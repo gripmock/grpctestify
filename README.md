@@ -57,7 +57,7 @@ jq --version
 ```
 
 ## Test File Format (`.gctf`)
-```text
+```php
 --- ADDRESS ---
 localhost:50051
 
