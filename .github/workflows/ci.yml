@@ -47,4 +47,4 @@ jobs:
           DEFAULT_ADDRESS=localhost:4771 ./grpctestify.sh --verbose tests/greeter_optional-address.gctf
 
       - name: Cleanup
-        run: docker rm -f greeter-server || true
+        run: docker rm -f greeter-server-1 greeter-server-2 || true
