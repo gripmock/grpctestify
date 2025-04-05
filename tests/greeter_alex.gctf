@@ -1,0 +1,15 @@
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+helloworld.Greeter/SayHello
+
+--- REQUEST ---
+{
+    "name": "Alex"
+}
+
+--- RESPONSE ---
+{
+    "message": "Hello Alex"
+}

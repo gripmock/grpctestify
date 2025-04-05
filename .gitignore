@@ -1,0 +1,15 @@
+# Temp files
+*.tmp
+*.log
+*.swp
+
+# Test artifacts
+test_results/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+
+# Shellcheck
+shellcheck.log

@@ -1,0 +1,48 @@
+name: CI
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-13]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      # macOS-specific Docker setup
+      - name: Setup Docker on macOS
+        if: matrix.os == 'macos-13'
+        uses: douglascamata/setup-docker-macos-action@v1-alpha
+
+      - name: Install dependencies
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y jq
+          else
+            brew install jq
+          fi
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          grpcurl --version
+
+      - name: Start Greeter server
+        run: |
+          docker run -d --name greeter-server -p 50051:50051 bavix/greeter-server
+          sleep 5
+
+      - name: Run tests
+        run: |
+          chmod +x grpctestify.sh
+          ./grpctestify.sh --verbose tests/
+
+      - name: Cleanup
+        run: docker rm -f greeter-server || true
