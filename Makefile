@@ -5,7 +5,7 @@ MAKEFLAGS += --no-print-directory
 
 # Variables
 TEST_DIR      := tests
-SERVER_PORT   := 50051
+SERVER_PORT   := 4770
 SERVER_IMAGE  := bavix/greeter-server:latest
 CONTAINER_NAME := grpctestify-server
 

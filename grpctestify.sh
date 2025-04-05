@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.1"
+VERSION="v0.0.2"
 
 # Color configuration
 RED="\033[0;31m"
@@ -137,7 +137,9 @@ run_test() {
 		fi
 	done
 
-	ADDRESS=$(extract_section "ADDRESS" || echo "localhost:4770")
+	ADDRESS=$(extract_section "ADDRESS" | xargs)
+	ADDRESS=${ADDRESS:-${DEFAULT_ADDRESS:-localhost:4770}}
+
 	REQUEST=$(extract_section "REQUEST")
 
 	log info "Configuration:"
