@@ -9,8 +9,6 @@ helloworld.Greeter/SayHello
     "name": "Bob"
 }
 
---- RESPONSE ---
-
 --- ERROR ---
 {
     "code": 16,
