@@ -36,8 +36,8 @@ jobs:
 
       - name: Start Greeter server
         run: |
-          docker run -d --name greeter-server-1 -p 4770:50051 bavix/greeter-server
-          docker run -d --name greeter-server-2 -p 4771:50051 bavix/greeter-server
+          CONTAINER_NAME=greeter-server-1 make up
+          CONTAINER_NAME=greeter-server-2 SERVER_PORT=4771 make up
           sleep 5
 
       - name: Run tests
