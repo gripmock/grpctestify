@@ -1,0 +1,26 @@
+- service: Greeter
+  method: SayHello
+  input:
+    equals:
+      name: TestUser
+  output:
+    data:
+      message: Hello TestUser
+
+- service: Greeter
+  method: SayHello
+  input:
+    equals:
+      name: Alex
+  output:
+    data:
+      message: Hello Alex
+
+- service: Greeter
+  method: SayHello
+  input:
+    equals:
+      name: Bob
+  output:
+    error: user not found
+    code: 16

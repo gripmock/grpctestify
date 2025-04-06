@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.2"
+VERSION="v0.0.3"
 
 # Color configuration
 RED="\033[0;31m"
@@ -129,8 +129,15 @@ run_test() {
 
 	ENDPOINT=$(extract_section "ENDPOINT")
 	RESPONSE=$(extract_section "RESPONSE")
+	ERROR=$(extract_section "ERROR")
 
-	for section in ENDPOINT RESPONSE; do
+	# Validate section coexistence
+	if [[ (-n "$RESPONSE" && -n "$ERROR") || (-z "$RESPONSE" && -z "$ERROR") ]]; then
+		log error "Exactly one of RESPONSE or ERROR sections must be present in $TEST_FILE"
+		return 1
+	fi
+
+	for section in ENDPOINT; do
 		if [[ -z "$(extract_section "$section")" ]]; then
 			log error "Missing $section section in $TEST_FILE"
 			return 1
@@ -146,10 +153,18 @@ run_test() {
 	log info "  ADDRESS: $ADDRESS"
 	log info "  ENDPOINT: $ENDPOINT"
 	[[ -n "$REQUEST" ]] && log info "  REQUEST: $REQUEST" || log info "  REQUEST: EMPTY"
+	[[ -n "$RESPONSE" ]] && log info "  RESPONSE: $RESPONSE" || log info "  ERROR: $ERROR"
 
-	[[ -n "$REQUEST" ]] && validate_json "$REQUEST" "REQUEST"
+	# Validate JSON content
+	if [[ -n "$REQUEST" ]]; then
+		validate_json "$REQUEST" "REQUEST"
+	fi
 	validate_address "$ADDRESS"
-	validate_json "$RESPONSE" "RESPONSE"
+	if [[ -n "$RESPONSE" ]]; then
+		validate_json "$RESPONSE" "RESPONSE"
+	elif [[ -n "$ERROR" ]]; then
+		validate_json "$ERROR" "ERROR"
+	fi
 
 	REQUEST_TMP=""
 	if [[ -n "$REQUEST" ]]; then
@@ -163,26 +178,38 @@ run_test() {
 
 	log info "Executing gRPC request to $ADDRESS..."
 
+	grpcurl_flags="-plaintext"
+	[[ -n "$ERROR" ]] && grpcurl_flags="$grpcurl_flags -format-error"
+
 	if [[ -n "$REQUEST_TMP" ]]; then
-		log debug "$ grpcurl -plaintext -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
+		log debug "$ grpcurl $grpcurl_flags -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
 		# shellcheck disable=SC2086
-		RESPONSE_OUTPUT=$(grpcurl -plaintext -d @ "$ADDRESS" "$ENDPOINT" <$REQUEST_TMP 2>&1)
+		RESPONSE_OUTPUT=$(grpcurl $grpcurl_flags -d @ "$ADDRESS" "$ENDPOINT" <$REQUEST_TMP 2>&1)
 	else
-		log debug "$ grpcurl -plaintext \"$ADDRESS\" \"$ENDPOINT\""
+		log debug "$ grpcurl $grpcurl_flags \"$ADDRESS\" \"$ENDPOINT\""
 		# shellcheck disable=SC2086
-		RESPONSE_OUTPUT=$(grpcurl -plaintext "$ADDRESS" "$ENDPOINT" 2>&1)
+		RESPONSE_OUTPUT=$(grpcurl $grpcurl_flags "$ADDRESS" "$ENDPOINT" 2>&1)
 	fi
 
 	GRPC_STATUS=$?
 	[[ -n "$REQUEST_TMP" ]] && rm -f "$REQUEST_TMP"
 
-	if [[ $GRPC_STATUS -ne 0 ]]; then
-		log error "gRPC request failed with status $GRPC_STATUS"
-		log error "Response: $RESPONSE_OUTPUT"
-		return 1
+	# Handle response expectations
+	if [[ -n "$ERROR" ]]; then
+		EXPECTED=$(echo "$ERROR" | jq --sort-keys .)
+		if [[ $GRPC_STATUS -eq 0 ]]; then
+			log error "Expected gRPC error but request succeeded"
+			return 1
+		fi
+	else
+		EXPECTED=$(echo "$RESPONSE" | jq --sort-keys .)
+		if [[ $GRPC_STATUS -ne 0 ]]; then
+			log error "gRPC request failed with status $GRPC_STATUS"
+			log error "Response: $RESPONSE_OUTPUT"
+			return 1
+		fi
 	fi
 
-	EXPECTED=$(echo "$RESPONSE" | jq --sort-keys .)
 	ACTUAL=$(echo "$RESPONSE_OUTPUT" | jq --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
 
 	log debug "Expected response: $EXPECTED"

@@ -6,13 +6,17 @@ MAKEFLAGS += --no-print-directory
 # Variables
 TEST_DIR      := tests
 SERVER_PORT   := 4770
-SERVER_IMAGE  := bavix/greeter-server:latest
+SERVER_IMAGE  := bavix/gripmock:3
 CONTAINER_NAME := grpctestify-server
 
 # Start test server
 .PHONY: up
 up:
-	docker run -d --name $(CONTAINER_NAME) -p $(SERVER_PORT):50051 $(SERVER_IMAGE)
+	docker run -d --name $(CONTAINER_NAME) \
+		-v ./api:/proto \
+		-v ./stubs:/stubs \
+		-p $(SERVER_PORT):4770 \
+		$(SERVER_IMAGE) --stub=/stubs /proto/helloworld.proto 
 	until grpcurl -plaintext localhost:$(SERVER_PORT) list; do sleep 1; done
 
 # Run tests
