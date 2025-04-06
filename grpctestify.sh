@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.3"
+VERSION="v0.0.4"
 
 # Color configuration
 RED="\033[0;31m"
@@ -117,14 +117,20 @@ run_test() {
 
 	extract_section() {
 		awk -v sec="$1" '
+    $0 ~ /^[[:space:]]*#/ { next } # skip comments
     $0 ~ "^[[:space:]]*---[[:space:]]*" sec "[[:space:]]*---" { 
-        found=1; 
+        found=1 
         next 
     } 
     /^[[:space:]]*---/ { 
         found=0 
     } 
-    found' "$TEST_FILE" | tr -d '\r' | tr '\n' ' ' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+    found {
+		# Remove comments and trailing spaces
+        gsub(/#.*/, "", $0)
+        gsub(/[[:space:]]+$/, "", $0)
+        printf "%s", $0
+    }' "$TEST_FILE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 	}
 
 	ENDPOINT=$(extract_section "ENDPOINT")
