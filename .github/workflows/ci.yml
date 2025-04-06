@@ -36,8 +36,8 @@ jobs:
 
       - name: Start Greeter server
         run: |
-          CONTAINER_NAME=greeter-server-1 make up
-          CONTAINER_NAME=greeter-server-2 SERVER_PORT=4771 make up
+          make up CONTAINER_NAME=greeter-server-1 
+          make up CONTAINER_NAME=greeter-server-2 SERVER_PORT=4771  
           sleep 5
 
       - name: Run tests
