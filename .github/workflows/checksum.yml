@@ -17,7 +17,7 @@ jobs:
 
       - name: Generate checksums.txt
         run: |
-          echo "grpctestify.sh $(sha256sum grpctestify.sh | awk '{print $1}')" > checksums.txt
+          echo "$(sha256sum grpctestify.sh | awk '{print $1}') grpctestify.sh" > checksums.txt
 
       - name: Upload checksum.txt to release
         uses: softprops/action-gh-release@v1
