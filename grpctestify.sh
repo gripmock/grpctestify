@@ -239,17 +239,26 @@ run_test() {
 	grpcurl_flags="-plaintext"
 	[[ -n "$ERROR" ]] && grpcurl_flags="$grpcurl_flags -format-error"
 
-	if [[ -n "$REQUEST_TMP" ]]; then
-		log debug "$ grpcurl $grpcurl_flags -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
-		# shellcheck disable=SC2086
-		RESPONSE_OUTPUT=$(grpcurl $grpcurl_flags -d @ "$ADDRESS" "$ENDPOINT" <$REQUEST_TMP 2>&1)
-	else
-		log debug "$ grpcurl $grpcurl_flags \"$ADDRESS\" \"$ENDPOINT\""
-		# shellcheck disable=SC2086
-		RESPONSE_OUTPUT=$(grpcurl $grpcurl_flags "$ADDRESS" "$ENDPOINT" 2>&1)
-	fi
+    temp_grpc_output=$(mktemp)
+    temp_time=$(mktemp)
+
+    if [[ -n "$REQUEST_TMP" ]]; then
+        log debug "$ grpcurl $grpcurl_flags -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
+        # shellcheck disable=SC2086
+        (TIMEFORMAT='%R'; { time grpcurl $grpcurl_flags -d @ "$ADDRESS" "$ENDPOINT" < "$REQUEST_TMP" > "$temp_grpc_output" 2>&1; } 2> "$temp_time")
+    else
+        log debug "$ grpcurl $grpcurl_flags \"$ADDRESS\" \"$ENDPOINT\""
+        # shellcheck disable=SC2086
+        (TIMEFORMAT='%R'; { time grpcurl $grpcurl_flags "$ADDRESS" "$ENDPOINT" > "$temp_grpc_output" 2>&1; } 2> "$temp_time")
+    fi
 
 	GRPC_STATUS=$?
+
+    RESPONSE_OUTPUT=$(cat "$temp_grpc_output")
+    execution_time=$(awk '{printf "%.0f", $1 * 1000}' "$temp_time")
+
+	[[ -n "$temp_grpc_output" ]] && rm -f "$temp_grpc_output"
+	[[ -n "$temp_time" ]] && rm -f "$temp_time"
 	[[ -n "$REQUEST_TMP" ]] && rm -f "$REQUEST_TMP"
 
 	# Handle response expectations
@@ -274,10 +283,10 @@ run_test() {
 	log debug "Actual response: $ACTUAL"
 
 	if [[ "$EXPECTED" == "$ACTUAL" ]]; then
-		log success "TEST PASSED: $TEST_NAME"
+		log success "TEST PASSED: $TEST_NAME ($execution_time ms)"
 		return 0
 	else
-		log error "TEST FAILED: $TEST_NAME"
+		log error "TEST FAILED: $TEST_NAME ($execution_time ms)"
 		log error "--- Expected ---"
 		printf "%s\n" "$EXPECTED"
 		log error "+++ Actual +++"
