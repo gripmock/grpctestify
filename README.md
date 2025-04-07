@@ -5,10 +5,19 @@
 
 Automate gRPC server testing with configuration files. Validate endpoints, requests, and responses using simple `.gctf` files.
 
+## What's New 🎉
+- Automatic self-update with checksum verification
+- Enhanced warning system with dedicated log level
+- Improved error handling and validation
+- Better security with SHA-256 verification
+
 ## Features
+- 🔄 **Self-updating** with `--update` flag
+- 🛡 **Security** with checksum verification
 - 📂 Recursive directory processing
 - 🎨 Colored output with emoji support
 - 🔍 Automatic dependency checks
+- ⚠️ Dedicated warning log level
 - 🛠 Flexible configuration format
 - ⚡ Fast sequential test execution
 - 📄 Version information display
@@ -52,6 +61,9 @@ jq --version
 # Disable colors
 ./grpctestify.sh --no-color test_case.gctf
 
+# Check for updates
+./grpctestify.sh --update
+
 # Show version
 ./grpctestify.sh --version
 ```
@@ -74,6 +86,11 @@ package.service/Method
   "status": "OK"
 }
 ```
+
+## Security Features 🔒
+- Automatic checksum verification during updates
+- Secure download process with SHA-256 validation
+- Warning system for potential security issues
 
 ## Local Development
 ### Quick Start
