@@ -1,4 +1,4 @@
-name: Generate Checksum for Release
+name: Generate Checksums for Release
 
 on:
   release:
@@ -15,16 +15,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate checksum.txt
+      - name: Generate checksums.txt
         run: |
-          echo "grpctestify.sh $(sha256sum grpctestify.sh | awk '{print $1}')" > checksum.txt
+          echo "grpctestify.sh $(sha256sum grpctestify.sh | awk '{print $1}')" > checksums.txt
 
       - name: Upload checksum.txt to release
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: checksum.txt
+          files: |
+            checksum.txt
+            grpctestify.sh
           tag_name: ${{ github.event.release.tag_name }}
-          body: "Checksum file for verification"
-
