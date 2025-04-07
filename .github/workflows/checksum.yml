@@ -13,7 +13,8 @@ jobs:
 
       - name: Generate checksum.txt
         run: |
-          echo "grpctestify.sh $(sha256sum "grpctestify.sh" | awk '{print $1}')" > checksum.txt
+          echo "grpctestify.sh $(sha256sum grpctestify.sh | awk '{print $1}')" > checksum.txt
+
       - name: Upload checksum.txt to release
         uses: actions/upload-release-asset@v1
         env:

@@ -94,7 +94,7 @@ log() {
 }
 
 check_dependencies() {
-	for cmd in grpcurl jq grep awk date basename find mktemp rm curl sha256sum; do
+	for cmd in grpcurl jq grep awk date basename find mktemp rm; do
 		if ! command -v "$cmd" >/dev/null 2>&1; then
 			log error "Missing dependency: $cmd"
 			exit 1
