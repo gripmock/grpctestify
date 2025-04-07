@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.4"
+VERSION="v0.0.5"
 
 # Color configuration
 RED="\033[0;31m"
@@ -17,6 +17,7 @@ DIVIDER="─"
 # Parse arguments
 NO_COLOR=0
 VERBOSE=0
+UPDATE=0
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--no-color)
@@ -30,6 +31,10 @@ while [[ $# -gt 0 ]]; do
 	--version)
 		printf "%s\n" "$VERSION"
 		exit 0
+		;;
+	--update)
+		UPDATE=1
+		shift
 		;;
 	-h | --help)
 		HELP=1
@@ -49,19 +54,42 @@ if [[ "$NO_COLOR" -eq 1 ]]; then
 	CHECK="OK"
 	CROSS="ERR"
 	INFO="INF"
-	ALERT="!"
+	ALERT="WARN"
 fi
 
 log() {
-	if [[ "$VERBOSE" -eq 0 && "$1" == "debug" ]]; then
+	local level="$1"
+	local message="$2"
+
+	# Skip debug messages if not in verbose mode
+	if [[ "$level" == "debug" && "$VERBOSE" -eq 0 ]]; then
 		return 0
 	fi
-	case "$1" in
-	debug) [[ "$NO_COLOR" -eq 1 ]] && printf "[DBG] %s\n" "$2" || printf "${YELLOW}🔍${NC} %s\n" "$2" ;;
-	info) [[ "$NO_COLOR" -eq 1 ]] && printf "[%s] %s\n" "$INFO" "$2" || printf "${BLUE}%s${NC} %s\n" "$INFO" "$2" ;;
-	success) [[ "$NO_COLOR" -eq 1 ]] && printf " %s  %s\n" "$CHECK" "$2" || printf "${GREEN}%s${NC} %s\n" "$CHECK" "$2" ;;
-	error) [[ "$NO_COLOR" -eq 1 ]] && printf " %s  %s\n" "$CROSS" "$2" >&2 || printf "${RED}%s${NC} %s\n" "$CROSS" "$2" >&2 ;;
-	section) [[ "$NO_COLOR" -eq 1 ]] && printf "\n---[ %s ]---\n" "$2" || printf "\n${YELLOW} %s%s%s[ %s ]%s%s%s${NC}\n" "$DIVIDER" "$DIVIDER" "$DIVIDER" "$2" "$DIVIDER" "$DIVIDER" "$DIVIDER" ;;
+
+	case "$level" in
+	debug)
+		[[ "$NO_COLOR" -eq 1 ]] && printf "[DBG] %s\n" "$message" || printf "${YELLOW}🔍${NC} %s\n" "$message"
+		;;
+	info)
+		[[ "$NO_COLOR" -eq 1 ]] && printf "[%s] %s\n" "$INFO" "$message" || printf "${BLUE}%s${NC} %s\n" "$INFO" "$message"
+		;;
+	success)
+		[[ "$NO_COLOR" -eq 1 ]] && printf " %s  %s\n" "$CHECK" "$message" || printf "${GREEN}%s${NC} %s\n" "$CHECK" "$message"
+		;;
+	warn)
+		[[ "$NO_COLOR" -eq 1 ]] && printf "[%s] %s\n" "$ALERT" "$message" || printf "${YELLOW}%s${NC} %s\n" "$ALERT" "$message"
+		;;
+	error)
+		[[ "$NO_COLOR" -eq 1 ]] && printf " %s  %s\n" "$CROSS" "$message" >&2 || printf "${RED}%s${NC} %s\n" "$CROSS" "$message" >&2
+		;;
+	section)
+		[[ "$NO_COLOR" -eq 1 ]] && printf "\n---[ %s ]---\n" "$message" || printf "\n${YELLOW} %s%s%s[ %s ]%s%s%s${NC}\n" "$DIVIDER" "$DIVIDER" "$DIVIDER" "$message" "$DIVIDER" "$DIVIDER" "$DIVIDER"
+		;;
+	*)
+		# Fallback for unknown log levels
+		printf "${RED}???${NC} [%s] %s\n" "$level" "$message" >&2
+		return 1
+		;;
 	esac
 }
 
@@ -81,6 +109,7 @@ display_help() {
 	printf "   --no-color   Disable colored output\n"
 	printf "   --verbose    Enable verbose debug output\n"
 	printf "   --version    Show version information\n"
+	printf "   --update     Check for updates and update the script\n"
 	printf "   -h, --help   Show this help message\n\n"
 	printf "${INFO} Requirements:\n"
 	printf "   ${CHECK} grpcurl (https://github.com/fullstorydev/grpcurl)\n"
@@ -126,7 +155,7 @@ run_test() {
         found=0 
     } 
     found {
-		# Remove comments and trailing spaces
+        # Remove comments and trailing spaces
         gsub(/#.*/, "", $0)
         gsub(/[[:space:]]+$/, "", $0)
         printf "%s", $0
@@ -234,8 +263,100 @@ run_test() {
 	fi
 }
 
+update_script() {
+	log section "Update Check"
+	check_dependencies
+
+	current_version=${VERSION#v}
+	current_version_parts=(${current_version//./ })
+
+	log info "Checking for updates..."
+	latest_release=$(curl -s https://api.github.com/repos/gripmock/grpctestify/releases/latest)
+	latest_version=$(echo "$latest_release" | jq -r '.tag_name' | sed 's/^v//')
+	latest_version_parts=(${latest_version//./ })
+
+	log info "Current version: $VERSION"
+	log info "Latest version: v$latest_version"
+
+	compare_versions() {
+		local current=("${!1}")
+		local latest=("${!2}")
+		for ((i = 0; i < ${#current[@]}; i++)); do
+			if [[ ${current[i]} -lt ${latest[i]} ]]; then
+				return 1
+			elif [[ ${current[i]} -gt ${latest[i]} ]]; then
+				return 2
+			fi
+		done
+		return 0
+	}
+
+	compare_versions current_version_parts[@] latest_version_parts[@]
+	result=$?
+
+	case $result in
+	1)
+		log info "New version available. Updating..."
+		script_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name == "grpctestify.sh").browser_download_url')
+		script_url=${script_url:-"https://raw.githubusercontent.com/gripmock/grpctestify/v${latest_version}/grpctestify.sh"}
+		checksum_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name == "checksums.txt").browser_download_url')
+
+		temp_file=$(mktemp)
+		checksum_file=$(mktemp)
+
+		# Download script and checksum
+		if ! curl -sSL --output "$temp_file" "$script_url"; then
+			log error "Failed to download script"
+			rm -f "$temp_file" "$checksum_file"
+			exit 1
+		fi
+
+		if [[ -n "$checksum_url" ]]; then
+			if ! curl -sSL --output "$checksum_file" "$checksum_url"; then
+				log warn "Failed to download checksum file. Proceeding without verification..."
+				rm -f "$checksum_file"
+			else
+				expected_hash=$(grep "grpctestify.sh" "$checksum_file" | awk '{print $1}')
+				actual_hash=$(sha256sum "$temp_file" | awk '{print $1}')
+
+				if [[ "$expected_hash" != "$actual_hash" ]]; then
+					log error "Checksum verification failed! Aborting update."
+					rm -f "$temp_file" "$checksum_file"
+					exit 1
+				fi
+				log success "Checksum verification passed"
+			fi
+		else
+			log warn "No checksum file found. Proceeding without verification..."
+		fi
+
+		chmod +x "$temp_file"
+		script_path=$(readlink -f "$0")
+		if [[ -w "$script_path" ]]; then
+			mv "$temp_file" "$script_path"
+			log success "Update successful. Restart the script to use the new version."
+		else
+			sudo mv "$temp_file" "$script_path"
+			log success "Update successful with sudo. Restart the script."
+		fi
+		rm -f "$checksum_file"
+		;;
+	0)
+		log success "Already up to date."
+		;;
+	2)
+		log info "Current version is newer than the latest release. You might be using a development version."
+		;;
+	esac
+}
+
 # Main execution
 check_dependencies
+
+if [[ "$UPDATE" -eq 1 ]]; then
+	update_script
+	exit 0
+fi
 
 if [[ -n "$HELP" || $# -eq 0 ]]; then
 	display_help
