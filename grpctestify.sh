@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.5"
+VERSION="v0.0.6"
 
 # Color configuration
 RED="\033[0;31m"
@@ -146,20 +146,43 @@ run_test() {
 
 	extract_section() {
 		awk -v sec="$1" '
-    $0 ~ /^[[:space:]]*#/ { next } # skip comments
-    $0 ~ "^[[:space:]]*---[[:space:]]*" sec "[[:space:]]*---" { 
-        found=1 
-        next 
-    } 
-    /^[[:space:]]*---/ { 
-        found=0 
-    } 
-    found {
-        # Remove comments and trailing spaces
-        gsub(/#.*/, "", $0)
-        gsub(/[[:space:]]+$/, "", $0)
-        printf "%s", $0
-    }' "$TEST_FILE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+        function process_line(line) {
+            in_str = 0
+            escaped = 0
+            res = ""
+            for (i = 1; i <= length(line); i++) {
+                c = substr(line, i, 1)
+                if (escaped) {
+                    res = res c
+                    escaped = 0
+                } else if (c == "\\") {
+                    res = res c
+                    escaped = 1
+                } else if (c == "\"") {
+                    res = res c
+                    in_str = !in_str
+                } else if (c == "#" && !in_str) {
+                    break
+                } else {
+                    res = res c
+                }
+            }
+            return res
+        }
+        $0 ~ /^[[:space:]]*#/ { next } # skip comment lines
+        $0 ~ "^[[:space:]]*---[[:space:]]*" sec "[[:space:]]*---" { 
+            found=1 
+            next 
+        } 
+        /^[[:space:]]*---/ { 
+            found=0 
+        } 
+        found {
+            # Process comments inside JSON strings
+            processed = process_line($0)
+            gsub(/[[:space:]]+$/, "", processed)
+            printf "%s", processed
+        }' "$TEST_FILE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 	}
 
 	ENDPOINT=$(extract_section "ENDPOINT")
