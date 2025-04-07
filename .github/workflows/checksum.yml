@@ -2,7 +2,7 @@ name: Generate Checksum for Release
 
 on:
   release:
-    types: [created]
+    types: [published]
 
 jobs:
   generate-checksum:
@@ -16,7 +16,7 @@ jobs:
           echo "grpctestify.sh $(sha256sum grpctestify.sh | awk '{print $1}')" > checksum.txt
 
       - name: Upload checksum.txt to release
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
