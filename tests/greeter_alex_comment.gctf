@@ -14,5 +14,6 @@ helloworld.Greeter/SayHello # endpoint value
 
 --- RESPONSE ---
 {
+    # begin
     "message": "Hello Alex" # message=Hello Alex
 }
