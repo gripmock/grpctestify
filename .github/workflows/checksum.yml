@@ -28,4 +28,3 @@ jobs:
             checksum.txt
             grpctestify.sh
           tag_name: ${{ github.event.release.tag_name }}
-          body: "Checksum file for verification"
