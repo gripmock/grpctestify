@@ -239,23 +239,29 @@ run_test() {
 	grpcurl_flags="-plaintext"
 	[[ -n "$ERROR" ]] && grpcurl_flags="$grpcurl_flags -format-error"
 
-    temp_grpc_output=$(mktemp)
-    temp_time=$(mktemp)
+	temp_grpc_output=$(mktemp)
+	temp_time=$(mktemp)
 
-    if [[ -n "$REQUEST_TMP" ]]; then
-        log debug "$ grpcurl $grpcurl_flags -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
-        # shellcheck disable=SC2086
-        (TIMEFORMAT='%R'; { time grpcurl $grpcurl_flags -d @ "$ADDRESS" "$ENDPOINT" < "$REQUEST_TMP" > "$temp_grpc_output" 2>&1; } 2> "$temp_time")
-    else
-        log debug "$ grpcurl $grpcurl_flags \"$ADDRESS\" \"$ENDPOINT\""
-        # shellcheck disable=SC2086
-        (TIMEFORMAT='%R'; { time grpcurl $grpcurl_flags "$ADDRESS" "$ENDPOINT" > "$temp_grpc_output" 2>&1; } 2> "$temp_time")
-    fi
+	if [[ -n "$REQUEST_TMP" ]]; then
+		log debug "$ grpcurl $grpcurl_flags -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
+		# shellcheck disable=SC2086
+		(
+			TIMEFORMAT='%R'
+			{ time grpcurl $grpcurl_flags -d @ "$ADDRESS" "$ENDPOINT" <"$REQUEST_TMP" >"$temp_grpc_output" 2>&1; } 2>"$temp_time"
+		)
+	else
+		log debug "$ grpcurl $grpcurl_flags \"$ADDRESS\" \"$ENDPOINT\""
+		# shellcheck disable=SC2086
+		(
+			TIMEFORMAT='%R'
+			{ time grpcurl $grpcurl_flags "$ADDRESS" "$ENDPOINT" >"$temp_grpc_output" 2>&1; } 2>"$temp_time"
+		)
+	fi
 
 	GRPC_STATUS=$?
 
-    RESPONSE_OUTPUT=$(cat "$temp_grpc_output")
-    execution_time=$(awk '{printf "%.0f", $1 * 1000}' "$temp_time")
+	RESPONSE_OUTPUT=$(cat "$temp_grpc_output")
+	execution_time=$(awk '{printf "%.0f", $1 * 1000}' "$temp_time")
 
 	[[ -n "$temp_grpc_output" ]] && rm -f "$temp_grpc_output"
 	[[ -n "$temp_time" ]] && rm -f "$temp_time"
