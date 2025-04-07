@@ -1,0 +1,19 @@
+# before section ADDRESS
+--- ADDRESS --- # address section
+# after section
+localhost:4770 # address value
+
+# before section ENDPOINT
+--- ENDPOINT --- # endpoint section
+helloworld.Greeter/SayHello # endpoint value
+
+--- REQUEST ---
+{
+    "name": "Alex" # name=Alex
+}
+
+--- RESPONSE ---
+{
+    # begin
+    "message": "Hello Alex" # message=Hello Alex
+}
