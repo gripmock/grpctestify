@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.7"
+VERSION="v0.0.8"
 
 # Color configuration
 RED="\033[0;31m"
@@ -210,8 +210,8 @@ run_test() {
 	log info "Configuration:"
 	log info "  ADDRESS: $ADDRESS"
 	log info "  ENDPOINT: $ENDPOINT"
-	[[ -n "$REQUEST" ]] && log info "  REQUEST: $REQUEST" || log info "  REQUEST: EMPTY"
-	[[ -n "$RESPONSE" ]] && log info "  RESPONSE: $RESPONSE" || log info "  ERROR: $ERROR"
+	[[ -n "$REQUEST" ]] && log info "  REQUEST: $(echo $REQUEST | jq -c .)" || log info "  REQUEST: EMPTY"
+	[[ -n "$RESPONSE" ]] && log info "  RESPONSE: $(echo $RESPONSE | jq -c .)" || log info "  ERROR: $(echo $ERROR | jq -c .)"
 
 	# Validate JSON content
 	if [[ -n "$REQUEST" ]]; then
