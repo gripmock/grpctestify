@@ -19,6 +19,11 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Build client-server
+        run: |
+          go build -o /tmp/client-server ./client-server
+          chmod +x /tmp/client-server
+
       # macOS-specific Docker setup
       - name: Setup Docker on macOS
         if: matrix.os == 'macos-13'
@@ -34,17 +39,35 @@ jobs:
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
           grpcurl --version
 
+      - name: Run client-server
+        run: |
+          /tmp/client-server &
+          echo $! > /tmp/client-server.pid
+
       - name: Start Greeter server
         run: |
           make up CONTAINER_NAME=greeter-server-1 
           make up CONTAINER_NAME=greeter-server-2 SERVER_PORT=4771  
           sleep 5
+      
+      - name: Change permissions
+        run: |
+          chmod +x grpctestify.sh
 
       - name: Run tests
         run: |
-          chmod +x grpctestify.sh
           ./grpctestify.sh --verbose tests/
+
+      - name: Run optional address tests
+        run: |
           DEFAULT_ADDRESS=localhost:4771 ./grpctestify.sh --verbose tests/greeter_optional-address.gctf
 
+      - name: Run streams tests
+        run: |
+          DEFAULT_ADDRESS=localhost:4771 ./grpctestify.sh --verbose client-server/tests/
+
       - name: Cleanup
-        run: docker rm -f greeter-server-1 greeter-server-2 || true
+        run: |
+          docker rm -f greeter-server-1 greeter-server-2 || true
+          kill $(cat /tmp/client-server.pid) || true
+          rm /tmp/client-server.pid || true

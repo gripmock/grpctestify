@@ -1,0 +1,22 @@
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+example.ExampleService/ClientStream
+
+--- REQUEST ---
+{"text": "Hello"}
+
+--- REQUEST ---
+{"text": "World"}
+
+--- REQUEST ---
+{"text": "from"}
+
+--- REQUEST ---
+{"text": "gRPC"}
+
+--- RESPONSE ---
+{
+  "result": "Hello World from gRPC"
+}

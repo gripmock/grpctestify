@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package example;
+
+option go_package = "./examplepb";
+
+service ExampleService {
+    rpc ClientStream(stream Message) returns (Response) {}
+    rpc ServerStream(Message) returns (stream Response) {}
+    rpc BidiStream(stream Message) returns (stream Response) {}
+}
+
+message Message {
+    string text = 1;
+}
+
+message Response {
+    string result = 1;
+}
