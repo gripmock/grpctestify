@@ -22,7 +22,7 @@ jobs:
       - name: Build client-server
         run: |
           cd client-server
-          go build -o /tmp/client-server ./client-server
+          go build -o /tmp/client-server .
           chmod +x /tmp/client-server
           cd -
 
