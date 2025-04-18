@@ -19,6 +19,7 @@ Automate gRPC server testing with configuration files. Validate endpoints, reque
 - 🔍 Automatic dependency checks
 - ⚠️ Dedicated warning log level
 - 🛠 Flexible configuration format
+- **🌊 Full gRPC streaming support**: unary, client, server, and bidirectional streams
 - ⚡ Fast sequential test execution
 - 📄 Version information display
 
@@ -85,6 +86,86 @@ package.service/Method
 {
   "status": "OK"
 }
+```
+
+## Streaming Examples 🌊
+
+### Client Streaming
+Multiple REQUEST blocks followed by a single RESPONSE
+```php
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+chat.ChatService/SendMessages
+
+--- REQUEST ---
+{ "name": "hello" }
+
+--- REQUEST ---
+{ "name": "world" }
+
+--- REQUEST ---
+{ "name": "from" }
+
+--- REQUEST ---
+{ "name": "grpctestify" }
+
+--- RESPONSE ---
+{ "message": "hello world from grpctestify" }
+```
+
+### Server Streaming
+Single REQUEST followed by multiple RESPONSE blocks
+```php
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+news.NewsService/Subscribe
+
+--- REQUEST ---
+{ "message": "hello world from grpctestify" }
+
+--- RESPONSE ---
+{ "name": "hello" }
+
+--- RESPONSE ---
+{ "name": "world" }
+
+--- RESPONSE ---
+{ "name": "from" }
+
+--- RESPONSE ---
+{ "name": "grpctestify" }
+```
+
+### Bidirectional Streaming
+Alternating REQUEST and RESPONSE blocks
+```php
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+math.Calculator/SumStream
+
+--- REQUEST ---
+{ "value": 2 }
+
+--- RESPONSE ---
+{ "sum": 2 }
+
+--- REQUEST ---
+{ "value": 1 }
+
+--- RESPONSE ---
+{ "sum": 3 }
+
+--- REQUEST ---
+{ "value": 0 }
+
+--- RESPONSE ---
+{ "sum": 3 }
 ```
 
 ## Security Features 🔒
