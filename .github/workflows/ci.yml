@@ -21,8 +21,10 @@ jobs:
 
       - name: Build client-server
         run: |
+          cd client-server
           go build -o /tmp/client-server ./client-server
           chmod +x /tmp/client-server
+          cd -
 
       # macOS-specific Docker setup
       - name: Setup Docker on macOS
