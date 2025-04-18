@@ -1,0 +1,25 @@
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+example.ExampleService/BidiStream
+
+--- REQUEST ---
+{"text": "Hello"}
+
+--- REQUEST ---
+{"text": "World from gRPC"}
+
+--- RESPONSE ---
+{
+  "result": "Hello"
+}
+{
+  "result": "World"
+}
+{
+  "result": "from"
+}
+{
+  "result": "gRPC"
+}
