@@ -20,7 +20,7 @@ jobs:
           echo "$(sha256sum grpctestify.sh | awk '{print $1}') grpctestify.sh" > checksums.txt
 
       - name: Upload checksum.txt to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
