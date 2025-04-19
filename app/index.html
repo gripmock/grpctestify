@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gRPCTestify Generator (.gctf)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      padding: 0;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      margin-bottom: 10px;
+      padding: 10px;
+      font-family: monospace;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    pre {
+      background-color: #f4f4f4;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .output-section {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>gRPCTestify Generator</h1>
+    <p>Input your grpcurl request:</p>
+    <textarea id="grpcurlInput" placeholder="grpcurl -plaintext -d '{...}' localhost:50051 example.identifier.v1.IdentifierService/ProcessUUIDs"></textarea>
+    <button onclick="generate()">Generate</button>
+
+    <div class="output-section">
+      <h2>Result:</h2>
+      <pre id="output"></pre>
+    </div>
+  </div>
+
+  <script>
+    function generate() {
+      const input = document.getElementById('grpcurlInput').value.trim();
+      const outputElement = document.getElementById('output');
+
+      const regex = /grpcurl\s+(-plaintext\s+)?-d\s+'({[^']*)'\s+(\S+)\s+(\S+)/;
+      const match = input.match(regex);
+
+      if (!match) {
+        outputElement.textContent = 'Error: Invalid grpcurl command format.';
+        return;
+      }
+
+      const [, , requestData, address, endpoint] = match;
+
+      const gctfContent = `--- ADDRESS ---
+${address}
+
+--- ENDPOINT ---
+${endpoint}
+
+--- REQUEST ---
+${requestData}
+
+--- RESPONSE ---
+
+--- ERROR ---`;
+
+      outputElement.textContent = gctfContent;
+    }
+  </script>
+</body>
+</html>
