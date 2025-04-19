@@ -70,15 +70,62 @@
       const input = document.getElementById('grpcurlInput').value.trim();
       const outputElement = document.getElementById('output');
 
-      const regex = /grpcurl\s+(-plaintext\s+)?-d\s+'({[^']*)'\s+(\S+)\s+(\S+)/;
-      const match = input.match(regex);
-
-      if (!match) {
-        outputElement.textContent = 'Error: Invalid grpcurl command format.';
+      // Split into tokens considering quotes
+      const tokens = input.match(/(?:[^\s"']|"[^"]*"|'[^']*')+/g)?.slice(1) || [];
+      if (tokens.length < 2) {
+        outputElement.textContent = 'Error: Insufficient arguments.';
         return;
       }
 
-      const [, , requestData, address, endpoint] = match;
+      let address = '';
+      let endpoint = '';
+      let requestData = '';
+      let plaintext = false;
+
+      for (let i = 0; i < tokens.length; i++) {
+        let token = tokens[i].trim();
+        
+        // Remove surrounding quotes from tokens
+        if ((token.startsWith("'") && token.endsWith("'")) || 
+            (token.startsWith('"') && token.endsWith('"'))) {
+          token = token.slice(1, -1).trim();
+        }
+
+        if (token === '-d') {
+          if (i + 1 >= tokens.length) {
+            outputElement.textContent = 'Error: Missing data after -d.';
+            return;
+          }
+          // Take the next token and unquote it
+          requestData = tokens[++i].trim();
+          if ((requestData.startsWith("'") && requestData.endsWith("'")) || 
+              (requestData.startsWith('"') && requestData.endsWith('"'))) {
+            requestData = requestData.slice(1, -1).trim();
+          }
+        } else if (token === '-plaintext') {
+          plaintext = true;
+        } else if (isAddress(token)) {
+          if (address) {
+            outputElement.textContent = 'Error: Duplicate address: ' + token;
+            return;
+          }
+          address = token;
+        } else if (isEndpoint(token)) {
+          if (endpoint) {
+            outputElement.textContent = 'Error: Duplicate endpoint: ' + token;
+            return;
+          }
+          endpoint = token;
+        } else {
+          outputElement.textContent = 'Error: Invalid token: ' + token;
+          return;
+        }
+      }
+
+      if (!address || !endpoint || !requestData) {
+        outputElement.textContent = 'Error: Missing required parameters (address, endpoint, or data).';
+        return;
+      }
 
       const gctfContent = `--- ADDRESS ---
 ${address}
@@ -94,6 +141,14 @@ ${requestData}
 --- ERROR ---`;
 
       outputElement.textContent = gctfContent;
+    }
+
+    function isAddress(str) {
+      return /^[\w.-]+:\d+$/.test(str);
+    }
+
+    function isEndpoint(str) {
+      return str.includes('/');
     }
   </script>
 </body>
