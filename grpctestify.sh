@@ -283,7 +283,6 @@ run_test() {
 	[[ -n "$temp_grpc_output" ]] && rm -f "$temp_grpc_output"
 	[[ -n "$temp_time" ]] && rm -f "$temp_time"
 	[[ -n "$REQUEST_TMP" ]] && rm -f "$REQUEST_TMP"
-	[[ -n "$HEADERS_TMP" ]] && rm -f "$HEADERS_TMP"
 
 	# Handle response expectations
 	if [[ -n "$ERROR" ]]; then
