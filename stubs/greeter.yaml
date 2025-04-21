@@ -34,3 +34,16 @@
   output:
     data:
       message: Hello Charlie
+
+- service: Greeter
+  method: SayHello
+  headers:
+    contains:
+      x-user: "Ivan"
+      x-token: "123"
+  input:
+    equals:
+      name: Bob
+  output:
+    data:
+      message: You aren't Bob. You are Ivan.
