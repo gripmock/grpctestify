@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.8"
+VERSION="v0.0.9"
 
 # Color configuration
 RED="\033[0;31m"
@@ -146,52 +146,52 @@ run_test() {
 
 	extract_section() {
 		awk -v sec="$1" '
-        function process_line(line) {
-            in_str = 0
-            escaped = 0
-            res = ""
-            for (i = 1; i <= length(line); i++) {
-                c = substr(line, i, 1)
-                if (escaped) {
-                    res = res c
-                    escaped = 0
-                } else if (c == "\\") {
-                    res = res c
-                    escaped = 1
-                } else if (c == "\"") {
-                    res = res c
-                    in_str = !in_str
-                } else if (c == "#" && !in_str) {
-                    break
-                } else {
-                    res = res c
-                }
-            }
-            return res
-        }
-        $0 ~ /^[[:space:]]*#/ { next } # skip comment lines
-        $0 ~ "^[[:space:]]*---[[:space:]]*" sec "[[:space:]]*---" { 
-            found=1 
-            next 
-        } 
-        /^[[:space:]]*---/ { 
-            found=0 
-        } 
-        found {
+		function process_line(line) {
+			in_str = 0
+			escaped = 0
+			res = ""
+			for (i = 1; i <= length(line); i++) {
+				c = substr(line, i, 1)
+				if (escaped) {
+					res = res c
+					escaped = 0
+				} else if (c == "\\") {
+					res = res c
+					escaped = 1
+				} else if (c == "\"") {
+					res = res c
+					in_str = !in_str
+				} else if (c == "#" && !in_str) {
+					break
+				} else {
+					res = res c
+				}
+			}
+			return res
+		}
+		$0 ~ /^[[:space:]]*#/ { next } # skip comment lines
+		$0 ~ "^[[:space:]]*---[[:space:]]*" sec "[[:space:]]*---" { 
+			found=1 
+			next 
+		} 
+		/^[[:space:]]*---/ { 
+			found=0 
+		} 
+		found {
             # Process comments inside JSON strings
-            processed = process_line($0)
-            gsub(/[[:space:]]+$/, "", processed)
-            printf "%s", processed
-        }' "$TEST_FILE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+			processed = process_line($0)
+			gsub(/[[:space:]]+$/, "", processed)
+			printf "%s\n", processed
+		}' "$TEST_FILE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 	}
 
 	ENDPOINT=$(extract_section "ENDPOINT")
 	RESPONSE=$(extract_section "RESPONSE")
 	ERROR=$(extract_section "ERROR")
+	HEADERS=$(extract_section "HEADERS")
 
-	# Validate section coexistence
-	if [[ (-n "$RESPONSE" && -n "$ERROR") || (-z "$RESPONSE" && -z "$ERROR") ]]; then
-		log error "Exactly one of RESPONSE or ERROR sections must be present in $TEST_FILE"
+	if [[ -z "$RESPONSE" && -z "$ERROR" ]]; then
+		log error "At least one of RESPONSE or ERROR sections must be present in $TEST_FILE"
 		return 1
 	fi
 
@@ -204,57 +204,74 @@ run_test() {
 
 	ADDRESS=$(extract_section "ADDRESS" | xargs)
 	ADDRESS=${ADDRESS:-${DEFAULT_ADDRESS:-localhost:4770}}
-
 	REQUEST=$(extract_section "REQUEST")
 
 	log info "Configuration:"
 	log info "  ADDRESS: $ADDRESS"
 	log info "  ENDPOINT: $ENDPOINT"
-	[[ -n "$REQUEST" ]] && log info "  REQUEST: $(echo $REQUEST | jq -c .)" || log info "  REQUEST: EMPTY"
-	[[ -n "$RESPONSE" ]] && log info "  RESPONSE: $(echo $RESPONSE | jq -c .)" || log info "  ERROR: $(echo $ERROR | jq -c .)"
 
-	# Validate JSON content
+	[[ -n "$HEADERS" ]] && log info "  HEADERS: $HEADERS"
+	[[ -n "$REQUEST" ]] && log info "  REQUEST: $(echo $REQUEST | jq -c .)" || log info "  REQUEST: EMPTY"
+	[[ -n "$RESPONSE" ]] && log info "  RESPONSE: $(echo $RESPONSE | jq -c .)"
+	[[ -n "$ERROR" ]] && log info "  ERROR: $(echo $ERROR | jq -c .)"
+
 	if [[ -n "$REQUEST" ]]; then
-		validate_json "$REQUEST" "REQUEST"
+		validate_json "$REQUEST" "REQUEST" || return 1
 	fi
-	validate_address "$ADDRESS"
+
 	if [[ -n "$RESPONSE" ]]; then
-		validate_json "$RESPONSE" "RESPONSE"
-	elif [[ -n "$ERROR" ]]; then
-		validate_json "$ERROR" "ERROR"
+		validate_json "$RESPONSE" "RESPONSE" || return 1
 	fi
+
+	if [[ -n "$ERROR" ]]; then
+		validate_json "$ERROR" "ERROR" || return 1
+	fi
+
+	validate_address "$ADDRESS" || return 1
 
 	REQUEST_TMP=""
 	if [[ -n "$REQUEST" ]]; then
 		REQUEST_TMP=$(mktemp)
 		echo "$REQUEST" | jq -c . >"$REQUEST_TMP"
 		log debug "Request file: $REQUEST_TMP"
-		if [[ "$VERBOSE" -eq 1 ]]; then
-			log debug "Request content: $(cat "$REQUEST_TMP")"
-		fi
+		[[ "$VERBOSE" -eq 1 ]] && log debug "Request content: $(cat "$REQUEST_TMP")"
 	fi
 
 	log info "Executing gRPC request to $ADDRESS..."
 
-	grpcurl_flags="-plaintext"
-	[[ -n "$ERROR" ]] && grpcurl_flags="$grpcurl_flags -format-error"
+	# Initialize grpcurl_flags as an array
+	grpcurl_flags=(-plaintext)
 
+	# Add headers if present
+	if [[ -n "$HEADERS" ]]; then
+		while IFS= read -r header; do
+			header=$(echo "$header" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+			if [[ -n "$header" ]]; then
+				grpcurl_flags+=(-H "$header")
+			fi
+		done <<<"$HEADERS"
+	fi
+
+	# Add format-error flag if ERROR section exists
+	[[ -n "$ERROR" ]] && grpcurl_flags+=(-format-error)
+
+	# Execute gRPC request
 	temp_grpc_output=$(mktemp)
 	temp_time=$(mktemp)
 
 	if [[ -n "$REQUEST_TMP" ]]; then
-		log debug "$ grpcurl $grpcurl_flags -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
+		log debug "$ grpcurl ${grpcurl_flags[@]} -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
 		# shellcheck disable=SC2086
 		(
 			TIMEFORMAT='%R'
-			{ time grpcurl $grpcurl_flags -d @ "$ADDRESS" "$ENDPOINT" <"$REQUEST_TMP" >"$temp_grpc_output" 2>&1; } 2>"$temp_time"
+			{ time grpcurl "${grpcurl_flags[@]}" -d @ "$ADDRESS" "$ENDPOINT" <"$REQUEST_TMP" >"$temp_grpc_output" 2>&1; } 2>"$temp_time"
 		)
 	else
-		log debug "$ grpcurl $grpcurl_flags \"$ADDRESS\" \"$ENDPOINT\""
+		log debug "$ grpcurl ${grpcurl_flags[@]} \"$ADDRESS\" \"$ENDPOINT\""
 		# shellcheck disable=SC2086
 		(
 			TIMEFORMAT='%R'
-			{ time grpcurl $grpcurl_flags "$ADDRESS" "$ENDPOINT" >"$temp_grpc_output" 2>&1; } 2>"$temp_time"
+			{ time grpcurl "${grpcurl_flags[@]}" "$ADDRESS" "$ENDPOINT" >"$temp_grpc_output" 2>&1; } 2>"$temp_time"
 		)
 	fi
 
