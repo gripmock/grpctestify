@@ -19,27 +19,26 @@ jobs:
 
       - name: Generate Homebrew formula
         run: |
-          FORMULA_NAME="grpctestify"
           VERSION="${{ github.ref_name }}"
           CHECKSUM="${{ env.SHA256 }}"
 
-          echo "class Grpctestify < Formula" > Formula/$FORMULA_NAME.rb
-          echo "  desc \"Utility for testing gRPC servers\"" >> Formula/$FORMULA_NAME.rb
-          echo "  homepage \"https://github.com/gripmock/grpctestify\"" >> Formula/$FORMULA_NAME.rb
-          echo "  url \"https://github.com/gripmock/grpctestify/releases/download/${VERSION}/grpctestify.sh\"" >> Formula/$FORMULA_NAME.rb
-          echo "  sha256 \"${CHECKSUM}\"" >> Formula/$FORMULA_NAME.rb
-          echo "" >> Formula/$FORMULA_NAME.rb
-          echo "  depends_on \"grpcurl\"" >> Formula/$FORMULA_NAME.rb
-          echo "  depends_on \"jq\"" >> Formula/$FORMULA_NAME.rb
-          echo "" >> Formula/$FORMULA_NAME.rb
-          echo "  def install" >> Formula/$FORMULA_NAME.rb
-          echo "    bin.install \"grpctestify.sh\" => \"grpctestify\"" >> Formula/$FORMULA_NAME.rb
-          echo "  end" >> Formula/$FORMULA_NAME.rb
-          echo "" >> Formula/$FORMULA_NAME.rb
-          echo "  test do" >> Formula/$FORMULA_NAME.rb
-          echo "    assert_match \"${VERSION}\", shell_output(\"#{bin}/grpctestify --version\")" >> Formula/$FORMULA_NAME.rb
-          echo "  end" >> Formula/$FORMULA_NAME.rb
-          echo "end" >> Formula/$FORMULA_NAME.rb
+          echo "class Grpctestify < Formula" > /tmp/grpctestify.rb
+          echo "  desc \"Utility for testing gRPC servers\"" >> /tmp/grpctestify.rb
+          echo "  homepage \"https://github.com/gripmock/grpctestify\"" >> /tmp/grpctestify.rb
+          echo "  url \"https://github.com/gripmock/grpctestify/releases/download/${VERSION}/grpctestify.sh\"" >> /tmp/grpctestify.rb
+          echo "  sha256 \"${CHECKSUM}\"" >> /tmp/grpctestify.rb
+          echo "" >> /tmp/grpctestify.rb
+          echo "  depends_on \"grpcurl\"" >> /tmp/grpctestify.rb
+          echo "  depends_on \"jq\"" >> /tmp/grpctestify.rb
+          echo "" >> /tmp/grpctestify.rb
+          echo "  def install" >> /tmp/grpctestify.rb
+          echo "    bin.install \"grpctestify.sh\" => \"grpctestify\"" >> /tmp/grpctestify.rb
+          echo "  end" >> /tmp/grpctestify.rb
+          echo "" >> /tmp/grpctestify.rb
+          echo "  test do" >> /tmp/grpctestify.rb
+          echo "    assert_match \"${VERSION}\", shell_output(\"#{bin}/grpctestify --version\")" >> /tmp/grpctestify.rb
+          echo "  end" >> /tmp/grpctestify.rb
+          echo "end" >> /tmp/grpctestify.rb
 
       - name: Clone homebrew-tap repository
         run: |
@@ -50,10 +49,9 @@ jobs:
 
       - name: Update formula in homebrew-tap
         run: |
-          FORMULA_NAME="grpctestify"
-          cp ../Formula/$FORMULA_NAME.rb homebrew-tap/Formula/$FORMULA_NAME.rb
+          cp /tmp/grpctestify.rb homebrew-tap/Formula/grpctestify.rb
 
           cd homebrew-tap
-          git add Formula/$FORMULA_NAME.rb
-          git commit -m "Update $FORMULA_NAME to ${{ github.ref_name }}"
-          git push origin main
+          git add Formula/grpctestify.rb
+          git commit -m "Update grpctestify to ${{ github.ref_name }}"
+          git push origin master
