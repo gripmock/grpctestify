@@ -42,7 +42,7 @@ jobs:
 
       - name: Clone homebrew-tap repository
         run: |
-          git clone https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/gripmock/homebrew-tap.git
+          git clone https://${{ github.actor }}:${{ secrets.HOMEBREW_TOKEN }}@github.com/gripmock/homebrew-tap.git
           cd homebrew-tap
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
