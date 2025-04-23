@@ -1,0 +1,37 @@
+on:
+    release:
+      types: [published]
+  
+  jobs:
+    homebrew-releaser:
+      runs-on: ubuntu-latest
+      name: homebrew-releaser
+      steps:
+        - name: Release project to Homebrew tap
+          uses: Justintime50/homebrew-releaser@v2
+          with:
+            github_token: ${{ secrets.HOMEBREW_TOKEN }}
+
+            homebrew_owner: gripmock
+            homebrew_tap: homebrew-tap
+            formula_folder: Formula
+
+            install: 'bin.install "grpctestify.sh" => "grpctestify"'
+
+            test: 'assert_match("#{version}", shell_output("#{bin}/grpctestify --version"))'
+
+            depends_on: |
+              "grpcurl"
+              "jq"
+
+            version: ${{ github.ref_name }}
+
+            target_darwin_amd64: true
+            target_darwin_arm64: true
+            target_linux_amd64: true
+            target_linux_arm64: true
+            update_readme_table: false
+
+            skip_commit: false
+
+            debug: false

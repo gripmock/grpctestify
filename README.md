@@ -28,25 +28,68 @@ Automate gRPC server testing with configuration files. Validate endpoints, reque
 - [jq](https://stedolan.github.io/jq/)
 
 ## Editor Support 🚀
-Enhance your .gctf workflow with official [VS Code extension](https://marketplace.visualstudio.com/items?itemName=gripmock.grpctestify):
-- Syntax highlighting for .gctf files
+Enhance your `.gctf` workflow with the official [VS Code extension](https://marketplace.visualstudio.com/items?itemName=gripmock.grpctestify):
+- Syntax highlighting for `.gctf` files
 - Snippets for quick test creation
 - Section folding
 - Validation warnings
 - Quick documentation
 
 ## Installation
-```bash
-# macOS
-brew install grpcurl jq
 
-# Ubuntu/Debian
-sudo apt install -y grpcurl jq
+### Using Homebrew (macOS/Linux)
+```bash
+# Tap the repository
+brew tap gripmock/tap
+
+# Install grpctestify
+brew install grpctestify
 
 # Verify installation
-grpcurl --version
-jq --version
+grpctestify --version
 ```
+
+### Manual Installation (Dependencies)
+1. **Install Dependencies**:
+   ```bash
+   # macOS
+   brew install grpcurl jq
+
+   # Ubuntu/Debian
+   sudo apt install -y grpcurl jq
+
+   # Verify installation
+   grpcurl --version
+   jq --version
+   ```
+
+2. **Download the Script**:
+   Use `curl` or `wget` to download the `grpctestify.sh` script from the latest release:
+   ```bash
+   # Using curl
+   curl -LO https://github.com/gripmock/grpctestify/releases/latest/download/grpctestify.sh
+
+   # Using wget
+   wget https://github.com/gripmock/grpctestify/releases/latest/download/grpctestify.sh
+   ```
+
+3. **Make the Script Executable**:
+   After downloading, make the script executable:
+   ```bash
+   chmod +x grpctestify.sh
+   ```
+
+4. **Move the Script to a Directory in Your PATH**:
+   Optionally, move the script to a directory in your `PATH` for easier access:
+   ```bash
+   sudo mv grpctestify.sh /usr/local/bin/grpctestify
+   ```
+
+5. **Verify Installation**:
+   Check that the script is working correctly:
+   ```bash
+   grpctestify --version
+   ```
 
 ## Usage
 ```bash
