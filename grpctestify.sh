@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.10"
+VERSION="v0.0.11"
 
 # Color configuration
 RED="\033[0;31m"
@@ -18,6 +18,8 @@ DIVIDER="─"
 NO_COLOR=0
 VERBOSE=0
 UPDATE=0
+BASH_COMPLETION=0
+ZSH_COMPLETION=0
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--no-color)
@@ -36,6 +38,14 @@ while [[ $# -gt 0 ]]; do
 		UPDATE=1
 		shift
 		;;
+    --bash-completion)
+        BASH_COMPLETION=1
+        shift
+        ;;
+    --zsh-completion)
+        ZSH_COMPLETION=1
+        shift
+        ;;
 	-h | --help)
 		HELP=1
 		shift
@@ -404,6 +414,56 @@ update_script() {
 		;;
 	esac
 }
+
+# Function to generate bash completion
+generate_bash_completion() {
+    cat <<EOF
+_grpctestify() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--help --version --update --no-color --verbose"
+
+    if [[ \${cur} == -* ]]; then
+        COMPREPLY=( \$(compgen -W "\${opts}" -- \${cur}) )
+        return 0
+    fi
+}
+complete -F _grpctestify grpctestify
+EOF
+}
+
+# Function to generate zsh completion
+generate_zsh_completion() {
+    cat <<EOF
+#compdef grpctestify
+
+_grpctestify() {
+    local state line
+    typeset -A opt_args
+
+    _arguments \\
+        '--help[Show help message]' \\
+        '--version[Show version information]' \\
+        '--update[Check for updates and update the script]' \\
+        '--no-color[Disable colored output]' \\
+        '--verbose[Enable verbose debug output]' \\
+        ':test_file:_files'
+}
+
+_grpctestify "\$@"
+EOF
+}
+
+# Main execution
+if [[ "$BASH_COMPLETION" -eq 1 ]]; then
+    generate_bash_completion
+    exit 0
+elif [[ "$ZSH_COMPLETION" -eq 1 ]]; then
+    generate_zsh_completion
+    exit 0
+fi
 
 # Main execution
 check_dependencies

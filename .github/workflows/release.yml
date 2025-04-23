@@ -33,6 +33,12 @@ jobs:
           echo "" >> /tmp/grpctestify.rb
           echo "  def install" >> /tmp/grpctestify.rb
           echo "    bin.install \"grpctestify.sh\" => \"grpctestify\"" >> /tmp/grpctestify.rb
+          echo "" >> /tmp/grpctestify.rb
+          echo "    # Generate and install bash completion" >> /tmp/grpctestify.rb
+          echo "    bash_completion.install StringIO.new(\`#{bin}/grpctestify --bash-completion\`) => \"grpctestify\"" >> /tmp/grpctestify.rb
+          echo "" >> /tmp/grpctestify.rb
+          echo "    # Generate and install zsh completion" >> /tmp/grpctestify.rb
+          echo "    zsh_completion.install StringIO.new(\`#{bin}/grpctestify --zsh-completion\`) => \"_grpctestify\"" >> /tmp/grpctestify.rb
           echo "  end" >> /tmp/grpctestify.rb
           echo "" >> /tmp/grpctestify.rb
           echo "  test do" >> /tmp/grpctestify.rb
