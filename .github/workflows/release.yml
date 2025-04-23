@@ -33,20 +33,6 @@ jobs:
           echo "" >> /tmp/grpctestify.rb
           echo "  def install" >> /tmp/grpctestify.rb
           echo "    bin.install \"grpctestify.sh\" => \"grpctestify\"" >> /tmp/grpctestify.rb
-          echo "" >> /tmp/grpctestify.rb
-          echo "    # Generate and install bash completion" >> /tmp/grpctestify.rb
-          echo "    bash_output = \`#{bin}/grpctestify --bash-completion\`" >> /tmp/grpctestify.rb
-          echo "    raise \"Failed to generate bash completion\" if bash_output.empty?" >> /tmp/grpctestify.rb
-          echo "    bash_completion_script = \"\#{buildpath}/grpctestify-bash-completion\"" >> /tmp/grpctestify.rb
-          echo "    File.write(bash_completion_script, bash_output)" >> /tmp/grpctestify.rb
-          echo "    bash_completion.install bash_completion_script => \"grpctestify\"" >> /tmp/grpctestify.rb
-          echo "" >> /tmp/grpctestify.rb
-          echo "    # Generate and install zsh completion" >> /tmp/grpctestify.rb
-          echo "    zsh_output = \`#{bin}/grpctestify --zsh-completion\`" >> /tmp/grpctestify.rb
-          echo "    raise \"Failed to generate zsh completion\" if zsh_output.empty?" >> /tmp/grpctestify.rb
-          echo "    zsh_completion_script = \"\#{buildpath}/grpctestify-zsh-completion\"" >> /tmp/grpctestify.rb
-          echo "    File.write(zsh_completion_script, zsh_output)" >> /tmp/grpctestify.rb
-          echo "    zsh_completion.install zsh_completion_script => \"_grpctestify\"" >> /tmp/grpctestify.rb
           echo "  end" >> /tmp/grpctestify.rb
           echo "" >> /tmp/grpctestify.rb
           echo "  test do" >> /tmp/grpctestify.rb
