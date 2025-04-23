@@ -1,37 +1,59 @@
+name: Update Homebrew Formula
+
 on:
   release:
     types: [published]
 
 jobs:
-  homebrew-releaser:
+  update-homebrew:
     runs-on: ubuntu-latest
-    name: homebrew-releaser
     steps:
-      - name: Release project to Homebrew tap
-        uses: Justintime50/homebrew-releaser@v2
-        with:
-          github_token: ${{ secrets.HOMEBREW_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          homebrew_owner: gripmock
-          homebrew_tap: homebrew-tap
-          formula_folder: Formula
+      - name: Generate checksum
+        id: checksum
+        run: |
+          CHECKSUM=$(sha256sum grpctestify.sh | awk '{print $1}')
+          echo "SHA256=$CHECKSUM" >> $GITHUB_ENV
 
-          install: 'bin.install "grpctestify.sh" => "grpctestify"'
+      - name: Generate Homebrew formula
+        run: |
+          FORMULA_NAME="grpctestify"
+          VERSION="${{ github.ref_name }}"
+          CHECKSUM="${{ env.SHA256 }}"
 
-          test: 'assert_match("#{version}", shell_output("#{bin}/grpctestify --version"))'
+          echo "class Grpctestify < Formula" > Formula/$FORMULA_NAME.rb
+          echo "  desc \"Utility for testing gRPC servers\"" >> Formula/$FORMULA_NAME.rb
+          echo "  homepage \"https://github.com/gripmock/grpctestify\"" >> Formula/$FORMULA_NAME.rb
+          echo "  url \"https://github.com/gripmock/grpctestify/releases/download/${VERSION}/grpctestify.sh\"" >> Formula/$FORMULA_NAME.rb
+          echo "  sha256 \"${CHECKSUM}\"" >> Formula/$FORMULA_NAME.rb
+          echo "" >> Formula/$FORMULA_NAME.rb
+          echo "  depends_on \"grpcurl\"" >> Formula/$FORMULA_NAME.rb
+          echo "  depends_on \"jq\"" >> Formula/$FORMULA_NAME.rb
+          echo "" >> Formula/$FORMULA_NAME.rb
+          echo "  def install" >> Formula/$FORMULA_NAME.rb
+          echo "    bin.install \"grpctestify.sh\" => \"grpctestify\"" >> Formula/$FORMULA_NAME.rb
+          echo "  end" >> Formula/$FORMULA_NAME.rb
+          echo "" >> Formula/$FORMULA_NAME.rb
+          echo "  test do" >> Formula/$FORMULA_NAME.rb
+          echo "    assert_match \"${VERSION}\", shell_output(\"#{bin}/grpctestify --version\")" >> Formula/$FORMULA_NAME.rb
+          echo "  end" >> Formula/$FORMULA_NAME.rb
+          echo "end" >> Formula/$FORMULA_NAME.rb
 
-          depends_on: |
-            "grpcurl"
-            "jq"
+      - name: Clone homebrew-tap repository
+        run: |
+          git clone https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/gripmock/homebrew-tap.git
+          cd homebrew-tap
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
 
-          version: ${{ github.ref_name }}
+      - name: Update formula in homebrew-tap
+        run: |
+          FORMULA_NAME="grpctestify"
+          cp ../Formula/$FORMULA_NAME.rb homebrew-tap/Formula/$FORMULA_NAME.rb
 
-          target_darwin_amd64: true
-          target_darwin_arm64: true
-          target_linux_amd64: true
-          target_linux_arm64: true
-          update_readme_table: false
-
-          skip_commit: false
-
-          debug: false
+          cd homebrew-tap
+          git add Formula/$FORMULA_NAME.rb
+          git commit -m "Update $FORMULA_NAME to ${{ github.ref_name }}"
+          git push origin main
