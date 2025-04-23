@@ -1,37 +1,37 @@
 on:
-    release:
-      types: [published]
-  
-  jobs:
-    homebrew-releaser:
-      runs-on: ubuntu-latest
-      name: homebrew-releaser
-      steps:
-        - name: Release project to Homebrew tap
-          uses: Justintime50/homebrew-releaser@v2
-          with:
-            github_token: ${{ secrets.HOMEBREW_TOKEN }}
+  release:
+    types: [published]
 
-            homebrew_owner: gripmock
-            homebrew_tap: homebrew-tap
-            formula_folder: Formula
+jobs:
+  homebrew-releaser:
+    runs-on: ubuntu-latest
+    name: homebrew-releaser
+    steps:
+      - name: Release project to Homebrew tap
+        uses: Justintime50/homebrew-releaser@v2
+        with:
+          github_token: ${{ secrets.HOMEBREW_TOKEN }}
 
-            install: 'bin.install "grpctestify.sh" => "grpctestify"'
+          homebrew_owner: gripmock
+          homebrew_tap: homebrew-tap
+          formula_folder: Formula
 
-            test: 'assert_match("#{version}", shell_output("#{bin}/grpctestify --version"))'
+          install: 'bin.install "grpctestify.sh" => "grpctestify"'
 
-            depends_on: |
-              "grpcurl"
-              "jq"
+          test: 'assert_match("#{version}", shell_output("#{bin}/grpctestify --version"))'
 
-            version: ${{ github.ref_name }}
+          depends_on: |
+            "grpcurl"
+            "jq"
 
-            target_darwin_amd64: true
-            target_darwin_arm64: true
-            target_linux_amd64: true
-            target_linux_arm64: true
-            update_readme_table: false
+          version: ${{ github.ref_name }}
 
-            skip_commit: false
+          target_darwin_amd64: true
+          target_darwin_arm64: true
+          target_linux_amd64: true
+          target_linux_arm64: true
+          update_readme_table: false
 
-            debug: false
+          skip_commit: false
+
+          debug: false
