@@ -1,5 +1,7 @@
 # gRPC Testify
 
+<img align="right" width="150" height="150"  src="https://github.com/user-attachments/assets/d331a8db-4f4c-4296-950c-86b91ea5540a">
+
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Marketplace-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=gripmock.grpctestify)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-green?logo=github)](https://github.com/gripmock/grpctestify-vscode)
 
