@@ -10,7 +10,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-13]
+        os: [ubuntu-latest, macos-13, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -25,11 +25,6 @@ jobs:
           go build -o /tmp/client-server .
           chmod +x /tmp/client-server
           cd -
-
-      # macOS-specific Docker setup
-      - name: Setup Docker on macOS
-        if: matrix.os == 'macos-13'
-        uses: douglascamata/setup-docker-macos-action@v1.0.0
 
       - name: Install dependencies
         run: |
@@ -48,9 +43,12 @@ jobs:
 
       - name: Start Greeter server
         run: |
-          make up CONTAINER_NAME=greeter-server-1 
-          make up CONTAINER_NAME=greeter-server-2 SERVER_PORT=4771  
-          sleep 5
+          go run github.com/bavix/gripmock/v3@v3.2.15 --stub ./stubs ./api &
+          echo $! > /tmp/server1.pid
+          go run github.com/bavix/gripmock/v3@v3.2.15 check --silent
+          GRPC_PORT=4771 go run github.com/bavix/gripmock/v3@v3.2.15 --stub ./stubs ./api &
+          echo $! > /tmp/server2.pid
+          GRPC_PORT=4771 go run github.com/bavix/gripmock/v3@v3.2.15 check --silent
       
       - name: Change permissions
         run: |
@@ -70,6 +68,7 @@ jobs:
 
       - name: Cleanup
         run: |
-          docker rm -f greeter-server-1 greeter-server-2 || true
           kill $(cat /tmp/client-server.pid) || true
-          rm /tmp/client-server.pid || true
+          kill $(cat /tmp/server1.pid) || true
+          kill $(cat /tmp/server2.pid) || true
+          rm /tmp/client-server.pid /tmp/server1.pid /tmp/server2.pid || true
