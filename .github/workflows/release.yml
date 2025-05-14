@@ -27,8 +27,8 @@ jobs:
           echo "" >> /tmp/grpctestify.rb
           echo "class Grpctestify < Formula" >> /tmp/grpctestify.rb
           echo "  desc \"Utility for testing gRPC servers\"" >> /tmp/grpctestify.rb
-          echo "  homepage \"https://github.com/gripmock/grpctestify \"" >> /tmp/grpctestify.rb
-          echo "  url \"https://github.com/gripmock/grpctestify/releases/download/ ${VERSION}/grpctestify.sh\"" >> /tmp/grpctestify.rb
+          echo "  homepage \"https://github.com/gripmock/grpctestify\"" >> /tmp/grpctestify.rb
+          echo "  url \"https://github.com/gripmock/grpctestify/releases/download/${VERSION}/grpctestify.sh\"" >> /tmp/grpctestify.rb
           echo "  sha256 \"${CHECKSUM}\"" >> /tmp/grpctestify.rb
           echo "" >> /tmp/grpctestify.rb
           echo "  depends_on \"grpcurl\"" >> /tmp/grpctestify.rb
