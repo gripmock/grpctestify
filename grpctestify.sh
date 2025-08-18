@@ -368,7 +368,16 @@ run_test() {
 			return 1
 		fi
 	else
-		EXPECTED=$(echo "$RESPONSE" | jq --sort-keys .)
+		# Check if RESPONSE contains multiple JSON objects (not in array format)
+		response_json_count=$(echo "$RESPONSE" | jq -s 'length' 2>/dev/null || echo "1")
+		
+		if [[ "$response_json_count" -gt 1 ]]; then
+			# Multiple JSON objects expected, convert to array for comparison
+			EXPECTED=$(echo "$RESPONSE" | jq -s --sort-keys .)
+		else
+			EXPECTED=$(echo "$RESPONSE" | jq --sort-keys .)
+		fi
+		
 		if [[ $GRPC_STATUS -ne 0 ]]; then
 			log error "gRPC request failed with status $GRPC_STATUS"
 			log error "Response: $RESPONSE_OUTPUT"
@@ -403,12 +412,16 @@ run_test() {
 		fi
 	else
 		# For non-verbose output, handle stream responses properly
-		if echo "$RESPONSE" | jq -e 'type=="array"' >/dev/null 2>&1; then
-			# Expected array, so collect all JSON objects
+		# Check if RESPONSE contains multiple JSON objects (not in array format)
+		response_json_count=$(echo "$RESPONSE" | jq -s 'length' 2>/dev/null || echo "1")
+		actual_json_count=$(echo "$RESPONSE_OUTPUT" | jq -s 'length' 2>/dev/null || echo "1")
+		
+		if [[ "$response_json_count" -gt 1 ]] || [[ "$actual_json_count" -gt 1 ]]; then
+			# Multiple JSON objects expected or received, collect all
 			ACTUAL=$(echo "$RESPONSE_OUTPUT" | jq -s --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
 		else
-			# Expected single object, take first JSON
-			ACTUAL=$(echo "$RESPONSE_OUTPUT" | jq -s '.[0]' 2>/dev/null | jq --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
+			# Single JSON object expected
+			ACTUAL=$(echo "$RESPONSE_OUTPUT" | jq --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
 		fi
 	fi
 
