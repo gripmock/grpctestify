@@ -45,5 +45,8 @@
     equals:
       name: Bob
   output:
+    headers:
+      x-last-name: Ivanov
+      x-first-name: Ivan
     data:
       message: You aren't Bob. You are Ivan.
