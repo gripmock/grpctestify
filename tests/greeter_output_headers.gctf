@@ -5,7 +5,7 @@ localhost:4770
 helloworld.Greeter/SayHello
 
 --- REQUEST_HEADERS ---
-x-test-header: test-value
+x-username: test-value
 
 --- REQUEST ---
 {
@@ -14,8 +14,9 @@ x-test-header: test-value
 
 --- RESPONSE_HEADERS ---
 content-type: application/grpc
+x-token: test-value-token
 
 --- RESPONSE ---
 {
-    "message": "Hello Alex"
+    "message": "Hello test-value"
 }

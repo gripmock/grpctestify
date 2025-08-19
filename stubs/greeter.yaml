@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://bavix.github.io/gripmock/schema/stub.json
+
 - service: Greeter
   method: SayHello
   input:
@@ -50,3 +52,17 @@
       x-first-name: Ivan
     data:
       message: You aren't Bob. You are Ivan.
+
+- service: Greeter
+  method: SayHello
+  headers:
+    equals:
+      x-username: "test-value"
+  input:
+    equals:
+      name: "Alex"
+  output:
+    headers:
+      x-token: "test-value-token"
+    data:
+      message: "Hello {{ index .Headers \"x-username\" }}"
