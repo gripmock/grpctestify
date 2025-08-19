@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.13"
+VERSION="v0.0.14"
 
 # Color configuration
 RED="\033[0;31m"
@@ -136,6 +136,9 @@ display_help() {
 	printf "   --- RESPONSE_HEADERS --- (optional)\n"
 	printf "   content-type: application/grpc\n"
 	printf "   x-response-id: abc123\n\n"
+	printf "   --- RESPONSE_TRAILERS --- (optional)\n"
+	printf "   grpc-status: 0\n"
+	printf "   x-trailer-id: def456\n\n"
 	printf "   --- REQUEST --- (optional)\n"
 	printf "   {\"name\": \"test\"}\n\n"
 	printf "   --- RESPONSE --- (optional)\n"
@@ -219,6 +222,7 @@ run_test() {
 	HEADERS=$(extract_section "HEADERS")
 	REQUEST_HEADERS=$(extract_section "REQUEST_HEADERS")
 	RESPONSE_HEADERS=$(extract_section "RESPONSE_HEADERS")
+	RESPONSE_TRAILERS=$(extract_section "RESPONSE_TRAILERS")
 
 	if [[ -z "$RESPONSE" && -z "$ERROR" ]]; then
 		log error "At least one of RESPONSE or ERROR sections must be present in $TEST_FILE"
@@ -250,6 +254,7 @@ run_test() {
 
 	[[ -n "$REQUEST_HEADERS" ]] && log info "  REQUEST_HEADERS: $REQUEST_HEADERS"
 	[[ -n "$RESPONSE_HEADERS" ]] && log info "  RESPONSE_HEADERS: $RESPONSE_HEADERS"
+	[[ -n "$RESPONSE_TRAILERS" ]] && log info "  RESPONSE_TRAILERS: $RESPONSE_TRAILERS"
 	[[ -n "$REQUEST" ]] && log info "  REQUEST: $(echo $REQUEST | jq -c .)" || log info "  REQUEST: EMPTY"
 	[[ -n "$RESPONSE" ]] && log info "  RESPONSE: $(echo $RESPONSE | jq -c .)"
 	[[ -n "$ERROR" ]] && log info "  ERROR: $(echo $ERROR | jq -c .)"
@@ -281,8 +286,8 @@ run_test() {
 	# Initialize grpcurl_flags as an array
 	grpcurl_flags=(-plaintext)
 	
-	# Add verbose flag only if we need to capture response headers
-	[[ -n "$RESPONSE_HEADERS" ]] && grpcurl_flags+=(-v)
+	# Add verbose flag only if we need to capture response headers or trailers
+	[[ -n "$RESPONSE_HEADERS" || -n "$RESPONSE_TRAILERS" ]] && grpcurl_flags+=(-v)
 
 	# Add request headers if present
 	if [[ -n "$REQUEST_HEADERS" ]]; then
@@ -324,36 +329,64 @@ run_test() {
 	RESPONSE_OUTPUT=$(cat "$temp_grpc_output")
 	execution_time=$(awk '{printf "%.0f", $1 * 1000}' "$temp_time")
 
-	# Extract response headers from verbose output
+	# Extract response headers and trailers from verbose output
 	ACTUAL_RESPONSE_HEADERS=""
-	# Always extract headers if verbose output is available (when -v flag was used)
-	if [[ -n "$RESPONSE_HEADERS" ]]; then
+	ACTUAL_RESPONSE_TRAILERS=""
+	# Always extract headers and trailers if verbose output is available (when -v flag was used)
+	if [[ -n "$RESPONSE_HEADERS" || -n "$RESPONSE_TRAILERS" ]]; then
 		# Extract headers section from verbose output
-		ACTUAL_RESPONSE_HEADERS=$(echo "$RESPONSE_OUTPUT" | awk '
-		/^Response headers received:/ {
-			in_headers = 1
-			next
-		}
-		/^Response contents:/ {
-			in_headers = 0
-			next
-		}
-		/^Response trailers received:/ {
-			in_headers = 0
-			next
-		}
-		/^Sent [0-9]+ request/ {
-			in_headers = 0
-			next
-		}
-		in_headers && /^[[:space:]]*[a-zA-Z0-9_-]+:/ {
-			gsub(/^[[:space:]]+/, "")
-			gsub(/[[:space:]]+$/, "")
-			if (length($0) > 0) {
-				print $0
+		if [[ -n "$RESPONSE_HEADERS" ]]; then
+			ACTUAL_RESPONSE_HEADERS=$(echo "$RESPONSE_OUTPUT" | awk '
+			/^Response headers received:/ {
+				in_headers = 1
+				next
 			}
-		}
-		' | sort)
+			/^Response contents:/ {
+				in_headers = 0
+				next
+			}
+			/^Response trailers received:/ {
+				in_headers = 0
+				next
+			}
+			/^Sent [0-9]+ request/ {
+				in_headers = 0
+				next
+			}
+			in_headers && /^[[:space:]]*[a-zA-Z0-9_-]+:/ {
+				gsub(/^[[:space:]]+/, "")
+				gsub(/[[:space:]]+$/, "")
+				if (length($0) > 0) {
+					print $0
+				}
+			}
+			' | sort)
+		fi
+		
+		# Extract trailers section from verbose output
+		if [[ -n "$RESPONSE_TRAILERS" ]]; then
+			ACTUAL_RESPONSE_TRAILERS=$(echo "$RESPONSE_OUTPUT" | awk '
+			/^Response trailers received:/ {
+				in_trailers = 1
+				next
+			}
+			/^Sent [0-9]+ request/ {
+				in_trailers = 0
+				next
+			}
+			/^[[:space:]]*---/ {
+				in_trailers = 0
+				next
+			}
+			in_trailers && /^[[:space:]]*[a-zA-Z0-9_-]+:/ {
+				gsub(/^[[:space:]]+/, "")
+				gsub(/[[:space:]]+$/, "")
+				if (length($0) > 0) {
+					print $0
+				}
+			}
+			' | sort)
+		fi
 	fi
 
 	[[ -n "$temp_grpc_output" ]] && rm -f "$temp_grpc_output"
@@ -385,8 +418,8 @@ run_test() {
 		fi
 	fi
 
-	# Build ACTUAL response, considering verbose output when RESPONSE_HEADERS are requested
-	if [[ -n "$RESPONSE_HEADERS" ]]; then
+	# Build ACTUAL response, considering verbose output when RESPONSE_HEADERS or RESPONSE_TRAILERS are requested
+	if [[ -n "$RESPONSE_HEADERS" || -n "$RESPONSE_TRAILERS" ]]; then
 		# Extract all JSON response blocks from verbose output
 		response_blocks=$(echo "$RESPONSE_OUTPUT" | awk '
 		/^Response contents:/ {
@@ -444,6 +477,26 @@ run_test() {
 			printf "%s\n" "$EXPECTED_HEADERS"
 			log error "+++ Actual Headers +++"
 			printf "%s\n" "$ACTUAL_RESPONSE_HEADERS"
+			return 1
+		fi
+	fi
+
+	# Validate response trailers if specified
+	if [[ -n "$RESPONSE_TRAILERS" ]]; then
+		log debug "Expected trailers: $RESPONSE_TRAILERS"
+		log debug "Actual trailers: $ACTUAL_RESPONSE_TRAILERS"
+		
+		# Convert expected trailers to sorted format for comparison
+		EXPECTED_TRAILERS=$(echo "$RESPONSE_TRAILERS" | sort)
+		
+		if [[ "$EXPECTED_TRAILERS" == "$ACTUAL_RESPONSE_TRAILERS" ]]; then
+			log success "Trailers validation passed"
+		else
+			log error "Trailers validation failed"
+			log error "--- Expected Trailers ---"
+			printf "%s\n" "$EXPECTED_TRAILERS"
+			log error "+++ Actual Trailers +++"
+			printf "%s\n" "$ACTUAL_RESPONSE_TRAILERS"
 			return 1
 		fi
 	fi

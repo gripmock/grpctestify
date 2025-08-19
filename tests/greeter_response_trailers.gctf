@@ -1,0 +1,23 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+helloworld.Greeter/SayHello
+
+--- REQUEST_HEADERS ---
+x-test-header: test-value
+
+--- REQUEST ---
+{
+    "name": "Alex"
+}
+
+--- RESPONSE_HEADERS ---
+content-type: application/grpc
+
+--- RESPONSE_TRAILERS ---
+
+--- RESPONSE ---
+{
+    "message": "Hello Alex"
+}
