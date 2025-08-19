@@ -43,12 +43,12 @@ jobs:
 
       - name: Start Greeter server
         run: |
-          HTTP_PORT=4790 go run github.com/bavix/gripmock/v3@v3.2.15 --stub ./stubs ./api &
+          HTTP_PORT=4790 go run github.com/bavix/gripmock/v3@v3.4.2 --stub ./stubs ./api &
           echo $! > /tmp/server1.pid
-          go run github.com/bavix/gripmock/v3@v3.2.15 check --silent
-          GRPC_PORT=4771 HTTP_PORT=4791 go run github.com/bavix/gripmock/v3@v3.2.15 --stub ./stubs ./api &
+          go run github.com/bavix/gripmock/v3@v3.4.2 check --silent
+          GRPC_PORT=4771 HTTP_PORT=4791 go run github.com/bavix/gripmock/v3@v3.4.2 --stub ./stubs ./api &
           echo $! > /tmp/server2.pid
-          GRPC_PORT=4771 go run github.com/bavix/gripmock/v3@v3.2.15 check --silent
+          GRPC_PORT=4771 go run github.com/bavix/gripmock/v3@v3.4.2 check --silent
       
       - name: Change permissions
         run: |
