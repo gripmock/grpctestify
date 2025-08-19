@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="v0.0.12"
+VERSION="v0.0.13"
 
 # Color configuration
 RED="\033[0;31m"
@@ -124,6 +124,24 @@ display_help() {
 	printf "${INFO} Requirements:\n"
 	printf "   ${CHECK} grpcurl (https://github.com/fullstorydev/grpcurl)\n"
 	printf "   ${CHECK} jq (https://stedolan.github.io/jq/)\n\n"
+	printf "${INFO} Test File Format:\n"
+	printf "   --- ADDRESS ---\n"
+	printf "   localhost:4770\n\n"
+	printf "   --- ENDPOINT ---\n"
+	printf "   helloworld.Greeter/SayHello\n\n"
+	printf "   --- REQUEST_HEADERS --- (optional)\n"
+	printf "   x-user: test\n"
+	printf "   x-token: 123\n\n"
+	printf "   # Note: 'HEADERS' is deprecated; use 'REQUEST_HEADERS' instead.\n\n"
+	printf "   --- RESPONSE_HEADERS --- (optional)\n"
+	printf "   content-type: application/grpc\n"
+	printf "   x-response-id: abc123\n\n"
+	printf "   --- REQUEST --- (optional)\n"
+	printf "   {\"name\": \"test\"}\n\n"
+	printf "   --- RESPONSE --- (optional)\n"
+	printf "   {\"message\": \"Hello test\"}\n\n"
+	printf "   --- ERROR --- (optional)\n"
+	printf "   {\"code\": 16, \"message\": \"user not found\"}\n\n"
 	printf "${INFO} Examples:\n"
 	printf "   $0 my_test.gctf\n"
 	printf "   $0 --verbose tests/\n"
@@ -199,6 +217,8 @@ run_test() {
 	RESPONSE=$(extract_section "RESPONSE")
 	ERROR=$(extract_section "ERROR")
 	HEADERS=$(extract_section "HEADERS")
+	REQUEST_HEADERS=$(extract_section "REQUEST_HEADERS")
+	RESPONSE_HEADERS=$(extract_section "RESPONSE_HEADERS")
 
 	if [[ -z "$RESPONSE" && -z "$ERROR" ]]; then
 		log error "At least one of RESPONSE or ERROR sections must be present in $TEST_FILE"
@@ -220,7 +240,16 @@ run_test() {
 	log info "  ADDRESS: $ADDRESS"
 	log info "  ENDPOINT: $ENDPOINT"
 
-	[[ -n "$HEADERS" ]] && log info "  HEADERS: $HEADERS"
+	# Map deprecated HEADERS to REQUEST_HEADERS if needed
+	if [[ -n "$HEADERS" && -z "$REQUEST_HEADERS" ]]; then
+		log warn "HEADERS is deprecated; use REQUEST_HEADERS instead"
+		REQUEST_HEADERS="$HEADERS"
+	elif [[ -n "$HEADERS" && -n "$REQUEST_HEADERS" ]]; then
+		log warn "HEADERS is deprecated and ignored because REQUEST_HEADERS is present"
+	fi
+
+	[[ -n "$REQUEST_HEADERS" ]] && log info "  REQUEST_HEADERS: $REQUEST_HEADERS"
+	[[ -n "$RESPONSE_HEADERS" ]] && log info "  RESPONSE_HEADERS: $RESPONSE_HEADERS"
 	[[ -n "$REQUEST" ]] && log info "  REQUEST: $(echo $REQUEST | jq -c .)" || log info "  REQUEST: EMPTY"
 	[[ -n "$RESPONSE" ]] && log info "  RESPONSE: $(echo $RESPONSE | jq -c .)"
 	[[ -n "$ERROR" ]] && log info "  ERROR: $(echo $ERROR | jq -c .)"
@@ -251,15 +280,18 @@ run_test() {
 
 	# Initialize grpcurl_flags as an array
 	grpcurl_flags=(-plaintext)
+	
+	# Add verbose flag only if we need to capture response headers
+	[[ -n "$RESPONSE_HEADERS" ]] && grpcurl_flags+=(-v)
 
-	# Add headers if present
-	if [[ -n "$HEADERS" ]]; then
+	# Add request headers if present
+	if [[ -n "$REQUEST_HEADERS" ]]; then
 		while IFS= read -r header; do
 			header=$(echo "$header" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 			if [[ -n "$header" ]]; then
 				grpcurl_flags+=(-H "$header")
 			fi
-		done <<<"$HEADERS"
+		done <<<"$REQUEST_HEADERS"
 	fi
 
 	# Add format-error flag if ERROR section exists
@@ -270,14 +302,16 @@ run_test() {
 	temp_time=$(mktemp)
 
 	if [[ -n "$REQUEST_TMP" ]]; then
-		log debug "$ grpcurl ${grpcurl_flags[@]} -d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
+		flags_str=$(printf "%s " "${grpcurl_flags[@]}")
+		log debug "$ grpcurl ${flags_str}-d @ \"$ADDRESS\" \"$ENDPOINT\" < $REQUEST_TMP"
 		# shellcheck disable=SC2086
 		(
 			TIMEFORMAT='%R'
 			{ time grpcurl "${grpcurl_flags[@]}" -d @ "$ADDRESS" "$ENDPOINT" <"$REQUEST_TMP" >"$temp_grpc_output" 2>&1; } 2>"$temp_time"
 		)
 	else
-		log debug "$ grpcurl ${grpcurl_flags[@]} \"$ADDRESS\" \"$ENDPOINT\""
+		flags_str=$(printf "%s " "${grpcurl_flags[@]}")
+		log debug "$ grpcurl ${flags_str}\"$ADDRESS\" \"$ENDPOINT\""
 		# shellcheck disable=SC2086
 		(
 			TIMEFORMAT='%R'
@@ -289,6 +323,38 @@ run_test() {
 
 	RESPONSE_OUTPUT=$(cat "$temp_grpc_output")
 	execution_time=$(awk '{printf "%.0f", $1 * 1000}' "$temp_time")
+
+	# Extract response headers from verbose output
+	ACTUAL_RESPONSE_HEADERS=""
+	# Always extract headers if verbose output is available (when -v flag was used)
+	if [[ -n "$RESPONSE_HEADERS" ]]; then
+		# Extract headers section from verbose output
+		ACTUAL_RESPONSE_HEADERS=$(echo "$RESPONSE_OUTPUT" | awk '
+		/^Response headers received:/ {
+			in_headers = 1
+			next
+		}
+		/^Response contents:/ {
+			in_headers = 0
+			next
+		}
+		/^Response trailers received:/ {
+			in_headers = 0
+			next
+		}
+		/^Sent [0-9]+ request/ {
+			in_headers = 0
+			next
+		}
+		in_headers && /^[[:space:]]*[a-zA-Z0-9_-]+:/ {
+			gsub(/^[[:space:]]+/, "")
+			gsub(/[[:space:]]+$/, "")
+			if (length($0) > 0) {
+				print $0
+			}
+		}
+		' | sort)
+	fi
 
 	[[ -n "$temp_grpc_output" ]] && rm -f "$temp_grpc_output"
 	[[ -n "$temp_time" ]] && rm -f "$temp_time"
@@ -302,7 +368,16 @@ run_test() {
 			return 1
 		fi
 	else
-		EXPECTED=$(echo "$RESPONSE" | jq --sort-keys .)
+		# Check if RESPONSE contains multiple JSON objects (not in array format)
+		response_json_count=$(echo "$RESPONSE" | jq -s 'length' 2>/dev/null || echo "1")
+		
+		if [[ "$response_json_count" -gt 1 ]]; then
+			# Multiple JSON objects expected, convert to array for comparison
+			EXPECTED=$(echo "$RESPONSE" | jq -s --sort-keys .)
+		else
+			EXPECTED=$(echo "$RESPONSE" | jq --sort-keys .)
+		fi
+		
 		if [[ $GRPC_STATUS -ne 0 ]]; then
 			log error "gRPC request failed with status $GRPC_STATUS"
 			log error "Response: $RESPONSE_OUTPUT"
@@ -310,10 +385,68 @@ run_test() {
 		fi
 	fi
 
-	ACTUAL=$(echo "$RESPONSE_OUTPUT" | jq --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
+	# Build ACTUAL response, considering verbose output when RESPONSE_HEADERS are requested
+	if [[ -n "$RESPONSE_HEADERS" ]]; then
+		# Extract all JSON response blocks from verbose output
+		response_blocks=$(echo "$RESPONSE_OUTPUT" | awk '
+		/^Response contents:/ {
+			in_resp = 1
+			next
+		}
+		/^Response (headers|trailers) received:/ {
+			in_resp = 0
+			next
+		}
+		/^Sent [0-9]+ request/ {
+			in_resp = 0
+			next
+		}
+		in_resp { print }
+		')
+		
+		# If expected is an array, assemble all blocks into array; else take first
+		if echo "$RESPONSE" | jq -e 'type=="array"' >/dev/null 2>&1; then
+			ACTUAL=$(echo "$response_blocks" | jq -s --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
+		else
+			ACTUAL=$(echo "$response_blocks" | jq -s '.[0]' 2>/dev/null | jq --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
+		fi
+	else
+		# For non-verbose output, handle stream responses properly
+		# Check if RESPONSE contains multiple JSON objects (not in array format)
+		response_json_count=$(echo "$RESPONSE" | jq -s 'length' 2>/dev/null || echo "1")
+		actual_json_count=$(echo "$RESPONSE_OUTPUT" | jq -s 'length' 2>/dev/null || echo "1")
+		
+		if [[ "$response_json_count" -gt 1 ]] || [[ "$actual_json_count" -gt 1 ]]; then
+			# Multiple JSON objects expected or received, collect all
+			ACTUAL=$(echo "$RESPONSE_OUTPUT" | jq -s --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
+		else
+			# Single JSON object expected
+			ACTUAL=$(echo "$RESPONSE_OUTPUT" | jq --sort-keys . 2>/dev/null || echo "$RESPONSE_OUTPUT")
+		fi
+	fi
 
 	log debug "Expected response: $EXPECTED"
 	log debug "Actual response: $ACTUAL"
+
+	# Validate response headers if specified
+	if [[ -n "$RESPONSE_HEADERS" ]]; then
+		log debug "Expected headers: $RESPONSE_HEADERS"
+		log debug "Actual headers: $ACTUAL_RESPONSE_HEADERS"
+		
+		# Convert expected headers to sorted format for comparison
+		EXPECTED_HEADERS=$(echo "$RESPONSE_HEADERS" | sort)
+		
+		if [[ "$EXPECTED_HEADERS" == "$ACTUAL_RESPONSE_HEADERS" ]]; then
+			log success "Headers validation passed"
+		else
+			log error "Headers validation failed"
+			log error "--- Expected Headers ---"
+			printf "%s\n" "$EXPECTED_HEADERS"
+			log error "+++ Actual Headers +++"
+			printf "%s\n" "$ACTUAL_RESPONSE_HEADERS"
+			return 1
+		fi
+	fi
 
 	if [[ "$EXPECTED" == "$ACTUAL" ]]; then
 		log success "TEST PASSED: $TEST_NAME ($execution_time ms)"
