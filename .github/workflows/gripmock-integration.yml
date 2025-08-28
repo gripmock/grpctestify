@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-          cache: false
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -29,6 +28,10 @@ jobs:
           
       - name: Install dependencies
         run: |
+          # Install system dependencies
+          sudo apt-get update
+          sudo apt-get install -y jq protobuf-compiler
+          
           # Install grpcurl without sudo
           curl -LO https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz
           tar -xzf grpcurl_1.9.1_linux_x86_64.tar.gz
@@ -36,10 +39,17 @@ jobs:
           mv grpcurl $HOME/bin/
           echo "$HOME/bin" >> $GITHUB_PATH
           
+          # Install Go protobuf tools
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          
           # Install bashly for script generation
           gem install bashly
           
           # Verify dependencies
+          protoc --version
+          protoc-gen-go --version
+          protoc-gen-go-grpc --version
           grpcurl --version
           jq --version
           
