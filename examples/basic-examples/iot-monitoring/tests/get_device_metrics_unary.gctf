@@ -1,0 +1,27 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+monitoring.IoTMonitoringService/GetDeviceMetrics
+
+--- REQUEST ---
+{
+  "device_id": "device_001",
+  "metric_type": "all",
+  "start_time": "2024-01-01T00:00:00Z",
+  "end_time": "2024-01-02T00:00:00Z"
+}
+
+--- ASSERTS ---
+.device_id == "device_001"
+.metric_type == "all"
+.total_points >= 10
+.data_points | length >= 10
+.data_points[0].metric_name == "temperature"
+.data_points[0].unit == "celsius"
+.data_points[0].value > 20
+.data_points[0].value < 30
+.data_points[0].tags.device_id == "device_001"
+
+--- OPTIONS ---
+timeout: 10

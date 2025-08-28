@@ -1,0 +1,33 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+chat.ChatService/GetMessages
+
+--- REQUEST ---
+{
+  "room_id": "room1",
+  "limit": 10,
+  "offset": 0
+}
+
+--- RESPONSE ---
+{
+  "messages": [
+    {
+      "id": "*",
+      "user_id": "*",
+      "room_id": "room1",
+      "content": "*",
+      "message_type": "text",
+      "timestamp": "*"
+    }
+  ],
+  "total": "*"
+}
+
+--- ASSERTS ---
+.messages | length >= 1
+.messages[0].room_id == "room1"
+.total >= 1
+

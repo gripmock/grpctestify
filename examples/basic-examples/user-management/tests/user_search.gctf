@@ -1,0 +1,59 @@
+# User Search Test
+# Tests user search functionality with pagination
+
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+user.UserService/SearchUsers
+
+--- REQUEST ---
+{
+    "query": "john_doe",
+    "roles": ["user", "premium"],
+    "active_only": true,
+    "page": 1,
+    "page_size": 10
+}
+
+--- RESPONSE ---
+{
+    "users": [
+        {
+            "id": "user_12345",
+            "username": "john_doe",
+            "email": "john.doe@example.com",
+            "full_name": "John Doe",
+            "age": 30,
+            "active": true,
+            "roles": ["user", "premium"],
+            "metadata": {
+                "department": "engineering",
+                "location": "san_francisco"
+            },
+            "created_at": "2024-01-15T10:00:00Z",
+            "updated_at": "2024-01-15T10:00:00Z"
+        }
+    ],
+    "total_count": 1,
+    "page": 1,
+    "page_size": 10,
+    "has_more": false
+}
+
+--- ASSERTS ---
+.users | length >= 0
+.users[0].id == "user_12345"
+.users[0].username == "john_doe"
+.users[0].email | test("@")
+.users[0].active == true
+.users[0].roles | length >= 1
+.users[0].metadata.department == "engineering"
+.total_count | type == "number"
+.page == 1
+.page_size == 10
+.has_more | type == "boolean"
+
+--- OPTIONS ---
+timeout: 30
+

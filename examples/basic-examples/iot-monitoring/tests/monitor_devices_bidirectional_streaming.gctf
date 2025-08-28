@@ -1,0 +1,46 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+monitoring.IoTMonitoringService/MonitorDevices
+
+--- REQUEST ---
+{
+  "device_id": "device_001",
+  "command_type": "start_monitoring",
+  "parameters": {
+    "interval": "5s",
+    "metrics": ["temperature", "humidity"]
+  },
+  "request_id": "req_001"
+}
+
+--- ASSERTS ---
+.device_id == "device_001"
+.request_id == "req_001"
+.message | contains("start_monitoring")
+.status == "DEVICE_STATUS_ONLINE"
+.telemetry.temperature > 20
+.telemetry.temperature < 30
+.telemetry.humidity > 40
+.telemetry.humidity < 60
+.telemetry.battery_level > 80
+
+--- REQUEST ---
+{
+  "device_id": "device_002",
+  "command_type": "get_status",
+  "parameters": {},
+  "request_id": "req_002"
+}
+
+--- ASSERTS ---
+.device_id == "device_002"
+.request_id == "req_002"
+.message | contains("get_status")
+.status == "DEVICE_STATUS_ONLINE"
+.telemetry.signal_strength > -60
+.telemetry.voltage > 10
+
+--- OPTIONS ---
+timeout: 30

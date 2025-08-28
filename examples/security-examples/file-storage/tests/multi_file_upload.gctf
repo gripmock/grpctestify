@@ -1,0 +1,66 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+filestorage.FileStorageService/UploadFiles
+
+--- REQUEST ---
+{
+  "chunk": {
+    "file_id": "file_001",
+    "filename": "document1.pdf", 
+    "chunk_index": 0,
+    "total_chunks": 3,
+    "data": "JVBERi0xLjQKJcOkw7zDtsOy...", 
+    "checksum": "abc123",
+    "metadata": {
+      "content_type": "application/pdf",
+      "size": "1024"
+    }
+  }
+}
+
+--- ASSERTS ---
+.file_id == "file_001"
+.status == "CHUNK_RECEIVED"
+.message | contains("Chunk 0/3 received")
+.bytes_received > 0
+
+--- REQUEST ---
+{
+  "chunk": {
+    "file_id": "file_001",
+    "filename": "document1.pdf",
+    "chunk_index": 1, 
+    "total_chunks": 3,
+    "data": "Lorem ipsum dolor sit amet...",
+    "checksum": "def456"
+  }
+}
+
+--- ASSERTS ---
+.file_id == "file_001"
+.status == "CHUNK_RECEIVED"
+.message | contains("Chunk 1/3 received") 
+.bytes_received > .bytes_received
+
+--- REQUEST ---
+{
+  "chunk": {
+    "file_id": "file_001",
+    "filename": "document1.pdf",
+    "chunk_index": 2,
+    "total_chunks": 3,
+    "data": "Final chunk data...",
+    "checksum": "ghi789"
+  }
+}
+
+--- ASSERTS ---
+.file_id == "file_001"
+.status == "FILE_COMPLETE"
+.message | contains("File upload completed")
+.total_size > 0
+.url | test("https?://.*")
+.checksum_verified == true
+

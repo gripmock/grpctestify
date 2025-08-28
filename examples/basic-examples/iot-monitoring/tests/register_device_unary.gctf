@@ -1,0 +1,33 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+monitoring.IoTMonitoringService/RegisterDevice
+
+--- REQUEST ---
+{
+  "device_name": "Smart Light Bulb - Kitchen",
+  "device_type": "smart_light",
+  "location": "Kitchen",
+  "firmware_version": "2.1.0",
+  "metadata": {
+    "manufacturer": "LightCorp",
+    "model": "LC-500",
+    "room": "kitchen",
+    "wattage": "9W"
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.device.id | test("device_.*")
+.device.name == "Smart Light Bulb - Kitchen"
+.device.type == "smart_light"
+.device.location == "Kitchen"
+.device.status == "DEVICE_STATUS_ONLINE"
+.device.firmware_version == "2.1.0"
+.device.metadata.manufacturer == "LightCorp"
+.device.metadata.model == "LC-500"
+
+--- OPTIONS ---
+timeout: 10

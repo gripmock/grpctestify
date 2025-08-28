@@ -1,0 +1,64 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+aichat.AIChatService/StreamChat
+
+--- REQUEST ---
+{
+  "session_id": "session_stream_001",
+  "user_id": "user_001",
+  "message": "Write a detailed explanation about machine learning algorithms and their applications in modern technology",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "streaming_options": {
+    "chunk_size": 50,
+    "response_speed": "normal",
+    "include_metadata": true,
+    "stream_thinking": false
+  },
+  "context": {
+    "topic": "machine_learning",
+    "requested_length": "detailed",
+    "format": "educational"
+  }
+}
+
+--- ASSERTS ---
+.session_id == "session_stream_001"
+.message_part | length > 0
+.chunk_number >= 1
+.is_final == false OR .is_final == true
+.response_metadata.chunk_size <= 50
+.response_metadata.total_expected_chunks >= 5
+.streaming_info.bytes_sent > 0
+.streaming_info.transmission_time_ms > 0
+
+--- ASSERTS ---
+.session_id == "session_stream_001"
+.message_part | length > 0
+.chunk_number >= 2
+.response_metadata.progress_percentage > 20
+.response_metadata.words_generated > 10
+
+--- ASSERTS ---
+.session_id == "session_stream_001"
+.message_part | length > 0
+.chunk_number >= 3
+.response_metadata.progress_percentage > 50
+
+--- ASSERTS ---
+.session_id == "session_stream_001"
+.is_final == true
+.chunk_number >= 4
+.response_metadata.progress_percentage == 100
+.full_response_metadata.total_words >= 150
+.full_response_metadata.total_characters >= 800
+.full_response_metadata.total_chunks >= 4
+.performance_metrics.total_generation_time_ms > 0
+.performance_metrics.words_per_second > 0
+.quality_metrics.coherence_score > 0.8
+.quality_metrics.relevance_score > 0.9
+
+--- OPTIONS ---
+timeout: 60
+response_count: 4

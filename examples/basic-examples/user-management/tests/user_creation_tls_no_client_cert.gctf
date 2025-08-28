@@ -1,0 +1,47 @@
+--- ADDRESS ---
+localhost:4770
+
+--- TLS ---
+ca_cert: ./../server/tls/ca-cert.pem
+server_name: localhost
+insecure_skip_verify: false
+
+--- ENDPOINT ---
+user.UserService/CreateUser
+
+--- REQUEST ---
+{
+  "username": "newtlsuser",
+  "email": "newtlsuser@example.com",
+  "password": "securepass123",
+  "profile": {
+    "first_name": "New",
+    "last_name": "TLS User",
+    "bio": "Testing TLS without client certificate"
+  }
+}
+
+--- RESPONSE ---
+{
+  "user": {
+    "id": "*",
+    "username": "newtlsuser",
+    "email": "newtlsuser@example.com",
+    "profile": {
+      "first_name": "New",
+      "last_name": "TLS User",
+      "bio": "Testing TLS without client certificate"
+    },
+    "is_active": true,
+    "created_at": "*"
+  },
+  "success": true
+}
+
+--- ASSERTS ---
+.user.id | test("user_.*")
+.user.username == "newtlsuser"
+.user.email == "newtlsuser@example.com"
+.user.is_active == true
+.success == true
+

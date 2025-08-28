@@ -1,0 +1,24 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/RefundPayment
+
+--- REQUEST ---
+{
+    "transaction_id": "txn_1234567890",
+    "amount": 199.99,
+    "reason": "Customer requested refund for defective product"
+}
+
+--- ASSERTS ---
+.success == true
+.refund_id | type == "string"
+.refund_id | test("^refund_")
+.amount_refunded == 199.99
+.message | test("successfully")
+.processed_at | type == "string"
+
+--- OPTIONS ---
+timeout: 30
+redact: ["processed_at"]

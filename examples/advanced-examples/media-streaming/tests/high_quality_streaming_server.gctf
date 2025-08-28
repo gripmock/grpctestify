@@ -1,0 +1,52 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+mediastreaming.MediaStreamingService/StreamFile
+
+--- REQUEST ---
+{
+  "file_id": "hq_video_001",
+  "user_id": "user_viewer_001",
+  "streaming_options": {
+    "quality": "4k",
+    "adaptive_bitrate": true,
+    "buffer_size": 5,
+    "start_position": 0
+  },
+  "client_info": {
+    "bandwidth_mbps": 100,
+    "device_type": "desktop",
+    "supported_codecs": ["h264", "h265", "av1"]
+  }
+}
+
+--- ASSERTS ---
+.file_id == "hq_video_001"
+.chunk_data | length > 0
+.chunk_number >= 1
+.streaming_metadata.current_quality == "4k"
+.streaming_metadata.bitrate_kbps >= 15000
+.streaming_metadata.resolution == "3840x2160"
+.streaming_metadata.codec == "h265"
+.streaming_metadata.fps == 60
+.performance_metrics.buffer_health > 80
+.performance_metrics.network_utilization < 90
+
+--- ASSERTS ---
+.file_id == "hq_video_001"
+.chunk_number >= 2
+.streaming_metadata.adaptive_bitrate_active == true
+.quality_metrics.video_quality_score > 0.9
+.quality_metrics.audio_quality_score > 0.9
+
+--- ASSERTS ---
+.file_id == "hq_video_001"
+.chunk_number >= 3
+.streaming_stats.total_bytes_streamed > 0
+.streaming_stats.average_chunk_size > 1024
+.streaming_stats.dropped_frames == 0
+
+--- OPTIONS ---
+timeout: 40
+response_count: 3

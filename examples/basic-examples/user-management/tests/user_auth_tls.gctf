@@ -1,0 +1,44 @@
+--- ADDRESS ---
+localhost:4770
+
+--- TLS ---
+ca_cert: ./../server/tls/ca-cert.pem
+cert: ./../server/tls/client-cert.pem
+key: ./../server/tls/client-key.pem
+server_name: localhost
+insecure_skip_verify: false
+
+--- ENDPOINT ---
+user.UserService/AuthenticateUser
+
+--- REQUEST ---
+{
+  "username": "alice",
+  "password": "password123"
+}
+
+--- RESPONSE ---
+{
+  "user": {
+    "id": "*",
+    "username": "alice",
+    "email": "*",
+    "profile": {
+      "first_name": "Alice",
+      "last_name": "*"
+    },
+    "is_active": true,
+    "role": "admin"
+  },
+  "token": "*",
+  "expires_at": "*",
+  "success": true
+}
+
+--- ASSERTS ---
+.user.username == "alice"
+.user.role == "admin"
+.user.is_active == true
+.token | length > 10
+.success == true
+

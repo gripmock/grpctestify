@@ -1,0 +1,62 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/CreateProduct
+
+--- REQUEST ---
+{
+    "name": "Complex Test Product",
+    "description": "Product for testing complex assertions and validations",
+    "price": 299.99,
+    "currency": "USD",
+    "stock_quantity": 150,
+    "categories": ["Electronics", "Test", "Complex"],
+    "attributes": {
+        "brand": "TestBrand",
+        "model": "TB-001",
+        "warranty": "2 years",
+        "color": "Black",
+        "weight": "1.5kg"
+    },
+    "sku": "TB-001-COMPLEX",
+    "image_urls": [
+        "https://example.com/product1.jpg",
+        "https://example.com/product2.jpg",
+        "https://example.com/product3.jpg"
+    ]
+}
+
+--- ASSERTS ---
+.success == true
+.product.id | type == "string"
+.product.id | test("^prod_")
+.product.name == "Complex Test Product"
+.product.description | test("complex assertions")
+.product.price == 299.99
+.product.currency == "USD"
+.product.stock_quantity == 150
+.product.categories | length == 3
+.product.categories | index("Electronics") != null
+.product.categories | index("Test") != null
+.product.categories | index("Complex") != null
+.product.attributes.brand == "TestBrand"
+.product.attributes.model == "TB-001"
+.product.attributes.warranty == "2 years"
+.product.attributes.color == "Black"
+.product.attributes.weight == "1.5kg"
+.product.sku == "TB-001-COMPLEX"
+.product.image_urls | length == 3
+.product.image_urls[0] | test("product1.jpg")
+.product.image_urls[1] | test("product2.jpg")
+.product.image_urls[2] | test("product3.jpg")
+.product.active == true
+.product.rating == 0.0
+.product.review_count == 0
+.created_at | type == "string"
+.updated_at | type == "string"
+.message | test("successfully")
+
+--- OPTIONS ---
+timeout: 30
+redact: ["created_at", "updated_at"]

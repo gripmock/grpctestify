@@ -1,0 +1,17 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/HealthCheck
+
+--- REQUEST ---
+{
+    "service": "shopflow-ecommerce"
+}
+
+--- ASSERTS ---
+.status == "healthy"
+.message | test("ShopFlow")
+
+--- OPTIONS ---
+timeout: 2

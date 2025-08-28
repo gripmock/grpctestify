@@ -1,0 +1,107 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+aichat.AIChatService/ChatConversation
+
+--- REQUEST ---
+{
+  "session_id": "session_multilingual_001",
+  "user_id": "user_global_001",
+  "message": "Hola, ¿puedes explicarme sobre inteligencia artificial en español?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "language_settings": {
+    "detected_language": "es",
+    "response_language": "es",
+    "translation_required": false,
+    "cultural_context": "latin_america"
+  },
+  "nlp_features": {
+    "language_detection": true,
+    "cultural_adaptation": true,
+    "formality_detection": true
+  },
+  "request_id": "multilingual_req_001",
+  "timestamp": "2024-01-01T11:00:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_multilingual_001"
+.request_id == "multilingual_req_001"
+.response | length > 100
+.response | contains("inteligencia artificial")
+.response_language == "es"
+.nlp_analysis.detected_language == "es"
+.nlp_analysis.formality_level == "formal"
+.nlp_analysis.cultural_context == "latin_america"
+.language_quality.grammar_score > 0.9
+.language_quality.fluency_score > 0.9
+.language_quality.cultural_appropriateness > 0.8
+
+--- REQUEST ---
+{
+  "session_id": "session_multilingual_001",
+  "user_id": "user_global_001",
+  "message": "Can you now switch to English and explain the same concept?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "language_settings": {
+    "detected_language": "en",
+    "response_language": "en",
+    "language_switch": true,
+    "maintain_context": true
+  },
+  "nlp_features": {
+    "code_switching": true,
+    "context_preservation": true
+  },
+  "request_id": "multilingual_req_002",
+  "timestamp": "2024-01-01T11:02:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_multilingual_001"
+.request_id == "multilingual_req_002"
+.response | length > 100
+.response | contains("artificial intelligence")
+.response_language == "en"
+.nlp_analysis.detected_language == "en"
+.nlp_analysis.language_switch_detected == true
+.conversation_context.language_continuity == "preserved"
+.conversation_context.topic_maintained == true
+
+--- REQUEST ---
+{
+  "session_id": "session_multilingual_001",
+  "user_id": "user_global_001",
+  "message": "Maintenant, peux-tu m'expliquer en français?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "language_settings": {
+    "detected_language": "fr",
+    "response_language": "fr",
+    "multilingual_session": true
+  },
+  "nlp_features": {
+    "polyglot_conversation": true,
+    "cross_lingual_understanding": true
+  },
+  "request_id": "multilingual_req_003",
+  "timestamp": "2024-01-01T11:04:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_multilingual_001"
+.request_id == "multilingual_req_003"
+.response | length > 100
+.response | contains("intelligence artificielle")
+.response_language == "fr"
+.nlp_analysis.detected_language == "fr"
+.conversation_context.languages_used | length == 3
+.conversation_context.languages_used | contains("es")
+.conversation_context.languages_used | contains("en")
+.conversation_context.languages_used | contains("fr")
+.polyglot_metrics.language_consistency > 0.8
+.polyglot_metrics.cultural_adaptation > 0.7
+
+--- OPTIONS ---
+timeout: 50
+stream_count: 3

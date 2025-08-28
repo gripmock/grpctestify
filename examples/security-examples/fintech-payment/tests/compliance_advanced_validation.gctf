@@ -1,0 +1,58 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+payment.PaymentService/ProcessPayment
+
+--- REQUEST ---
+{
+  "account_id": "acc_compliance_001",
+  "merchant_id": "merchant_regulated_001",
+  "amount": 10000.00,
+  "currency": "USD",
+  "payment_method": "wire_transfer",
+  "risk_level": "high",
+  "compliance_data": {
+    "kyc_status": "verified",
+    "aml_check": "passed",
+    "sanctions_check": "clear",
+    "pep_check": "not_applicable",
+    "source_of_funds": "business_income",
+    "customer_due_diligence": "enhanced",
+    "jurisdiction": "US"
+  },
+  "regulatory_requirements": {
+    "requires_manual_review": true,
+    "suspicious_activity_monitoring": true,
+    "transaction_reporting": true,
+    "maximum_daily_limit": 50000.00,
+    "maximum_monthly_limit": 1000000.00
+  },
+  "metadata": {
+    "transaction_purpose": "business_payment",
+    "industry_sector": "financial_services",
+    "compliance_framework": "SOX_PCI_DSS",
+    "data_retention_period": "7_years"
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.transaction_id | test("txn_.*")
+.status == "pending_review"
+.message | contains("compliance review required")
+.amount_charged == 10000.00
+.currency == "USD"
+.compliance_check.compliance_status == "under_review"
+.compliance_check.kyc_verified == true
+.compliance_check.aml_status == "passed"
+.compliance_check.sanctions_clear == true
+.compliance_check.requires_manual_review == true
+.risk_assessment.risk_level == "high"
+.risk_assessment.risk_score >= 0.7
+.regulatory_checks.transaction_reporting_required == true
+.regulatory_checks.daily_limit_check == "within_limits"
+.regulatory_checks.monthly_limit_check == "within_limits"
+
+--- OPTIONS ---
+timeout: 20

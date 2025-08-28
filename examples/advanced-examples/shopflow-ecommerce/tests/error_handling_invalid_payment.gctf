@@ -1,0 +1,28 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/RefundPayment
+
+--- REQUEST ---
+{
+    "transaction_id": "nonexistent_transaction_999",
+    "amount": 100.00,
+    "reason": "Customer requested refund"
+}
+
+--- ERROR ---
+{
+    "code": "NOT_FOUND",
+    "message": "Original transaction not found",
+    "details": "Transaction with ID 'nonexistent_transaction_999' does not exist"
+}
+
+--- ASSERTS ---
+.success == false
+.refund_id == ""
+.amount_refunded == 0
+.message | test("not found")
+
+--- OPTIONS ---
+timeout: 15

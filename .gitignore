@@ -1,15 +1,71 @@
-# Temp files
+# Temporary files
 *.tmp
 *.log
 *.swp
+*.bak
+*~
 
-# Test artifacts
+# Test artifacts and coverage
 test_results/
 coverage/
+*.coverage
+.coverage/
 
-# IDE
+# Cache directories
+.cache/
+.grpctestify/
+.grpc-testify/
+
+# IDE and editor files
 .vscode/
 .idea/
+*.sublime-*
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.o
+*.so
+*.dylib
+
+# Logs
+*.log
+logs/
 
 # Shellcheck
 shellcheck.log
+
+# Bashly generated files (if any)
+src/bashly/
+
+# Plugin temporary files
+plugins/temp/
+plugins/*.tmp
+
+# Test server artifacts
+testdata/server/*/bin/
+testdata/server/*/pkg/
+
+# Go specific (for test framework)
+testdata/testframework/vendor/
+testdata/server/*/vendor/
+
+# Configuration files (user-specific)
+.grpc-testify-config
+.grpc-testify-rc
+
+# Node.js
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
+# Examples build artifacts
+examples/*/server/*-server
+examples/*/server/*-service
+examples/*/server/user-service
+examples/*/server/file-storage-server
+examples/*/server/monitoring-server
+examples/*/server/payment-server
+examples/*/server/chat-server

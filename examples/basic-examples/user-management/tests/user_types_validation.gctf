@@ -1,0 +1,55 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+user.UserService/GetUserProfile
+
+--- REQUEST ---
+{
+  "user_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+--- ASSERTS ---
+.success == true
+.user | type == "object"
+
+# Basic type validation
+.user.name | type == "string" and length > 0
+.user.age | type == "number" and . >= 0 and . <= 150
+.user.active | type == "boolean"
+
+# Advanced type validation with new plugins
+@uuid(.user.id) == true
+@email(.user.email) == true  
+@email(.user.backup_email, "strict") == true
+@url(.user.avatar_url, "https") == true
+@url(.user.website) == true
+@timestamp(.user.created_at, "iso8601") == true
+@timestamp(.user.last_login, "rfc3339") == true
+@ip(.user.last_login_ip, "v4") == true
+
+# Validate nested objects
+.user.address | type == "object"
+.user.address.country | test("^[A-Z]{2}$")  # ISO country code
+.user.address.postal_code | test("^[0-9]{5}(-[0-9]{4})?$")  # US zip code
+
+# Validate arrays
+.user.roles | type == "array" and length > 0
+.user.roles | all(type == "string")
+.user.permissions | type == "array"
+.user.permissions | all(test("^[a-z]+:[a-z]+$"))  # permission format
+
+# Validate optional fields
+(.user.phone // null) | if . != null then test("^\\+?[0-9\\-\\(\\)\\s]+$") else true end
+(.user.social_security // null) | if . != null then test("^[0-9]{3}-[0-9]{2}-[0-9]{4}$") else true end
+
+# Security validations
+.user.password == null  # Ensure password is not exposed
+.user.secret_key == null  # Ensure secret key is not exposed
+
+# Business logic validations
+if .user.email_verified == true then .user.email != null else true end
+if .user.roles | index("admin") then .user.permissions | length > 5 else true end
+
+--- OPTIONS ---
+timeout: 15

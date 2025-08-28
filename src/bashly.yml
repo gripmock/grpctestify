@@ -1,0 +1,104 @@
+name: grpctestify
+help: gRPC Server Testing Tool
+version: v1.0.0
+filename: commands/root_command.sh
+
+# Dependencies - external commands required by the script
+dependencies:
+  grpcurl: "Install grpcurl: https://github.com/fullstorydev/grpcurl#installation"
+  jq: "Install jq: https://jqlang.github.io/jq/download/"
+  bc: "Install bc: sudo apt install bc (Ubuntu/Debian) or brew install bc (macOS)"
+
+# Environment variables
+environment_variables:
+  - name: grpctestify_address
+    help: Default gRPC server address (e.g., localhost:4770)
+    default: localhost:4770
+  - name: grpctestify_timeout
+    help: Default timeout for gRPC calls in seconds
+    default: "30"
+  - name: grpctestify_verbose
+    help: Enable verbose output (true/false)
+    default: "false"
+  - name: external_plugin_dir
+    help: Directory for external plugins
+    default: "~/.grpctestify/plugins"
+
+# Settings for autonomous script generation
+
+# Global flags
+flags:
+  - long: --no-color
+    short: -c
+    help: Disable colored output
+    arg: false
+
+  - long: --verbose
+    short: -v
+    help: Enable verbose debug output
+    arg: false
+
+  - long: --progress
+    help: Show progress indicator
+    arg: progress_mode
+    default: "none"
+    allowed:
+      - none
+      - dots
+
+  - long: --parallel
+    help: Run N tests in parallel
+    arg: parallel
+    default: "1"
+
+  - long: --timeout
+    help: Timeout for individual tests in seconds
+    arg: timeout
+    default: "30"
+
+  - long: --retry
+    help: Number of retries for failed network calls
+    arg: retries
+    default: "3"
+
+  - long: --retry-delay
+    help: Initial delay between retries in seconds
+    arg: delay
+    default: "1"
+
+  - long: --no-retry
+    help: Disable retry mechanisms for network failures
+    arg: false
+
+  - long: --update
+    help: Check for updates and update the script
+    arg: false
+
+  - long: --completion
+    help: Install shell completion (bash, zsh, or all)
+    arg: shell_type
+
+  - long: --config
+    help: Show current configuration
+    arg: false
+
+  - long: --init-config
+    help: Create default configuration file
+    arg: config_file
+
+  - long: --list-plugins
+    help: List available plugins
+    arg: false
+
+  - long: --create-plugin
+    help: Create a new plugin template
+    arg: plugin_name
+
+  - long: --log-junit
+    help: Save test results in JUnit XML format to specified file
+    arg: junit_file
+
+# Arguments - main functionality (direct file argument like original)
+args:
+  - name: test_path
+    help: Test file or directory

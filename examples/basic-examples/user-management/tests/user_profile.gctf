@@ -1,0 +1,58 @@
+# User Profile Test
+# Tests user profile management with nested objects
+
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+user.UserService/GetUserProfile
+
+--- REQUEST ---
+{
+    "user_id": "user_12345"
+}
+
+--- RESPONSE ---
+{
+    "profile": {
+        "user_id": "user_12345",
+        "bio": "Senior Software Engineer with 5+ years of experience",
+        "avatar_url": "https://example.com/avatars/user_12345.jpg",
+        "address": {
+            "street": "123 Main Street",
+            "city": "San Francisco",
+            "state": "CA",
+            "country": "USA",
+            "postal_code": "94105"
+        },
+        "interests": ["technology", "programming", "music", "travel"],
+        "preferences": {
+            "theme": "dark",
+            "language": "en",
+            "notifications": "email",
+            "privacy": "friends_only"
+        }
+    },
+    "found": true
+}
+
+--- ASSERTS ---
+.profile.user_id == "user_12345"
+.profile.bio | length > 0
+.profile.avatar_url | test("https://")
+.profile.address.city == "San Francisco"
+.profile.address.state == "CA"
+.profile.address.country == "USA"
+.profile.address.postal_code == "94105"
+.profile.interests | length >= 3
+.profile.interests[0] == "technology"
+.profile.interests[1] == "programming"
+.profile.preferences.theme == "dark"
+.profile.preferences.language == "en"
+.profile.preferences.notifications == "email"
+.found == true
+
+--- OPTIONS ---
+timeout: 30
+partial: true
+

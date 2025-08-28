@@ -1,0 +1,61 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+monitoring.IoTMonitoringService/MonitorDevices
+
+--- REQUEST ---
+{
+  "device_id": "invalid_device_999",
+  "command_type": "start_monitoring",
+  "parameters": {
+    "interval": "1s"
+  },
+  "request_id": "error_test_001"
+}
+
+--- ERROR ---
+.code == 5
+.message | contains("device not found")
+
+--- REQUEST ---
+{
+  "device_id": "device_001",
+  "command_type": "invalid_command",
+  "parameters": {},
+  "request_id": "error_test_002"
+}
+
+--- ERROR ---
+.code == 3
+.message | contains("invalid command")
+
+--- REQUEST ---
+{
+  "device_id": "device_001",
+  "command_type": "start_monitoring",
+  "parameters": {
+    "interval": "invalid_interval"
+  },
+  "request_id": "error_test_003"
+}
+
+--- ERROR ---
+.code == 3
+.message | contains("invalid parameter")
+
+--- REQUEST ---
+{
+  "device_id": "",
+  "command_type": "start_monitoring",
+  "parameters": {},
+  "request_id": "error_test_004"
+}
+
+--- ERROR ---
+.code == 3
+.message | contains("device_id is required")
+
+--- OPTIONS ---
+timeout: 30
+stream_count: 4

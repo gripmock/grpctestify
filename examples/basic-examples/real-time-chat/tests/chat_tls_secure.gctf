@@ -1,0 +1,53 @@
+--- ADDRESS ---
+localhost:4770
+
+--- TLS ---
+ca_cert: ./../server/tls/ca-cert.pem
+cert: ./../server/tls/client-cert.pem
+key: ./../server/tls/client-key.pem
+server_name: localhost
+insecure_skip_verify: false
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
+
+--- REQUEST ---
+{
+  "message": {
+    "user_id": "user1",
+    "room_id": "room1", 
+    "content": "Secure TLS message from gRPC Testify!",
+    "message_type": "text",
+    "metadata": {
+      "encryption": "tls",
+      "client": "grpctestify",
+      "security_level": "high"
+    }
+  }
+}
+
+--- RESPONSE ---
+{
+  "message": {
+    "id": "msg_*",
+    "user_id": "user1",
+    "room_id": "room1",
+    "content": "Secure TLS message from gRPC Testify!",
+    "message_type": "text",
+    "timestamp": "*",
+    "metadata": {
+      "encryption": "tls",
+      "client": "grpctestify",
+      "security_level": "high"
+    }
+  },
+  "success": true
+}
+
+--- ASSERTS ---
+.message.id | test("msg_.*")
+.message.content | contains("Secure TLS")
+.message.metadata.encryption == "tls"
+.message.metadata.security_level == "high"
+.success == true
+

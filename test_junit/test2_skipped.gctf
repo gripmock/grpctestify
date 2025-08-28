@@ -1,0 +1,14 @@
+--- ADDRESS ---
+localhost:9999
+
+--- ENDPOINT ---
+test.Service/Test2
+
+--- REQUEST ---
+{"test":"value2"}
+
+--- RESPONSE ---
+{"result":"ok"}
+
+--- ASSERTS ---
+.result == "ok"

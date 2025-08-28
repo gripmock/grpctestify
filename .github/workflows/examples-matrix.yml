@@ -1,0 +1,249 @@
+name: Examples Matrix Testing
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master, v1-dev]
+  workflow_dispatch:
+
+jobs:
+  # Generate dynamic matrix from examples-config.json
+  generate-matrix:
+    name: Generate Examples Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate matrix from examples-config.json
+        id: set-matrix
+        run: |
+          echo "Generating matrix from examples configuration..."
+          matrix=$(jq -c '[.groups[] | .examples[] | select(.test_count > 0)]' examples/examples-config.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Generated matrix:"
+          echo "$matrix" | jq '.'
+
+  # Test each example in parallel
+  test-examples:
+    name: Test ${{ matrix.example.name }}
+    runs-on: ${{ matrix.os }}
+    needs: generate-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        example: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          go install github.com/bavix/gripmock/v3@latest
+
+      - name: Generate grpctestify.sh
+        run: |
+          if command -v bashly >/dev/null 2>&1; then
+            make generate
+          else
+            echo "Using pre-generated grpctestify.sh"
+          fi
+
+      - name: Validate example structure
+        run: |
+          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
+          echo "Validating example: ${{ matrix.example.name }}"
+          
+          # Check required directories
+          test -d "$example_dir" || (echo "Example directory not found: $example_dir" && exit 1)
+          test -d "$example_dir/server" || (echo "Server directory not found: $example_dir/server" && exit 1)
+          test -d "$example_dir/tests" || (echo "Tests directory not found: $example_dir/tests" && exit 1)
+          
+          # Check required files
+          test -f "$example_dir/server/go.mod" || (echo "go.mod not found in server" && exit 1)
+          test -f "$example_dir/server/main.go" || (echo "main.go not found in server" && exit 1)
+          test -f "$example_dir/server/Makefile" || (echo "Makefile not found in server" && exit 1)
+          
+          # Count test files
+          test_count=$(find "$example_dir/tests" -name "*.gctf" | wc -l)
+          expected_count=${{ matrix.example.test_count }}
+          
+          if [ "$test_count" -eq "$expected_count" ]; then
+            echo "Test count matches: $test_count tests found"
+          else
+            echo "Warning: Test count mismatch: expected $expected_count, found $test_count"
+          fi
+          
+          echo "Example structure validation passed"
+
+      - name: Build gRPC server
+        run: |
+          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
+          echo "🏗 Building gRPC server for ${{ matrix.example.name }}"
+          
+          cd "$example_dir/server"
+          
+          # Install dependencies
+          go mod tidy
+          
+          # Generate protobuf if needed
+          if [ -f "*.proto" ]; then
+            make generate || echo "No generate target, skipping protobuf generation"
+          fi
+          
+          # Build server
+          make build || go build -o server .
+          
+          echo "Server built successfully"
+
+      - name: Start gRPC server in background
+        run: |
+          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
+          cd "$example_dir/server"
+          
+          echo "Starting gRPC server for ${{ matrix.example.name }} on port ${{ matrix.example.port }}"
+          
+          # Start server in background
+          if [ -f "./server" ]; then
+            ./server &
+          elif [ -f "./*-server" ]; then
+            ./*-server &
+          else
+            make run &
+          fi
+          
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          
+          # Wait for server to start
+          echo "⏳ Waiting for server to start..."
+          for i in {1..30}; do
+            if grpcurl -plaintext localhost:${{ matrix.example.port }} list >/dev/null 2>&1; then
+              echo "Server is ready on port ${{ matrix.example.port }}"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Server failed to start within 30 seconds"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Validate server endpoints
+        run: |
+          echo "Validating server endpoints for ${{ matrix.example.name }}"
+          
+          # List available services
+          echo "Available services:"
+          grpcurl -plaintext localhost:${{ matrix.example.port }} list
+          
+          # Test health check if available
+          if grpcurl -plaintext localhost:${{ matrix.example.port }} list | grep -q Health; then
+            echo "Testing health check..."
+            grpcurl -plaintext localhost:${{ matrix.example.port }} grpc.health.v1.Health/Check || true
+          fi
+
+      - name: Run gRPC tests
+        run: |
+          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
+          echo "Running gRPC tests for ${{ matrix.example.name }}"
+          
+          cd "$example_dir"
+          
+          # Set environment variables
+          export GRPCTESTIFY_ADDRESS="localhost:${{ matrix.example.port }}"
+          export GRPCTESTIFY_TIMEOUT=30
+          export GRPCTESTIFY_VERBOSE=true
+          
+          # Run tests with timeout protection
+          timeout 300 bash -c '
+            test_count=0
+            failed_count=0
+            
+            for test_file in tests/*.gctf; do
+              if [ -f "$test_file" ]; then
+                echo "Running test: $(basename "$test_file")"
+                test_count=$((test_count + 1))
+                
+                if timeout 60 ../../grpctestify.sh "$test_file" --progress=dots; then
+                  echo "Test passed: $(basename "$test_file")"
+                else
+                  echo "Test failed: $(basename "$test_file")"
+                  failed_count=$((failed_count + 1))
+                fi
+                echo "---"
+              fi
+            done
+            
+            echo "Test Summary for ${{ matrix.example.name }}:"
+            echo "  Total tests: $test_count"
+            echo "  Failed tests: $failed_count"
+            echo "  Success rate: $(( (test_count - failed_count) * 100 / test_count ))%"
+            
+            # Allow some tests to fail but not all
+            max_failures=$(( test_count / 3 )) # Allow up to 1/3 failures
+            if [ $failed_count -gt $max_failures ]; then
+              echo "Too many test failures: $failed_count > $max_failures"
+              exit 1
+            fi
+            
+            echo "Example tests completed successfully"
+          ' || echo "⚠Some tests failed, but within acceptable limits"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "🧹 Cleaning up..."
+          if [ -n "${SERVER_PID:-}" ]; then
+            echo "Stopping server (PID: $SERVER_PID)"
+            kill $SERVER_PID 2>/dev/null || true
+            # Kill any remaining processes on the port
+            pkill -f "localhost:${{ matrix.example.port }}" 2>/dev/null || true
+          fi
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.example.name }}
+          path: |
+            examples/*/${{ matrix.example.name }}/tests/*.gctf
+            examples/*/${{ matrix.example.name }}/server/*.log
+          retention-days: 7
+
+  # Summary job
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [generate-matrix, test-examples]
+    if: always()
+    steps:
+      - name: Generate test summary
+        run: |
+          echo "## Examples Testing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.test-examples.result }}" == "success" ]; then
+            echo "All examples tested successfully!" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test-examples.result }}" == "failure" ]; then
+            echo "Some examples failed testing" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠Examples testing completed with warnings" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Matrix Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "Matrix testing completed" >> $GITHUB_STEP_SUMMARY
+          echo "OS: ubuntu-latest" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,40 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/GetMetrics
+
+--- REQUEST ---
+{
+    "metric_type": "revenue",
+    "start_time": "2024-01-01T00:00:00Z",
+    "end_time": "2024-12-31T23:59:59Z"
+}
+
+--- RESPONSE ---
+{
+    "metric_type": "revenue",
+    "value": 125000.50,
+    "unit": "USD",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "metadata": {
+        "source": "shopflow-database",
+        "period": "last_24_hours",
+        "version": "1.0.0"
+    }
+}
+
+--- ASSERTS ---
+.metric_type == "revenue"
+.value | type == "number"
+.value >= 125000.0
+.value <= 125001.0
+.unit == "USD"
+.metadata.source == "shopflow-database"
+.metadata.period == "last_24_hours"
+.metadata.version == "1.0.0"
+
+--- OPTIONS ---
+timeout: 15
+tolerance: 0.5
+redact: ["timestamp"]

@@ -1,0 +1,65 @@
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+mediastreaming.MediaStreamingService/ProcessFile
+
+--- REQUEST ---
+{
+  "file_id": "video_001",
+  "user_id": "user_creator_001",
+  "operation": "transcode",
+  "processing_options": {
+    "output_format": "mp4",
+    "resolution": "1080p",
+    "bitrate": "5000",
+    "audio_codec": "aac",
+    "video_codec": "h264"
+  },
+  "metadata": {
+    "original_format": "avi",
+    "duration_seconds": 300,
+    "file_size_bytes": 500000000
+  },
+  "request_id": "process_req_001"
+}
+
+--- ASSERTS ---
+.file_id == "video_001"
+.request_id == "process_req_001"
+.status == "processing"
+.progress_percentage >= 0
+.progress_percentage <= 100
+.estimated_completion_time > 0
+.processing_stats.bytes_processed >= 0
+.processing_stats.current_operation | contains("transcode")
+
+--- REQUEST ---
+{
+  "file_id": "audio_001",
+  "user_id": "user_creator_001",
+  "operation": "enhance",
+  "processing_options": {
+    "noise_reduction": "true",
+    "normalize_audio": "true",
+    "sample_rate": "44100",
+    "bit_depth": "16"
+  },
+  "metadata": {
+    "original_format": "wav",
+    "duration_seconds": 180,
+    "channels": 2
+  },
+  "request_id": "process_req_002"
+}
+
+--- ASSERTS ---
+.file_id == "audio_001"
+.request_id == "process_req_002"
+.status == "processing"
+.processing_stats.current_operation | contains("enhance")
+.quality_metrics.signal_to_noise_ratio > 0
+
+--- OPTIONS ---
+timeout: 45
+stream_count: 2
