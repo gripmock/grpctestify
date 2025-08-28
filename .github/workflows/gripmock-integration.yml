@@ -35,6 +35,10 @@ jobs:
           mkdir -p $HOME/bin
           cp grpctestify.sh $HOME/bin/grpctestify
           echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Verify grpctestify installation
+        run: |
+          set -euo pipefail
           grpctestify --version
 
       - name: Clone GripMock repository to tmp
