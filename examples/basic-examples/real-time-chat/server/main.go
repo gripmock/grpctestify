@@ -13,11 +13,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	
+	pb "github.com/gripmock/grpctestify/examples/real-time-chat/server/chatpb"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
-
-	pb "github.com/gripmock/grpctestify/examples/real-time-chat/server/chatpb"
 )
 
 // ChatServer implements the gRPC chat service
@@ -244,7 +244,7 @@ func (s *ChatServer) ChatStream(stream pb.ChatService_ChatServer) error {
 			}
 			
 			// Process chat action
-			s.processpb.ChatAction(stream, action)
+			s.processChatAction(stream, action)
 		}
 	}()
 	
@@ -255,8 +255,8 @@ func (s *ChatServer) ChatStream(stream pb.ChatService_ChatServer) error {
 	}
 }
 
-// processpb.ChatAction handles incoming chat actions
-func (s *ChatServer) processpb.ChatAction(stream pb.ChatService_ChatServer, action *pb.ChatAction) {
+// processChatAction handles incoming chat actions
+func (s *ChatServer) processChatAction(stream pb.ChatService_ChatServer, action *pb.ChatAction) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	

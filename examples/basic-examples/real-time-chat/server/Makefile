@@ -18,7 +18,7 @@ GO_OUT=./chatpb
 all: deps proto build
 
 ## Build the server binary
-build:
+build: proto
 	@echo "🔨 Building chat server..."
 	$(GOBUILD) -o $(BINARY_NAME) -v .
 	@echo "✅ Build complete: $(BINARY_NAME)"
