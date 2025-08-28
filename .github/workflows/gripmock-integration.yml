@@ -20,6 +20,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache: false
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -31,8 +32,8 @@ jobs:
           set -euo pipefail
           gem install bashly
           make generate
-          cp grpctestify.sh $HOME/bin/grpctestify
           mkdir -p $HOME/bin
+          cp grpctestify.sh $HOME/bin/grpctestify
           echo "$HOME/bin" >> $GITHUB_PATH
           grpctestify --version
 
