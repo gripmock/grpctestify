@@ -61,8 +61,10 @@ node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
-# Examples build artifacts - Go binaries
+# Examples build artifacts - Go binaries  
 examples/**/server/server
+examples/**/server/*-server
+examples/**/server/*-service
 
 # Bashly generated output
 grpctestify.sh

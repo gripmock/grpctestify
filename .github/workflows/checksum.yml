@@ -15,6 +15,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Install bashly
+        run: |
+          gem install bashly
+
+      - name: Generate grpctestify.sh
+        run: |
+          make generate
+
       - name: Generate checksums.txt
         run: |
           echo "$(sha256sum grpctestify.sh | awk '{print $1}') grpctestify.sh" > checksums.txt
