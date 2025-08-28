@@ -11,11 +11,11 @@ jobs:
   gripmock-integration:
     name: Test grpctestify against gripmock
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout grpctestify
         uses: actions/checkout@v4
-        
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -25,187 +25,65 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
-          
-      - name: Install dependencies
+
+      - name: Install bashly and generate grpctestify
         run: |
-          # Install system dependencies
-          sudo apt-get update
-          sudo apt-get install -y jq protobuf-compiler
-          
-          # Install grpcurl without sudo
-          curl -LO https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz
-          tar -xzf grpcurl_1.9.1_linux_x86_64.tar.gz
-          mkdir -p $HOME/bin
-          mv grpcurl $HOME/bin/
-          echo "$HOME/bin" >> $GITHUB_PATH
-          
-          # Install Go protobuf tools
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          
-          # Install bashly for script generation
+          set -euo pipefail
           gem install bashly
-          
-          # Verify dependencies
-          protoc --version
-          protoc-gen-go --version
-          protoc-gen-go-grpc --version
-          grpcurl --version
-          jq --version
-          
-      - name: Generate grpctestify
-        run: |
           make generate
-          
-          mkdir -p ~/bin
-          cp grpctestify.sh ~/bin/grpctestify
-          chmod +x ~/bin/grpctestify
+          cp grpctestify.sh $HOME/bin/grpctestify
+          mkdir -p $HOME/bin
           echo "$HOME/bin" >> $GITHUB_PATH
-          
-      - name: Clone and setup gripmock
+          grpctestify --version
+
+      - name: Clone gripmock repository to tmp
         run: |
-          # Clone gripmock in temp directory
+          set -euo pipefail
           cd /tmp
           git clone https://github.com/bavix/gripmock.git
           cd gripmock
-          
-          # Checkout latest stable tag
-          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-          git checkout $LATEST_TAG
-          echo "Using gripmock version: $LATEST_TAG"
-          
-          echo "GRIPMOCK_VERSION=$LATEST_TAG" >> $GITHUB_STEP_SUMMARY
-          
-      - name: Start gripmock server
+
+      - name: Find and checkout latest tag
         run: |
+          set -euo pipefail
           cd /tmp/gripmock
-          
-          # Start gripmock with all proto files in background
-          echo "Starting gripmock server..."
+          latest_tag=$(git describe --tags --abbrev=0)
+          echo "Latest tag: $latest_tag"
+          git checkout $latest_tag
+
+      - name: Start gripmock server with examples
+        run: |
+          set -euo pipefail
+          cd /tmp/gripmock
           go run main.go examples -s examples &
-          GRIPMOCK_PID=$!
-          echo "GRIPMOCK_PID=$GRIPMOCK_PID" >> $GITHUB_ENV
+          echo $! > gripmock.pid
           
-          # Wait for server to start using gripmock check
-          echo "Waiting for gripmock to start..."
+          # Wait for server to start
+          sleep 5
+          
+          # Verify server is running
+          if ! ps -p $(cat gripmock.pid) > /dev/null; then
+            echo "Error: gripmock server failed to start"
+            exit 1
+          fi
+          
+          echo "Gripmock server started with PID $(cat gripmock.pid)"
+
+      - name: Test grpctestify with gripmock examples
+        run: |
+          set -euo pipefail
           cd /tmp/gripmock
-          for i in {1..30}; do
-            if go run main.go check >/dev/null 2>&1; then
-              echo "Gripmock server is ready on port 4770"
-              break
-            fi
-            echo "Attempt $i/30: Server not ready, waiting..."
-            sleep 2
-          done
-          cd $GITHUB_WORKSPACE
           
-          # Verify server is running and show available services
-          echo "Available gRPC services:"
-          grpcurl -plaintext localhost:4770 list
+          # Run grpctestify tests against examples
+          grpctestify examples
           
-      - name: Test grpctestify compatibility with gripmock
-        run: |
-          set -euo pipefail
-          echo "Testing grpctestify version compatibility..."
-          grpctestify --version
-          
-      - name: Test gripmock examples (if any .gctf files exist)
-        run: |
-          set -euo pipefail
-          echo "Looking for existing .gctf files in gripmock examples..."
-          
-          # Find .gctf files in gripmock examples
-          GCTF_FILES=$(find /tmp/gripmock/examples -name "*.gctf" 2>/dev/null || echo "")
-          
-          if [ ! -z "$GCTF_FILES" ]; then
-            echo "Found .gctf test files:"
-            echo "$GCTF_FILES" | head -5
-            
-            # Test up to 3 files to avoid timeout
-            echo "$GCTF_FILES" | head -3 | while read -r gctf_file; do
-              if [ -f "$gctf_file" ]; then
-                echo "Testing existing gripmock test: $gctf_file"
-                grpctestify "$gctf_file" \
-                  --log-junit "gripmock_$(basename $gctf_file .gctf).xml" \
-                  --progress dots
-              fi
-            done
-          else
-            echo "No .gctf files found in gripmock examples - skipping gripmock integration tests"
-          fi
-          
-      - name: Validate generated JUnit XML files
-        run: |
-          echo "Validating generated JUnit XML files..."
-          
-          for xml_file in *.xml; do
-            if [ -f "$xml_file" ]; then
-              echo "Validating: $xml_file"
-              
-              # Basic XML syntax check using Python (available without sudo)
-              python3 -c "
-import xml.etree.ElementTree as ET
-import sys
-try:
-    ET.parse('$xml_file')
-    print('$xml_file is valid XML')
-except ET.ParseError:
-    print('$xml_file has XML syntax errors')
-    sys.exit(1)
-"
-                
-              # Check for required JUnit elements
-              if grep -q "<testsuites" "$xml_file" && \
-                 grep -q "<testsuite" "$xml_file" && \
-                 grep -q "<testcase" "$xml_file"; then
-                echo "$xml_file contains required JUnit elements"
-              else
-                echo "$xml_file missing required JUnit elements"
-              fi
-            fi
-          done
-          
-      - name: Generate integration test summary
-        if: always()
-        run: |
-          echo "## Gripmock Integration Test Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Count test results
-          TOTAL_XML=$(ls *.xml 2>/dev/null | wc -l)
-          echo "**Generated JUnit XML files**: $TOTAL_XML" >> $GITHUB_STEP_SUMMARY
-          
-          if [ $TOTAL_XML -gt 0 ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "📋 **Test Files Generated**:" >> $GITHUB_STEP_SUMMARY
-            for xml_file in *.xml; do
-              if [ -f "$xml_file" ]; then
-                echo "- \`$xml_file\`" >> $GITHUB_STEP_SUMMARY
-              fi
-            done
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**grpctestify Integration**: All functionality tests passed" >> $GITHUB_STEP_SUMMARY
-          
-      - name: Upload test results and artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gripmock-integration-results
-          path: |
-            *.xml
-            *.yml
-            *.gctf
-            ~/.grpctestify/plugins/gripmock_test_plugin.sh
-          retention-days: 7
-          
+          echo "Gripmock integration test completed successfully"
+
       - name: Cleanup gripmock server
         if: always()
         run: |
-          echo "🧹 Cleaning up gripmock server..."
-          if [ ! -z "$GRIPMOCK_PID" ]; then
-            kill $GRIPMOCK_PID 2>/dev/null || true
+          cd /tmp/gripmock
+          if [ -f gripmock.pid ]; then
+            kill $(cat gripmock.pid) 2>/dev/null || true
+            rm -f gripmock.pid
           fi
-          pkill -f "go run main.go" 2>/dev/null || true
-          echo "Cleanup completed"
