@@ -63,10 +63,10 @@ source "${BATS_TEST_DIRNAME}/colors.sh"
     run log section "Test section message"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Test section message"* ]]
-    [[ "$output" == *"━━"* ]]
+    [[ "$output" == *"───"* ]]
     
     # Test warning log
-    run log warn "Test warning message"
+    run log warning "Test warning message"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Test warning message"* ]]
     [[ "$output" == *"⚠️"* ]]
