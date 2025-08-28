@@ -31,7 +31,7 @@ jobs:
           echo "$HOME/bin" >> $GITHUB_PATH
           
           # Install bashly for script generation
-          gem install bashly
+          sudo gem install bashly
           
           # Verify dependencies
           grpcurl --version

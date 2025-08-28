@@ -53,7 +53,7 @@ jobs:
           go install github.com/bavix/gripmock/v3@latest
           
           # Install bashly for script generation
-          gem install bashly
+          sudo gem install bashly
 
       - name: Generate grpctestify
         run: |

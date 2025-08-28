@@ -28,8 +28,12 @@ jobs:
         run: |
           sudo apt-get install -y jq bc
           
+          # Debug Ruby/Gem environment
+          which ruby && ruby --version
+          which gem && gem --version
+          
           # Install bashly for script generation
-          gem install bashly
+          sudo gem install bashly
           
       - name: Generate grpctestify script
         run: |

@@ -13,7 +13,7 @@ jobs:
 
       - name: Install bashly
         run: |
-          gem install bashly
+          sudo gem install bashly
 
       - name: Generate grpctestify.sh
         run: |
