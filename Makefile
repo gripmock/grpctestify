@@ -15,8 +15,7 @@ VERSION = $(shell test -f $(MAIN_SCRIPT) && ./$(MAIN_SCRIPT) --version 2>/dev/nu
 .PHONY: generate
 generate:
 	@echo "🔧 Generating $(MAIN_SCRIPT) from modular source using bashly..."
-	@bashly generate -u
-	@mv grpctestify $(MAIN_SCRIPT)
+	@BASHLY_SOURCE_DIR=$(SRC_DIR) bashly generate -u
 	@echo "✅ $(MAIN_SCRIPT) generated successfully!"
 
 # Testing targets  
@@ -43,12 +42,13 @@ check: generate
 	@command -v grpcurl >/dev/null || echo "❌ grpcurl not found"
 	@command -v jq >/dev/null || echo "❌ jq not found"
 	@command -v bashly >/dev/null || echo "❌ bashly not found"
-	@./$(MAIN_SCRIPT) --version
+	@test -f $(MAIN_SCRIPT) && ./$(MAIN_SCRIPT) --version || echo "Run 'make generate' first"
 
 .PHONY: clean
 clean:
 	@echo "🧹 Cleaning up..."
 	@rm -f *.tmp *.log *.backup
+	@rm -rf dist/
 
 .PHONY: help
 help:

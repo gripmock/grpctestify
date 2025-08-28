@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strings"
@@ -497,40 +498,36 @@ func (s *AIChatServer) ChatConversation(stream aichatpb.AIChatService_ChatConver
 
 	// Handle incoming user messages and send AI responses
 	for {
-		select {
-		case userMsg, ok := <-stream.Recv():
-			if !ok {
+		userMsg, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
 				return nil
 			}
+			return err
+		}
 
-			// Process user message and generate AI response
-			aiResponse := &aichatpb.AIResponse{
-				SessionId:    userMsg.SessionId,
-				RequestId:    userMsg.RequestId,
-				Response:     s.generateAIResponse(userMsg.Message, nil),
-				ResponseType: aichatpb.ResponseType_RESPONSE_TYPE_TEXT,
-				Sentiment:    s.analyzeSentiment(userMsg.Message),
-				Metrics: &aichatpb.ProcessingMetrics{
-					ResponseTimeMs:  200.0,
-					TokensUsed:      20,
-					TokensGenerated: 25,
-					CostUsd:         0.002,
-					ModelUsed:       "gpt-4",
-				},
-				Timestamp:   timestamppb.New(time.Now()),
-				IsFinal:     true,
-				ChunkNumber: 1,
-				TotalChunks: 1,
-			}
+		// Process user message and generate AI response
+		aiResponse := &aichatpb.AIResponse{
+			SessionId:    userMsg.SessionId,
+			RequestId:    userMsg.RequestId,
+			Response:     s.generateAIResponse(userMsg.Message, nil),
+			ResponseType: aichatpb.ResponseType_RESPONSE_TYPE_TEXT,
+			Sentiment:    s.analyzeSentiment(userMsg.Message),
+			Metrics: &aichatpb.ProcessingMetrics{
+				ResponseTimeMs:  200.0,
+				TokensUsed:      20,
+				TokensGenerated: 25,
+				CostUsd:         0.002,
+				ModelUsed:       "gpt-4",
+			},
+			Timestamp:   timestamppb.New(time.Now()),
+			IsFinal:     true,
+			ChunkNumber: 1,
+			TotalChunks: 1,
+		}
 
-			if err := stream.Send(aiResponse); err != nil {
-				return err
-			}
-
-		case aiResponse := <-responseChan:
-			if err := stream.Send(aiResponse); err != nil {
-				return err
-			}
+		if err := stream.Send(aiResponse); err != nil {
+			return err
 		}
 	}
 }

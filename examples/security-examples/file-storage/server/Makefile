@@ -10,11 +10,11 @@ proto:
 
 # Build the server
 build: proto
-	go build -o file-storage-server .
+	go build -o server .
 
 # Run the server
 run: build
-	./file-storage-server
+	./server
 
 # Clean generated files
 clean:
@@ -23,7 +23,7 @@ clean:
 # Test the server (basic health check)
 test: build
 	@echo "Testing file storage server..."
-	@timeout 5s ./file-storage-server &
+	@timeout 5s ./server &
 	@sleep 2
 	@grpcurl -plaintext localhost:50051 filestorage.FileStorageService/HealthCheck
 	@pkill -f file-storage-server || true

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -476,6 +477,7 @@ func (s *MediaStreamingServer) UploadLargeFile(stream mediapb.MediaStreamingServ
 	var userID string
 	var metadata map[string]string
 	var totalSize int64
+	_ = totalSize // Remove unused variable - keeping for future use
 	var chunks [][]byte
 	var chunkNumber int32
 
@@ -608,41 +610,37 @@ func (s *MediaStreamingServer) ProcessFile(stream mediapb.MediaStreamingService_
 
 	// Handle incoming processing requests and send responses
 	for {
-		select {
-		case processingReq, ok := <-stream.Recv():
-			if !ok {
+		processingReq, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
 				return nil
 			}
+			return err
+		}
 
-			// Process request and generate response
-			response := &mediapb.ProcessingResponse{
-				RequestId: processingReq.RequestId,
-				FileId:    processingReq.FileId,
-				Operation: processingReq.Operation,
-				Status: &mediapb.ProcessingStatus{
-					Status:    "processing",
-					Progress:  25.0,
-					Message:   fmt.Sprintf("Processing %s operation", processingReq.Operation),
-					StartedAt: timestamppb.New(time.Now()),
-				},
-				Progress: 25.0,
-				Message:  fmt.Sprintf("Started %s operation", processingReq.Operation),
-				Result: &mediapb.ProcessingResult{
-					ResultType: "processing_started",
-					ResultData: "Operation initiated",
-					Metadata:   processingReq.Parameters,
-				},
-				Timestamp: timestamppb.New(time.Now()),
-			}
+		// Process request and generate response
+		response := &mediapb.ProcessingResponse{
+			RequestId: processingReq.RequestId,
+			FileId:    processingReq.FileId,
+			Operation: processingReq.Operation,
+			Status: &mediapb.ProcessingStatus{
+				Status:    "processing",
+				Progress:  25.0,
+				Message:   fmt.Sprintf("Processing %s operation", processingReq.Operation),
+				StartedAt: timestamppb.New(time.Now()),
+			},
+			Progress: 25.0,
+			Message:  fmt.Sprintf("Started %s operation", processingReq.Operation),
+			Result: &mediapb.ProcessingResult{
+				ResultType: "processing_started",
+				ResultData: "Operation initiated",
+				Metadata:   processingReq.Parameters,
+			},
+			Timestamp: timestamppb.New(time.Now()),
+		}
 
-			if err := stream.Send(response); err != nil {
-				return err
-			}
-
-		case processingResponse := <-responseChan:
-			if err := stream.Send(processingResponse); err != nil {
-				return err
-			}
+		if err := stream.Send(response); err != nil {
+			return err
 		}
 	}
 }

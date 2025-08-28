@@ -3,13 +3,13 @@
 # Build the media streaming server
 build: proto
 	@echo "Building Media Streaming Server..."
-	go build -o media-streaming-server .
+	go build -o server .
 	@echo "✅ Server built successfully!"
 
 # Run the server
 run: build
 	@echo "Starting Media Streaming Server..."
-	./media-streaming-server
+	./server
 
 # Generate protobuf code
 proto:
@@ -25,7 +25,7 @@ proto:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -f media-streaming-server
+	rm -f server
 	rm -rf mediapb
 	@echo "✅ Cleaned successfully!"
 

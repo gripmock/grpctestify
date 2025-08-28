@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -585,49 +586,45 @@ func (s *PaymentServer) FraudDetection(stream paymentpb.PaymentService_FraudDete
 
 	// Handle incoming payment requests and send fraud analysis
 	for {
-		select {
-		case paymentReq, ok := <-stream.Recv():
-			if !ok {
+		paymentReq, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
 				return nil
 			}
+			return err
+		}
 
-			// Process payment request and generate fraud analysis
-			analysis := &paymentpb.FraudAnalysis{
-				RequestId:  paymentReq.RequestId,
-				AnalysisId: fmt.Sprintf("analysis_%d", time.Now().Unix()),
-				RiskLevel:  "medium",
-				RiskScore:  0.45,
-				RiskFactors: []string{
-					"amount_above_average",
-					"new_merchant",
-				},
-				Recommendation: "review",
-				FraudIndicators: &paymentpb.FraudIndicators{
-					SuspiciousLocation: false,
-					UnusualAmount:      true,
-					VelocityAlert:      false,
-					CardNotPresent:     false,
-					HighRiskMerchant:   false,
-					DeviceMismatch:     false,
-					TimeAnomaly:        false,
-				},
-				ComplianceViolations: &paymentpb.ComplianceViolations{
-					AmlViolation:        false,
-					KycViolation:        false,
-					SanctionsViolation:  false,
-					RegulatoryViolation: false,
-				},
-				AnalyzedAt: timestamppb.New(time.Now()),
-			}
+		// Process payment request and generate fraud analysis
+		analysis := &paymentpb.FraudAnalysis{
+			RequestId:  paymentReq.RequestId,
+			AnalysisId: fmt.Sprintf("analysis_%d", time.Now().Unix()),
+			RiskLevel:  "medium",
+			RiskScore:  0.45,
+			RiskFactors: []string{
+				"amount_above_average",
+				"new_merchant",
+			},
+			Recommendation: "review",
+			FraudIndicators: &paymentpb.FraudIndicators{
+				SuspiciousLocation: false,
+				UnusualAmount:      true,
+				VelocityAlert:      false,
+				CardNotPresent:     false,
+				HighRiskMerchant:   false,
+				DeviceMismatch:     false,
+				TimeAnomaly:        false,
+			},
+			ComplianceViolations: &paymentpb.ComplianceViolations{
+				AmlViolation:        false,
+				KycViolation:        false,
+				SanctionsViolation:  false,
+				RegulatoryViolation: false,
+			},
+			AnalyzedAt: timestamppb.New(time.Now()),
+		}
 
-			if err := stream.Send(analysis); err != nil {
-				return err
-			}
-
-		case analysis := <-fraudChan:
-			if err := stream.Send(analysis); err != nil {
-				return err
-			}
+		if err := stream.Send(analysis); err != nil {
+			return err
 		}
 	}
 }

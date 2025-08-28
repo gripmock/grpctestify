@@ -11,6 +11,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Install bashly
+        run: |
+          gem install bashly
+
+      - name: Generate grpctestify.sh
+        run: |
+          make generate
+
       - name: Generate checksum
         id: checksum
         run: |

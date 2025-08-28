@@ -1,4 +1,4 @@
-name: grpctestify
+name: grpctestify.sh
 help: gRPC Server Testing Tool
 version: v1.0.0
 filename: commands/root_command.sh

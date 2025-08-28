@@ -51,14 +51,18 @@ jobs:
           sudo apt-get install -y jq
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
           go install github.com/bavix/gripmock/v3@latest
+          
+          # Install bashly for script generation
+          gem install bashly
 
-      - name: Generate grpctestify.sh
+      - name: Generate grpctestify
         run: |
-          if command -v bashly >/dev/null 2>&1; then
-            make generate
-          else
-            echo "Using pre-generated grpctestify.sh"
-          fi
+          make generate
+          
+          mkdir -p ~/bin
+          cp grpctestify.sh ~/bin/grpctestify
+          chmod +x ~/bin/grpctestify
+          echo "$HOME/bin" >> $GITHUB_PATH
 
       - name: Validate example structure
         run: |
@@ -82,60 +86,45 @@ jobs:
           if [ "$test_count" -eq "$expected_count" ]; then
             echo "Test count matches: $test_count tests found"
           else
-            echo "Warning: Test count mismatch: expected $expected_count, found $test_count"
+            echo "Error: Test count mismatch: expected $expected_count, found $test_count"
+            exit 1
           fi
           
           echo "Example structure validation passed"
 
       - name: Build gRPC server
         run: |
+          set -euo pipefail
           example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
-          echo "🏗 Building gRPC server for ${{ matrix.example.name }}"
+          echo "Building gRPC server for ${{ matrix.example.name }}"
           
           cd "$example_dir/server"
-          
-          # Install dependencies
-          go mod tidy
-          
-          # Generate protobuf if needed
-          if [ -f "*.proto" ]; then
-            make generate || echo "No generate target, skipping protobuf generation"
-          fi
-          
-          # Build server
-          make build || go build -o server .
-          
-          echo "Server built successfully"
+          make build
 
       - name: Start gRPC server in background
         run: |
+          set -euo pipefail
           example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
           cd "$example_dir/server"
           
           echo "Starting gRPC server for ${{ matrix.example.name }} on port ${{ matrix.example.port }}"
           
           # Start server in background
-          if [ -f "./server" ]; then
-            ./server &
-          elif [ -f "./*-server" ]; then
-            ./*-server &
-          else
-            make run &
-          fi
+          ./server &
           
           SERVER_PID=$!
           echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
           
           # Wait for server to start
-          echo "⏳ Waiting for server to start..."
+          echo "Waiting for server to start..."
           for i in {1..30}; do
             if grpcurl -plaintext localhost:${{ matrix.example.port }} list >/dev/null 2>&1; then
-              echo "Server is ready on port ${{ matrix.example.port }}"
+              echo "Server ready on port ${{ matrix.example.port }}"
               break
             fi
             if [ $i -eq 30 ]; then
               echo "Server failed to start within 30 seconds"
-              kill $SERVER_PID 2>/dev/null || true
+              kill $SERVER_PID
               exit 1
             fi
             sleep 1
@@ -152,11 +141,12 @@ jobs:
           # Test health check if available
           if grpcurl -plaintext localhost:${{ matrix.example.port }} list | grep -q Health; then
             echo "Testing health check..."
-            grpcurl -plaintext localhost:${{ matrix.example.port }} grpc.health.v1.Health/Check || true
+            grpcurl -plaintext localhost:${{ matrix.example.port }} grpc.health.v1.Health/Check
           fi
 
       - name: Run gRPC tests
         run: |
+          set -euo pipefail
           example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
           echo "Running gRPC tests for ${{ matrix.example.name }}"
           
@@ -167,49 +157,23 @@ jobs:
           export GRPCTESTIFY_TIMEOUT=30
           export GRPCTESTIFY_VERBOSE=true
           
-          # Run tests with timeout protection
-          timeout 300 bash -c '
-            test_count=0
-            failed_count=0
-            
-            for test_file in tests/*.gctf; do
-              if [ -f "$test_file" ]; then
-                echo "Running test: $(basename "$test_file")"
-                test_count=$((test_count + 1))
-                
-                if timeout 60 ../../grpctestify.sh "$test_file" --progress=dots; then
-                  echo "Test passed: $(basename "$test_file")"
-                else
-                  echo "Test failed: $(basename "$test_file")"
-                  failed_count=$((failed_count + 1))
-                fi
-                echo "---"
-              fi
-            done
-            
-            echo "Test Summary for ${{ matrix.example.name }}:"
-            echo "  Total tests: $test_count"
-            echo "  Failed tests: $failed_count"
-            echo "  Success rate: $(( (test_count - failed_count) * 100 / test_count ))%"
-            
-            # Allow some tests to fail but not all
-            max_failures=$(( test_count / 3 )) # Allow up to 1/3 failures
-            if [ $failed_count -gt $max_failures ]; then
-              echo "Too many test failures: $failed_count > $max_failures"
-              exit 1
+          # Run tests - fail fast on any error
+          for test_file in tests/*.gctf; do
+            if [ -f "$test_file" ]; then
+              echo "Running test: $(basename "$test_file")"
+              timeout 60 grpctestify "$test_file" --progress=dots
             fi
-            
-            echo "Example tests completed successfully"
-          ' || echo "⚠Some tests failed, but within acceptable limits"
+          done
+          
+          echo "All tests passed for ${{ matrix.example.name }}"
 
       - name: Cleanup
         if: always()
         run: |
-          echo "🧹 Cleaning up..."
+          echo "Cleaning up..."
           if [ -n "${SERVER_PID:-}" ]; then
             echo "Stopping server (PID: $SERVER_PID)"
             kill $SERVER_PID 2>/dev/null || true
-            # Kill any remaining processes on the port
             pkill -f "localhost:${{ matrix.example.port }}" 2>/dev/null || true
           fi
 

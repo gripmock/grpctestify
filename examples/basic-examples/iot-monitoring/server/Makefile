@@ -3,13 +3,13 @@
 # Build the IoT monitoring server
 build: proto
 	@echo "Building IoT Monitoring Server..."
-	go build -o iot-monitoring-server .
+	go build -o server .
 	@echo "✅ Server built successfully!"
 
 # Run the server
 run: build
 	@echo "Starting IoT Monitoring Server..."
-	./iot-monitoring-server
+	./server
 
 # Generate protobuf code
 proto:
@@ -25,7 +25,7 @@ proto:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -f iot-monitoring-server
+	rm -f server
 	rm -rf monitoringpb
 	@echo "✅ Cleaned successfully!"
 

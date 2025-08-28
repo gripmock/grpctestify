@@ -26,18 +26,18 @@ proto:
 # Build the server
 build: proto
 	@echo "Building ShopFlow E-commerce Server..."
-	go build -o shopflow-server .
+	go build -o server .
 	@echo "✅ Server built successfully!"
 
 # Run the server
 run: build
 	@echo "🚀 Starting ShopFlow E-commerce Server..."
-	./shopflow-server
+	./server
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -f shopflow-server
+	rm -f server
 	rm -rf shopflowpb/
 	@echo "✅ Cleaned successfully!"
 

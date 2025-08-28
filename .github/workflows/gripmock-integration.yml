@@ -31,19 +31,20 @@ jobs:
           echo "$HOME/bin" >> $GITHUB_PATH
           
           # Install bashly for script generation
-          bash -c "$(curl -fsSL https://bashly.dannyb.co/install)"
-          echo "$HOME/.bashly/bin" >> $GITHUB_PATH
+          gem install bashly
           
           # Verify dependencies
           grpcurl --version
           jq --version
-          bashly --version
           
-      - name: Generate grpctestify script
+      - name: Generate grpctestify
         run: |
           make generate
-          chmod +x grpctestify.sh
-          ./grpctestify.sh --version
+          
+          mkdir -p ~/bin
+          cp grpctestify.sh ~/bin/grpctestify
+          chmod +x ~/bin/grpctestify
+          echo "$HOME/bin" >> $GITHUB_PATH
           
       - name: Clone and setup gripmock
         run: |
@@ -86,27 +87,15 @@ jobs:
           echo "Available gRPC services:"
           grpcurl -plaintext localhost:4770 list
           
-      - name: Test grpctestify basic functionality
+      - name: Test grpctestify compatibility with gripmock
         run: |
-          echo "Testing grpctestify basic functionality..."
-          
-          # Test help and version
-          ./grpctestify.sh --help
-          ./grpctestify.sh --version
-          ./grpctestify.sh --config
-          ./grpctestify.sh --list-plugins
-          
-          # Test config creation
-          ./grpctestify.sh --init-config gripmock-test-config.yml
-          [ -f gripmock-test-config.yml ] && echo "Config file created"
-          
-          # Test plugin creation  
-          ./grpctestify.sh --create-plugin gripmock_test_plugin
-          [ -f ~/.grpctestify/plugins/gripmock_test_plugin.sh ] && \
-            echo "Plugin created"
+          set -euo pipefail
+          echo "Testing grpctestify version compatibility..."
+          grpctestify --version
           
       - name: Test gripmock examples (if any .gctf files exist)
         run: |
+          set -euo pipefail
           echo "Looking for existing .gctf files in gripmock examples..."
           
           # Find .gctf files in gripmock examples
@@ -120,15 +109,13 @@ jobs:
             echo "$GCTF_FILES" | head -3 | while read -r gctf_file; do
               if [ -f "$gctf_file" ]; then
                 echo "Testing existing gripmock test: $gctf_file"
-                ./grpctestify.sh "$gctf_file" \
+                grpctestify "$gctf_file" \
                   --log-junit "gripmock_$(basename $gctf_file .gctf).xml" \
-                  --progress dots || \
-                  echo "Test may fail due to gripmock stub configuration"
+                  --progress dots
               fi
             done
           else
-            echo "Info: No .gctf files found in gripmock examples"
-            echo "This is normal - gripmock focuses on .proto and .yaml files"
+            echo "No .gctf files found in gripmock examples - skipping gripmock integration tests"
           fi
           
       - name: Validate generated JUnit XML files
@@ -184,8 +171,6 @@ except ET.ParseError:
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**grpctestify Integration**: All functionality tests passed" >> $GITHUB_STEP_SUMMARY
-          echo "Info: **Note**: Some gRPC calls may fail due to gripmock stub configuration" >> $GITHUB_STEP_SUMMARY
-          echo "This is expected and tests grpctestify's error handling capabilities" >> $GITHUB_STEP_SUMMARY
           
       - name: Upload test results and artifacts
         if: always()

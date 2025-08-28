@@ -9,7 +9,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 # Build targets
-BINARY_NAME=chat-server
+BINARY_NAME=server
 PROTO_FILE=chat.proto
 GO_OUT=./chatpb
 

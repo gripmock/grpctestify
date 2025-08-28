@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -395,38 +396,34 @@ func (s *IoTMonitoringServer) MonitorDevices(stream monitoringpb.IoTMonitoringSe
 
 	// Handle incoming commands and send telemetry
 	for {
-		select {
-		case command, ok := <-stream.Recv():
-			if !ok {
+		command, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
 				return nil
 			}
+			return err
+		}
 
-			// Process command
-			response := &monitoringpb.DeviceTelemetry{
-				DeviceId:  command.DeviceId,
-				RequestId: command.RequestId,
-				Timestamp: timestamppb.New(time.Now()),
-				Message:   fmt.Sprintf("Command %s processed for device %s", command.CommandType, command.DeviceId),
-				Status:    monitoringpb.DeviceStatus_DEVICE_STATUS_ONLINE,
-				Telemetry: &monitoringpb.TelemetryData{
-					Temperature:    22.5,
-					Humidity:       45.0,
-					Pressure:       1013.25,
-					Voltage:        12.0,
-					Current:        0.5,
-					SignalStrength: -50,
-					BatteryLevel:   85,
-				},
-			}
+		// Process command
+		response := &monitoringpb.DeviceTelemetry{
+			DeviceId:  command.DeviceId,
+			RequestId: command.RequestId,
+			Timestamp: timestamppb.New(time.Now()),
+			Message:   fmt.Sprintf("Command %s processed for device %s", command.CommandType, command.DeviceId),
+			Status:    monitoringpb.DeviceStatus_DEVICE_STATUS_ONLINE,
+			Telemetry: &monitoringpb.TelemetryData{
+				Temperature:    22.5,
+				Humidity:       45.0,
+				Pressure:       1013.25,
+				Voltage:        12.0,
+				Current:        0.5,
+				SignalStrength: -50,
+				BatteryLevel:   85,
+			},
+		}
 
-			if err := stream.Send(response); err != nil {
-				return err
-			}
-
-		case telemetry := <-telemetryChan:
-			if err := stream.Send(telemetry); err != nil {
-				return err
-			}
+		if err := stream.Send(response); err != nil {
+			return err
 		}
 	}
 }

@@ -3,13 +3,13 @@
 # Build the FinTech payment server
 build: proto
 	@echo "Building FinTech Payment Server..."
-	go build -o fintech-payment-server .
+	go build -o server .
 	@echo "✅ Server built successfully!"
 
 # Run the server
 run: build
 	@echo "Starting FinTech Payment Server..."
-	./fintech-payment-server
+	./server
 
 # Generate protobuf code
 proto:
@@ -34,7 +34,7 @@ tls:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -f fintech-payment-server
+	rm -f server
 	rm -rf paymentpb
 	rm -rf tls/*.pem
 	@echo "✅ Cleaned successfully!"
@@ -49,4 +49,4 @@ deps:
 run-no-tls: build
 	@echo "Starting FinTech Payment Server without TLS..."
 	@echo "⚠️  WARNING: Running without TLS is not secure for production!"
-	USE_TLS=false ./fintech-payment-server
+	USE_TLS=false ./server

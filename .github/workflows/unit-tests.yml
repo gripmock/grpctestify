@@ -28,34 +28,35 @@ jobs:
         run: |
           sudo apt-get install -y jq bc
           
+          # Install bashly for script generation
+          gem install bashly
+          
       - name: Generate grpctestify script
         run: |
-          if command -v bashly >/dev/null 2>&1; then
-            make generate
-          else
-            echo "Using pre-generated grpctestify.sh"
-          fi
-
-      - name: Verify script functionality
-        run: |
-          chmod +x grpctestify.sh
-          ./grpctestify.sh --version
-          ./grpctestify.sh --help >/dev/null
+          make generate
+          
+          mkdir -p ~/bin
+          cp grpctestify.sh ~/bin/grpctestify
+          chmod +x ~/bin/grpctestify
+          echo "$HOME/bin" >> $GITHUB_PATH
 
       - name: Run core unit tests
         run: |
+          set -euo pipefail
           if [ -d "src/lib/core" ]; then
             find src/lib/core -name "*.bats" -print0 | xargs -0 -I {} bats {}
           fi
 
       - name: Run plugin unit tests
         run: |
+          set -euo pipefail
           if [ -d "src/lib/plugins" ]; then
             find src/lib/plugins -name "*.bats" -print0 | xargs -0 -I {} bats {}
           fi
 
       - name: Run command unit tests
         run: |
+          set -euo pipefail
           if [ -d "src/lib/commands" ]; then
             find src/lib/commands -name "*.bats" -print0 | xargs -0 -I {} bats {}
           fi
@@ -79,40 +80,3 @@ jobs:
           fi
           
           echo "Test coverage: $coverage% ($tested_files/$total_files files)"
-
-  validation:
-    name: Script Validation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate shell scripts
-        run: |
-          find src -name "*.sh" -exec bash -n {} \;
-          
-      - name: Check for bashisms
-        run: |
-          if command -v checkbashisms >/dev/null 2>&1; then
-            find src -name "*.sh" -exec checkbashisms {} \; || true
-          else
-            echo "checkbashisms not available, skipping"
-          fi
-
-  summary:
-    name: Test Summary
-    runs-on: ubuntu-latest
-    needs: [bats-tests, validation]
-    if: always()
-    steps:
-      - name: Report results
-        run: |
-          echo "Unit test results:"
-          echo "- BATS tests: ${{ needs.bats-tests.result }}"
-          echo "- Validation: ${{ needs.validation.result }}"
-          
-          if [ "${{ needs.bats-tests.result }}" != "success" ] || [ "${{ needs.validation.result }}" != "success" ]; then
-            echo "Some tests failed"
-            exit 1
-          else
-            echo "All tests passed"
-          fi

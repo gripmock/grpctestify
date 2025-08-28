@@ -16,17 +16,19 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	pb "github.com/gripmock/grpctestify/examples/real-time-chat/server/chatpb"
 )
 
 // ChatServer implements the gRPC chat service
 type ChatServer struct {
-	UnimplementedChatServiceServer
+	pb.UnimplementedChatServiceServer
 	
 	// In-memory storage for demo purposes
-	rooms    map[string]*ChatRoom
-	users    map[string]*User
-	messages map[string][]*ChatMessage
-	streams  map[string][]ChatService_ChatStreamServer
+	rooms    map[string]*pb.ChatRoom
+	users    map[string]*pb.User
+	messages map[string][]*pb.ChatMessage
+	streams  map[string][]pb.ChatService_ChatServer
 	mu       sync.RWMutex
 }
 
@@ -35,8 +37,8 @@ func NewChatServer() *ChatServer {
 	server := &ChatServer{
 		rooms:    make(map[string]*ChatRoom),
 		users:    make(map[string]*User),
-		messages: make(map[string][]*ChatMessage),
-		streams:  make(map[string][]ChatService_ChatStreamServer),
+		messages: make(map[string][]*pb.ChatMessage),
+		streams:  make(map[string][]pb.ChatService_ChatServer),
 	}
 	
 	// Initialize with sample data
@@ -98,7 +100,7 @@ func (s *ChatServer) initializeSampleData() {
 	}
 	
 	// Sample messages
-	s.messages["room1"] = []*ChatMessage{
+	s.messages["room1"] = []*pb.ChatMessage{
 		{
 			Id:          "msg1",
 			UserId:      "user1",
@@ -117,7 +119,7 @@ func (s *ChatServer) initializeSampleData() {
 		},
 	}
 	
-	s.messages["room2"] = []*ChatMessage{
+	s.messages["room2"] = []*pb.ChatMessage{
 		{
 			Id:          "msg3",
 			UserId:      "user1",
@@ -130,7 +132,7 @@ func (s *ChatServer) initializeSampleData() {
 }
 
 // SendMessage handles sending a single message (Unary RPC)
-func (s *ChatServer) SendMessage(ctx context.Context, req *SendMessageRequest) (*SendMessageResponse, error) {
+func (s *ChatServer) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
@@ -162,7 +164,7 @@ func (s *ChatServer) SendMessage(ctx context.Context, req *SendMessageRequest) (
 	}
 	
 	// Generate message ID and timestamp
-	message := &ChatMessage{
+	message := &pb.ChatMessage{
 		Id:          fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 		UserId:      req.Message.UserId,
 		RoomId:      req.Message.RoomId,
@@ -184,14 +186,14 @@ func (s *ChatServer) SendMessage(ctx context.Context, req *SendMessageRequest) (
 	// Broadcast to all connected streams for this room
 	s.broadcastToRoom(req.Message.RoomId, message)
 	
-	return &SendMessageResponse{
+	return &pb.SendMessageResponse{
 		Message: message,
 		Success: true,
 	}, nil
 }
 
 // GetMessages retrieves messages from a room (Unary RPC)
-func (s *ChatServer) GetMessages(ctx context.Context, req *GetMessagesRequest) (*GetMessagesResponse, error) {
+func (s *ChatServer) GetMessages(ctx context.Context, req *pb.GetMessagesRequest) (*pb.GetMessagesResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
@@ -212,7 +214,7 @@ func (s *ChatServer) GetMessages(ctx context.Context, req *GetMessagesRequest) (
 		end := start + int(req.Limit)
 		
 		if start >= len(messages) {
-			messages = []*ChatMessage{}
+			messages = []*pb.ChatMessage{}
 		} else {
 			if end > len(messages) {
 				end = len(messages)
@@ -221,14 +223,14 @@ func (s *ChatServer) GetMessages(ctx context.Context, req *GetMessagesRequest) (
 		}
 	}
 	
-	return &GetMessagesResponse{
+	return &pb.GetMessagesResponse{
 		Messages: messages,
 		Total:    int32(len(s.messages[req.RoomId])),
 	}, nil
 }
 
 // ChatStream handles bidirectional streaming chat (Bidirectional Streaming RPC)
-func (s *ChatServer) ChatStream(stream ChatService_ChatStreamServer) error {
+func (s *ChatServer) ChatStream(stream pb.ChatService_ChatServer) error {
 	// Handle incoming stream
 	go func() {
 		for {
@@ -242,7 +244,7 @@ func (s *ChatServer) ChatStream(stream ChatService_ChatStreamServer) error {
 			}
 			
 			// Process chat action
-			s.processChatAction(stream, action)
+			s.processpb.ChatAction(stream, action)
 		}
 	}()
 	
@@ -253,8 +255,8 @@ func (s *ChatServer) ChatStream(stream ChatService_ChatStreamServer) error {
 	}
 }
 
-// processChatAction handles incoming chat actions
-func (s *ChatServer) processChatAction(stream ChatService_ChatStreamServer, action *ChatAction) {
+// processpb.ChatAction handles incoming chat actions
+func (s *ChatServer) processpb.ChatAction(stream pb.ChatService_ChatServer, action *pb.ChatAction) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
@@ -262,12 +264,12 @@ func (s *ChatServer) processChatAction(stream ChatService_ChatStreamServer, acti
 	case "join":
 		// Add stream to room
 		if s.streams[action.RoomId] == nil {
-			s.streams[action.RoomId] = make([]ChatService_ChatStreamServer, 0)
+			s.streams[action.RoomId] = make([]pb.ChatService_ChatServer, 0)
 		}
 		s.streams[action.RoomId] = append(s.streams[action.RoomId], stream)
 		
 		// Send join confirmation
-		stream.Send(&ChatAction{
+		stream.Send(&pb.ChatAction{
 			UserId:     action.UserId,
 			RoomId:     action.RoomId,
 			ActionType: "joined",
@@ -277,7 +279,7 @@ func (s *ChatServer) processChatAction(stream ChatService_ChatStreamServer, acti
 	case "send":
 		if action.Message != nil {
 			// Generate message ID and timestamp
-			message := &ChatMessage{
+			message := &pb.ChatMessage{
 				Id:          fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 				UserId:      action.UserId,
 				RoomId:      action.RoomId,
@@ -302,7 +304,7 @@ func (s *ChatServer) processChatAction(stream ChatService_ChatStreamServer, acti
 		
 	case "typing":
 		// Broadcast typing indicator
-		typingAction := &ChatAction{
+		typingAction := &pb.ChatAction{
 			UserId:     action.UserId,
 			RoomId:     action.RoomId,
 			ActionType: "user_typing",
@@ -312,7 +314,7 @@ func (s *ChatServer) processChatAction(stream ChatService_ChatStreamServer, acti
 		
 	case "stop_typing":
 		// Broadcast stop typing indicator
-		stopTypingAction := &ChatAction{
+		stopTypingAction := &pb.ChatAction{
 			UserId:     action.UserId,
 			RoomId:     action.RoomId,
 			ActionType: "user_stop_typing",
@@ -323,11 +325,11 @@ func (s *ChatServer) processChatAction(stream ChatService_ChatStreamServer, acti
 }
 
 // broadcastToRoom sends a message to all connected streams in a room
-func (s *ChatServer) broadcastToRoom(roomID string, message *ChatMessage) {
+func (s *ChatServer) broadcastToRoom(roomID string, message *pb.ChatMessage) {
 	streams := s.streams[roomID]
 	for i := len(streams) - 1; i >= 0; i-- {
 		stream := streams[i]
-		err := stream.Send(&ChatAction{
+		err := stream.Send(&pb.ChatAction{
 			UserId:     message.UserId,
 			RoomId:     message.RoomId,
 			ActionType: "message",
@@ -342,7 +344,7 @@ func (s *ChatServer) broadcastToRoom(roomID string, message *ChatMessage) {
 }
 
 // broadcastActionToRoom sends an action to all connected streams in a room except sender
-func (s *ChatServer) broadcastActionToRoom(roomID string, action *ChatAction, sender ChatService_ChatStreamServer) {
+func (s *ChatServer) broadcastActionToRoom(roomID string, action *pb.ChatAction, sender pb.ChatService_ChatServer) {
 	streams := s.streams[roomID]
 	for i := len(streams) - 1; i >= 0; i-- {
 		stream := streams[i]

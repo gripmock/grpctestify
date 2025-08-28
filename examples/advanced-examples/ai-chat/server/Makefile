@@ -3,13 +3,13 @@
 # Build the AI chat server
 build: proto
 	@echo "Building AI Chat Server..."
-	go build -o ai-chat-server .
+	go build -o server .
 	@echo "✅ Server built successfully!"
 
 # Run the server
 run: build
 	@echo "Starting AI Chat Server..."
-	./ai-chat-server
+	./server
 
 # Generate protobuf code
 proto:
@@ -25,7 +25,7 @@ proto:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -f ai-chat-server
+	rm -f server
 	rm -rf aichatpb
 	@echo "✅ Cleaned successfully!"
 
