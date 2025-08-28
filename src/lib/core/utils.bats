@@ -2,11 +2,8 @@
 
 # utils.bats - Tests for utils.sh module
 
-# Load dependencies
-source "${BATS_TEST_DIRNAME}/colors.sh"
-
-# Load the utils module
-source "${BATS_TEST_DIRNAME}/utils.sh"
+# Load test helper
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 # Mock log function for testing
 log() {

@@ -3,7 +3,7 @@
 # colors.bats - Tests for colors.sh module using bats-core
 
 # Load the colors module
-source "${BATS_TEST_DIRNAME}/colors.sh"
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 @test "setup_colors function sets color variables" {
     # Test with no_color=false (default)

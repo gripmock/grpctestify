@@ -3,7 +3,7 @@
 # validation.bats - Tests for validation.sh module
 
 # Load the validation module
-load "${BATS_TEST_DIRNAME}/validation.sh"
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 @test "validate_address function validates addresses correctly" {
     # Test valid address

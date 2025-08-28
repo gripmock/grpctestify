@@ -3,7 +3,7 @@
 # response_comparison.bats - Tests for response_comparison.sh module
 
 # Load the response comparison module
-load "${BATS_TEST_DIRNAME}/response_comparison.sh"
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 # Mock log function for testing
 log() {
