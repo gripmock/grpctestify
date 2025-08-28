@@ -2,8 +2,8 @@
 
 # plugin_system_enhanced.bats - Tests for plugin_system_enhanced.sh module
 
-# Load the plugin system module
-load "${BATS_TEST_DIRNAME}/plugin_system_enhanced.sh"
+# Load test helper which loads grpctestify.sh functions
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 @test "register_plugin function registers plugins" {
     # Test plugin registration

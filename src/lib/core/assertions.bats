@@ -2,8 +2,8 @@
 
 # assertions.bats - Tests for assertions.sh module
 
-# Load the assertions module
-source "${BATS_TEST_DIRNAME}/assertions.sh"
+# Load test helper which loads grpctestify.sh functions
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 @test "extract_asserts function extracts assertions correctly" {
     # Create test file

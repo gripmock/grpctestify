@@ -3,7 +3,7 @@
 # progress.bats - Tests for progress.sh module
 
 # Load the progress module
-load "${BATS_TEST_DIRNAME}/progress.sh"
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 @test "print_progress function works with different modes" {
     # Test dots mode

@@ -3,7 +3,7 @@
 # runner.bats - Tests for runner.sh module
 
 # Load the runner module
-load "${BATS_TEST_DIRNAME}/runner.sh"
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 @test "run_grpc_call function runs gRPC calls" {
     # Test gRPC call (will fail but should not crash)

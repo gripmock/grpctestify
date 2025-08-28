@@ -2,8 +2,8 @@
 
 # parallel.bats - Tests for parallel.sh module
 
-# Load the parallel module
-source "${BATS_TEST_DIRNAME}/parallel.sh"
+# Load test helper which loads grpctestify.sh functions
+source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
 @test "run_test_with_timeout function runs tests with timeout" {
     # Test timeout functionality
