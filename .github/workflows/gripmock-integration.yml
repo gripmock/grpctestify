@@ -20,6 +20,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@ec02537da5712d66d4d50a0f33b7eb52773b5ed1
+        with:
+          ruby-version: '3.1'
           
       - name: Install dependencies
         run: |
@@ -31,7 +36,7 @@ jobs:
           echo "$HOME/bin" >> $GITHUB_PATH
           
           # Install bashly for script generation
-          sudo gem install bashly
+          gem install bashly
           
           # Verify dependencies
           grpcurl --version

@@ -11,9 +11,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@ec02537da5712d66d4d50a0f33b7eb52773b5ed1
+        with:
+          ruby-version: '3.1'
+
       - name: Install bashly
         run: |
-          sudo gem install bashly
+          gem install bashly
 
       - name: Generate grpctestify.sh
         run: |
