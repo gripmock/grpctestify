@@ -3,7 +3,7 @@
 # help.bats - Tests for help.sh module
 
 # Load the help module
-load "/load "${BATS_TEST_DIRNAME}/help.sh'"
+source "${BATS_TEST_DIRNAME}/help.sh"
 
 @test "show_help function shows help information" {
     # Test help display

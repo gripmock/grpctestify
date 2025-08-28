@@ -3,7 +3,7 @@
 # update.bats - Tests for update.sh module
 
 # Load the update module
-load "/load "${BATS_TEST_DIRNAME}/update.sh'"
+source "${BATS_TEST_DIRNAME}/update.sh"
 
 @test "update_command function handles update command" {
     # Test update command

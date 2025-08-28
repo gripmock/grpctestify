@@ -141,10 +141,10 @@ teardown() {
 
 @test "plugin development mode can be set" {
     export GRPCTESTIFY_PLUGIN_DEV="true"
-    load "/load "${BATS_TEST_DIRNAME}/plugin_api.sh'"
+    source "${BATS_TEST_DIRNAME}/plugin_api.sh"
     [ "$PLUGIN_DEV_MODE" = "true" ]
     
     unset GRPCTESTIFY_PLUGIN_DEV
-    load "/load "${BATS_TEST_DIRNAME}/plugin_api.sh'"
+    source "${BATS_TEST_DIRNAME}/plugin_api.sh"
     [ "$PLUGIN_DEV_MODE" = "false" ]
 }

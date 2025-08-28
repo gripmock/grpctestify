@@ -3,7 +3,7 @@
 # parallel.bats - Tests for parallel.sh module
 
 # Load the parallel module
-load "/load "${BATS_TEST_DIRNAME}/parallel.sh'"
+source "${BATS_TEST_DIRNAME}/parallel.sh"
 
 @test "run_test_with_timeout function runs tests with timeout" {
     # Test timeout functionality

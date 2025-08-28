@@ -3,7 +3,7 @@
 # plugins.bats - Tests for plugins.sh module
 
 # Load the plugins module
-load "/load "${BATS_TEST_DIRNAME}/plugins.sh'"
+source "${BATS_TEST_DIRNAME}/plugins.sh"
 
 @test "list_plugins_command function lists plugins" {
     # Test plugin listing command

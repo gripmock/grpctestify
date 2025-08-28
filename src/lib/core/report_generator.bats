@@ -3,8 +3,8 @@
 # report_generator.bats - Tests for report_generator.sh module
 
 # Load the report generator module
-load "/load "${BATS_TEST_DIRNAME}/report_generator.sh'"
-load "/load "${BATS_TEST_DIRNAME}/colors.sh'"
+source "${BATS_TEST_DIRNAME}/report_generator.sh"
+source "${BATS_TEST_DIRNAME}/colors.sh"
 
 setup() {
     # Initialize colors for testing
