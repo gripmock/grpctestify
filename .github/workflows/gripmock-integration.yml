@@ -1,4 +1,4 @@
-name: Gripmock Integration Tests
+name: GripMock Integration Tests
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   gripmock-integration:
-    name: Test grpctestify against gripmock
+    name: Test grpctestify against GripMock
     runs-on: ubuntu-latest
 
     steps:
@@ -36,7 +36,7 @@ jobs:
           echo "$HOME/bin" >> $GITHUB_PATH
           grpctestify --version
 
-      - name: Clone gripmock repository to tmp
+      - name: Clone GripMock repository to tmp
         run: |
           set -euo pipefail
           cd /tmp
@@ -51,25 +51,19 @@ jobs:
           echo "Latest tag: $latest_tag"
           git checkout $latest_tag
 
-      - name: Start gripmock server with examples
+      - name: Start GripMock server with examples
         run: |
           set -euo pipefail
           cd /tmp/gripmock
           go run main.go examples -s examples &
           echo $! > gripmock.pid
           
-          # Wait for server to start
-          sleep 5
+          # Wait for server to start and verify it's ready
+          go run main.go check
           
-          # Verify server is running
-          if ! ps -p $(cat gripmock.pid) > /dev/null; then
-            echo "Error: gripmock server failed to start"
-            exit 1
-          fi
-          
-          echo "Gripmock server started with PID $(cat gripmock.pid)"
+          echo "GripMock server started with PID $(cat gripmock.pid)"
 
-      - name: Test grpctestify with gripmock examples
+      - name: Test grpctestify with GripMock examples
         run: |
           set -euo pipefail
           cd /tmp/gripmock
@@ -77,7 +71,7 @@ jobs:
           # Run grpctestify tests against examples
           grpctestify examples
           
-          echo "Gripmock integration test completed successfully"
+          echo "GripMock integration test completed successfully"
 
       - name: Cleanup gripmock server
         if: always()

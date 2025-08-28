@@ -5,7 +5,7 @@
 # Load test helper which loads grpctestify.sh functions
 source "${BATS_TEST_DIRNAME}/test_helper.bash"
 
-@test.skip "run_test_with_timeout function runs tests with timeout" {
+@test "run_test_with_timeout function runs tests with timeout" {
     # Test timeout functionality
     local temp_file=$(mktemp)
     echo 'echo "test"' > "$temp_file"
@@ -17,14 +17,14 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -f "$temp_file" "$temp_file.result"
 }
 
-@test.skip "get_optimal_parallel_jobs function gets optimal parallel jobs" {
+@test "get_optimal_parallel_jobs function gets optimal parallel jobs" {
     # Test optimal parallel jobs calculation
     run get_optimal_parallel_jobs
     [ $status -eq 0 ]
     [[ "$output" =~ ^[0-9]+$ ]]
 }
 
-@test.skip "run_test_parallel function runs tests in parallel" {
+@test "run_test_parallel function runs tests in parallel" {
     # Test parallel test execution
     local temp_file=$(mktemp)
     echo 'echo "test"' > "$temp_file"
@@ -36,7 +36,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -f "$temp_file"
 }
 
-@test.skip "discover_test_files finds test files in directory" {
+@test "discover_test_files finds test files in directory" {
     # Create temporary test directory structure
     local temp_dir=$(mktemp -d)
     local subdir="$temp_dir/subdir"
@@ -65,7 +65,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -rf "$temp_dir"
 }
 
-@test.skip "discover_test_files handles single file" {
+@test "discover_test_files handles single file" {
     # Create temporary test file
     local temp_file=$(mktemp --suffix=.gctf)
     
@@ -78,7 +78,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -f "$temp_file"
 }
 
-@test.skip "discover_test_files handles non-test file" {
+@test "discover_test_files handles non-test file" {
     # Create temporary non-test file
     local temp_file=$(mktemp --suffix=.txt)
     
@@ -91,7 +91,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -f "$temp_file"
 }
 
-@test.skip "discover_and_categorize_tests categorizes tests by directory" {
+@test "discover_and_categorize_tests categorizes tests by directory" {
     # Create temporary test directory structure
     local temp_dir=$(mktemp -d)
     local basic_dir="$temp_dir/basic"
@@ -119,7 +119,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -rf "$temp_dir"
 }
 
-@test.skip "discover_tests_with_filters applies include filter" {
+@test "discover_tests_with_filters applies include filter" {
     # Create temporary test directory structure
     local temp_dir=$(mktemp -d)
     touch "$temp_dir/auth_test.gctf"
@@ -143,7 +143,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -rf "$temp_dir"
 }
 
-@test.skip "discover_tests_with_filters applies exclude filter" {
+@test "discover_tests_with_filters applies exclude filter" {
     # Create temporary test directory structure
     local temp_dir=$(mktemp -d)
     touch "$temp_dir/auth_test.gctf"
@@ -167,7 +167,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -rf "$temp_dir"
 }
 
-@test.skip "discover_tests_with_filters applies depth filter" {
+@test "discover_tests_with_filters applies depth filter" {
     # Create temporary test directory structure
     local temp_dir=$(mktemp -d)
     local subdir="$temp_dir/subdir"
@@ -198,7 +198,7 @@ source "${BATS_TEST_DIRNAME}/test_helper.bash"
     rm -rf "$temp_dir"
 }
 
-@test.skip "discover_tests_with_dependencies analyzes test dependencies" {
+@test "discover_tests_with_dependencies analyzes test dependencies" {
     # Create temporary test directory structure
     local temp_dir=$(mktemp -d)
     
@@ -237,7 +237,7 @@ EOF
     rm -rf "$temp_dir"
 }
 
-@test.skip "optimize_test_execution_order optimizes test order" {
+@test "optimize_test_execution_order optimizes test order" {
     # Create temporary test directory structure
     local temp_dir=$(mktemp -d)
     
