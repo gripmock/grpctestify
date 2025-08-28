@@ -13,7 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	
+
 	pb "github.com/gripmock/grpctestify/examples/real-time-chat/server/chatpb"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
@@ -23,7 +23,7 @@ import (
 // ChatServer implements the gRPC chat service
 type ChatServer struct {
 	pb.UnimplementedChatServiceServer
-	
+
 	// In-memory storage for demo purposes
 	rooms    map[string]*pb.ChatRoom
 	users    map[string]*pb.User
@@ -40,7 +40,7 @@ func NewChatServer() *ChatServer {
 		messages: make(map[string][]*pb.ChatMessage),
 		streams:  make(map[string][]pb.ChatService_ChatServer),
 	}
-	
+
 	// Initialize with sample data
 	server.initializeSampleData()
 	return server
@@ -59,7 +59,7 @@ func (s *ChatServer) initializeSampleData() {
 		IsPrivate:   false,
 		MaxMembers:  100,
 	}
-	
+
 	s.rooms["room2"] = &ChatRoom{
 		Id:          "room2",
 		Name:        "Tech Support",
@@ -70,7 +70,7 @@ func (s *ChatServer) initializeSampleData() {
 		IsPrivate:   false,
 		MaxMembers:  50,
 	}
-	
+
 	// Sample users
 	s.users["user1"] = &User{
 		Id:          "user1",
@@ -80,7 +80,7 @@ func (s *ChatServer) initializeSampleData() {
 		Online:      true,
 		LastSeen:    time.Now().Format(time.RFC3339),
 	}
-	
+
 	s.users["user2"] = &User{
 		Id:          "user2",
 		Username:    "bob",
@@ -89,7 +89,7 @@ func (s *ChatServer) initializeSampleData() {
 		Online:      false,
 		LastSeen:    time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
 	}
-	
+
 	s.users["user3"] = &User{
 		Id:          "user3",
 		Username:    "charlie",
@@ -98,7 +98,7 @@ func (s *ChatServer) initializeSampleData() {
 		Online:      true,
 		LastSeen:    time.Now().Format(time.RFC3339),
 	}
-	
+
 	// Sample messages
 	s.messages["room1"] = []*pb.ChatMessage{
 		{
@@ -118,7 +118,7 @@ func (s *ChatServer) initializeSampleData() {
 			Timestamp:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
 		},
 	}
-	
+
 	s.messages["room2"] = []*pb.ChatMessage{
 		{
 			Id:          "msg3",
@@ -135,22 +135,22 @@ func (s *ChatServer) initializeSampleData() {
 func (s *ChatServer) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Validate request
 	if req.Message == nil {
 		return nil, status.Error(codes.InvalidArgument, "message cannot be nil")
 	}
-	
+
 	if req.Message.UserId == "" || req.Message.RoomId == "" || req.Message.Content == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id, room_id, and content are required")
 	}
-	
+
 	// Check if room exists
 	room, exists := s.rooms[req.Message.RoomId]
 	if !exists {
 		return nil, status.Error(codes.NotFound, "room not found")
 	}
-	
+
 	// Check if user is member of the room
 	userIsMember := false
 	for _, memberID := range room.Members {
@@ -162,7 +162,7 @@ func (s *ChatServer) SendMessage(ctx context.Context, req *pb.SendMessageRequest
 	if !userIsMember {
 		return nil, status.Error(codes.PermissionDenied, "user is not a member of this room")
 	}
-	
+
 	// Generate message ID and timestamp
 	message := &pb.ChatMessage{
 		Id:          fmt.Sprintf("msg_%d", time.Now().UnixNano()),
@@ -175,17 +175,17 @@ func (s *ChatServer) SendMessage(ctx context.Context, req *pb.SendMessageRequest
 		Mentions:    req.Message.Mentions,
 		ReplyTo:     req.Message.ReplyTo,
 	}
-	
+
 	if message.MessageType == "" {
 		message.MessageType = "text"
 	}
-	
+
 	// Store message
 	s.messages[req.Message.RoomId] = append(s.messages[req.Message.RoomId], message)
-	
+
 	// Broadcast to all connected streams for this room
 	s.broadcastToRoom(req.Message.RoomId, message)
-	
+
 	return &pb.SendMessageResponse{
 		Message: message,
 		Success: true,
@@ -196,23 +196,23 @@ func (s *ChatServer) SendMessage(ctx context.Context, req *pb.SendMessageRequest
 func (s *ChatServer) GetMessages(ctx context.Context, req *pb.GetMessagesRequest) (*pb.GetMessagesResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if req.RoomId == "" {
 		return nil, status.Error(codes.InvalidArgument, "room_id is required")
 	}
-	
+
 	// Check if room exists
 	if _, exists := s.rooms[req.RoomId]; !exists {
 		return nil, status.Error(codes.NotFound, "room not found")
 	}
-	
+
 	messages := s.messages[req.RoomId]
-	
+
 	// Apply pagination if specified
 	if req.Limit > 0 {
 		start := int(req.Offset)
 		end := start + int(req.Limit)
-		
+
 		if start >= len(messages) {
 			messages = []*pb.ChatMessage{}
 		} else {
@@ -222,7 +222,7 @@ func (s *ChatServer) GetMessages(ctx context.Context, req *pb.GetMessagesRequest
 			messages = messages[start:end]
 		}
 	}
-	
+
 	return &pb.GetMessagesResponse{
 		Messages: messages,
 		Total:    int32(len(s.messages[req.RoomId])),
@@ -242,12 +242,12 @@ func (s *ChatServer) ChatStream(stream pb.ChatService_ChatServer) error {
 				log.Printf("Error receiving from stream: %v", err)
 				return
 			}
-			
+
 			// Process chat action
 			s.processChatAction(stream, action)
 		}
 	}()
-	
+
 	// Keep the stream alive
 	select {
 	case <-stream.Context().Done():
@@ -259,7 +259,7 @@ func (s *ChatServer) ChatStream(stream pb.ChatService_ChatServer) error {
 func (s *ChatServer) processChatAction(stream pb.ChatService_ChatServer, action *pb.ChatAction) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	switch action.ActionType {
 	case "join":
 		// Add stream to room
@@ -267,7 +267,7 @@ func (s *ChatServer) processChatAction(stream pb.ChatService_ChatServer, action 
 			s.streams[action.RoomId] = make([]pb.ChatService_ChatServer, 0)
 		}
 		s.streams[action.RoomId] = append(s.streams[action.RoomId], stream)
-		
+
 		// Send join confirmation
 		stream.Send(&pb.ChatAction{
 			UserId:     action.UserId,
@@ -275,7 +275,7 @@ func (s *ChatServer) processChatAction(stream pb.ChatService_ChatServer, action 
 			ActionType: "joined",
 			Metadata:   map[string]string{"status": "success"},
 		})
-		
+
 	case "send":
 		if action.Message != nil {
 			// Generate message ID and timestamp
@@ -290,18 +290,18 @@ func (s *ChatServer) processChatAction(stream pb.ChatService_ChatServer, action 
 				Mentions:    action.Message.Mentions,
 				ReplyTo:     action.Message.ReplyTo,
 			}
-			
+
 			if message.MessageType == "" {
 				message.MessageType = "text"
 			}
-			
+
 			// Store message
 			s.messages[action.RoomId] = append(s.messages[action.RoomId], message)
-			
+
 			// Broadcast to all streams in the room
 			s.broadcastToRoom(action.RoomId, message)
 		}
-		
+
 	case "typing":
 		// Broadcast typing indicator
 		typingAction := &pb.ChatAction{
@@ -311,7 +311,7 @@ func (s *ChatServer) processChatAction(stream pb.ChatService_ChatServer, action 
 			Metadata:   action.Metadata,
 		}
 		s.broadcastActionToRoom(action.RoomId, typingAction, stream)
-		
+
 	case "stop_typing":
 		// Broadcast stop typing indicator
 		stopTypingAction := &pb.ChatAction{
@@ -363,7 +363,7 @@ func (s *ChatServer) broadcastActionToRoom(roomID string, action *pb.ChatAction,
 func (s *ChatServer) GetRooms(ctx context.Context, req *GetRoomsRequest) (*GetRoomsResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	rooms := make([]*ChatRoom, 0, len(s.rooms))
 	for _, room := range s.rooms {
 		// Filter private rooms if user is not a member
@@ -381,7 +381,7 @@ func (s *ChatServer) GetRooms(ctx context.Context, req *GetRoomsRequest) (*GetRo
 		}
 		rooms = append(rooms, room)
 	}
-	
+
 	return &GetRoomsResponse{
 		Rooms: rooms,
 	}, nil
@@ -391,23 +391,23 @@ func (s *ChatServer) GetRooms(ctx context.Context, req *GetRoomsRequest) (*GetRo
 func (s *ChatServer) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsersResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if req.RoomId == "" {
 		return nil, status.Error(codes.InvalidArgument, "room_id is required")
 	}
-	
+
 	room, exists := s.rooms[req.RoomId]
 	if !exists {
 		return nil, status.Error(codes.NotFound, "room not found")
 	}
-	
+
 	users := make([]*User, 0, len(room.Members))
 	for _, memberID := range room.Members {
 		if user, exists := s.users[memberID]; exists {
 			users = append(users, user)
 		}
 	}
-	
+
 	return &GetUsersResponse{
 		Users: users,
 	}, nil
@@ -417,16 +417,16 @@ func (s *ChatServer) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUs
 func (s *ChatServer) JoinRoom(ctx context.Context, req *JoinRoomRequest) (*JoinRoomResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if req.UserId == "" || req.RoomId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id and room_id are required")
 	}
-	
+
 	room, exists := s.rooms[req.RoomId]
 	if !exists {
 		return nil, status.Error(codes.NotFound, "room not found")
 	}
-	
+
 	// Check if user is already a member
 	for _, memberID := range room.Members {
 		if memberID == req.UserId {
@@ -436,15 +436,15 @@ func (s *ChatServer) JoinRoom(ctx context.Context, req *JoinRoomRequest) (*JoinR
 			}, nil
 		}
 	}
-	
+
 	// Check room capacity
 	if room.MaxMembers > 0 && len(room.Members) >= int(room.MaxMembers) {
 		return nil, status.Error(codes.ResourceExhausted, "room is at maximum capacity")
 	}
-	
+
 	// Add user to room
 	room.Members = append(room.Members, req.UserId)
-	
+
 	return &JoinRoomResponse{
 		Success: true,
 		Message: "Successfully joined the room",
@@ -455,16 +455,16 @@ func (s *ChatServer) JoinRoom(ctx context.Context, req *JoinRoomRequest) (*JoinR
 func (s *ChatServer) LeaveRoom(ctx context.Context, req *LeaveRoomRequest) (*LeaveRoomResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if req.UserId == "" || req.RoomId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id and room_id are required")
 	}
-	
+
 	room, exists := s.rooms[req.RoomId]
 	if !exists {
 		return nil, status.Error(codes.NotFound, "room not found")
 	}
-	
+
 	// Remove user from room
 	for i, memberID := range room.Members {
 		if memberID == req.UserId {
@@ -475,7 +475,7 @@ func (s *ChatServer) LeaveRoom(ctx context.Context, req *LeaveRoomRequest) (*Lea
 			}, nil
 		}
 	}
-	
+
 	return &LeaveRoomResponse{
 		Success: false,
 		Message: "User is not a member of this room",
@@ -486,16 +486,16 @@ func (s *ChatServer) LeaveRoom(ctx context.Context, req *LeaveRoomRequest) (*Lea
 func (s *ChatServer) GetUserProfile(ctx context.Context, req *GetUserProfileRequest) (*GetUserProfileResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
-	
+
 	user, exists := s.users[req.UserId]
 	if !exists {
 		return nil, status.Error(codes.NotFound, "user not found")
 	}
-	
+
 	return &GetUserProfileResponse{
 		User: user,
 	}, nil
@@ -505,16 +505,16 @@ func (s *ChatServer) GetUserProfile(ctx context.Context, req *GetUserProfileRequ
 func (s *ChatServer) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusRequest) (*UpdateUserStatusResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
-	
+
 	user, exists := s.users[req.UserId]
 	if !exists {
 		return nil, status.Error(codes.NotFound, "user not found")
 	}
-	
+
 	// Update user status
 	user.Online = req.Online
 	if req.Online {
@@ -523,7 +523,7 @@ func (s *ChatServer) UpdateUserStatus(ctx context.Context, req *UpdateUserStatus
 	if req.Status != nil {
 		user.Status = req.Status
 	}
-	
+
 	return &UpdateUserStatusResponse{
 		Success: true,
 		User:    user,
@@ -583,7 +583,7 @@ func main() {
 		log.Println("⚠️  Real-time Chat gRPC Server starting without TLS on :50051")
 		log.Println("   Run 'make tls' in user-management/server to generate TLS certificates")
 	}
-	
+
 	// Create gRPC server
 	var server *grpc.Server
 	if useTLS {
@@ -596,20 +596,19 @@ func main() {
 		// Create server without TLS
 		server = grpc.NewServer()
 	}
-	
+
 	// Register chat service
 	chatServer := NewChatServer()
 	RegisterChatServiceServer(server, chatServer)
-	
+
 	log.Println("📝 Sample data initialized:")
 	log.Println("   - Rooms: General Discussion, Tech Support")
 	log.Println("   - Users: alice, bob, charlie")
 	log.Println("   - Messages: Pre-loaded sample conversations")
 	log.Println("💬 Ready for bidirectional streaming and unary calls")
-	
+
 	// Start server
 	if err := server.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve gRPC server: %v", err)
 	}
 }
-
