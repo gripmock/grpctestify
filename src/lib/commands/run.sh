@@ -156,16 +156,18 @@ setup_configuration() {
         report_output_file="${args[--log-output]}"
         
         # Validate report format
-        if ! validate_report_format "$REPORT_FORMAT"; then
+        if ! validate_report_format "$report_format"; then
             exit 1
         fi
         
         # Auto-generate output file if not specified
-        if [[ -z "$REPORT_OUTPUT_FILE" ]]; then
-            REPORT_OUTPUT_FILE=$(auto_generate_output_filename "$REPORT_FORMAT")
-            export REPORT_OUTPUT_FILE
-            log info "Auto-generated report file: $REPORT_OUTPUT_FILE"
+        if [[ -z "$report_output_file" ]]; then
+            report_output_file=$(auto_generate_output_filename "$report_format")
+            log info "Auto-generated report file: $report_output_file"
         fi
+        
+        # Export for use in other functions
+        export report_format report_output_file
     fi
     
 
@@ -780,9 +782,9 @@ show_summary() {
         fi
         
         # Generate report if requested
-        if [[ -n "$REPORT_FORMAT" && -n "$REPORT_OUTPUT_FILE" ]]; then
+        if [[ -n "$report_format" && -n "$report_output_file" ]]; then
             local test_results_json=$(build_test_results_json "$passed" "$failed" "$total" "$4" "${ALL_TEST_FILES[@]}")
-            generate_report "$REPORT_FORMAT" "$REPORT_OUTPUT_FILE" "$test_results_json" "$4" "$(date +%s)"
+            generate_report "$report_format" "$report_output_file" "$test_results_json" "$4" "$(date +%s)"
         fi
         return 1
     fi

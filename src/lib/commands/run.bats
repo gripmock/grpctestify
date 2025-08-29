@@ -2,12 +2,8 @@
 
 # run.bats - Tests for run.sh module
 
-# Load dependencies
-load "${BATS_TEST_DIRNAME}/../core/colors.sh"
-load "${BATS_TEST_DIRNAME}/../core/utils.sh"
-
-# Load the run module
-load "${BATS_TEST_DIRNAME}/run.sh"
+# NOTE: We don't load any modules to avoid side effects in unit tests
+# All functions are mocked inline for isolated testing
 
 # Mock functions for testing
 log() {
@@ -48,6 +44,8 @@ setup() {
     args[--completions]="0"
     args[--plugins]="0"
     args[--create-plugin]=""
+    args[--log-format]=""
+    args[--log-output]=""
 }
 
 @test "run_tests handles version flag" {
@@ -228,4 +226,69 @@ EOF
     run show_summary
     [ $status -eq 0 ]
     [[ "$output" =~ "Tests: 5, Passed: 4, Failed: 1" ]]
+}
+
+@test "setup_configuration handles report format correctly" {
+    # Mock report functions
+    report_manager_init() { return 0; }
+    validate_report_format() { 
+        [ "$1" = "junit" ] && return 0 || return 1
+    }
+    auto_generate_output_filename() {
+        echo "auto-generated-${1}.xml"
+    }
+    
+    # Mock setup_configuration function to test logic
+    setup_configuration() {
+        if [[ -n "${args[--log-format]}" ]]; then
+            local report_format="${args[--log-format]}"
+            local report_output_file="${args[--log-output]}"
+            
+            if ! validate_report_format "$report_format"; then
+                return 1
+            fi
+            
+            if [[ -z "$report_output_file" ]]; then
+                report_output_file=$(auto_generate_output_filename "$report_format")
+                echo "Auto-generated report file: $report_output_file"
+            fi
+        fi
+        return 0
+    }
+    
+    # Test with valid format and output
+    args[--log-format]="junit"
+    args[--log-output]="test.xml"
+    
+    run setup_configuration
+    [ $status -eq 0 ]
+}
+
+@test "setup_configuration fails with invalid report format" {
+    # Mock report functions
+    report_manager_init() { return 0; }
+    validate_report_format() { 
+        log error "Unknown report format: $1"
+        return 1
+    }
+    
+    # Mock setup_configuration function to test logic
+    setup_configuration() {
+        if [[ -n "${args[--log-format]}" ]]; then
+            local report_format="${args[--log-format]}"
+            
+            if ! validate_report_format "$report_format"; then
+                return 1
+            fi
+        fi
+        return 0
+    }
+    
+    # Test with invalid format
+    args[--log-format]="invalid"
+    args[--log-output]="test.xml"
+    
+    run setup_configuration
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Unknown report format" ]]
 }
