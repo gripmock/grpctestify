@@ -168,7 +168,7 @@ jobs:
           export GRPCTESTIFY_VERBOSE=true
           
           # Run tests with JUnit output
-          grpctestify tests/ --log-junit=test-results/grpc-tests.xml || true
+          grpctestify tests/ --log-format junit --log-output test-results/grpc-tests.xml
           
           # Also run individual tests for compatibility
           for test_file in tests/*.gctf; do

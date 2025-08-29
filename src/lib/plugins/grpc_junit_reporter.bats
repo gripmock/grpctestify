@@ -157,7 +157,7 @@ teardown() {
     run junit_plugin_help
     [ "$status" -eq 0 ]
     [[ "$output" =~ "JUnit Reporter Plugin" ]]
-    [[ "$output" =~ "--log-junit" ]]
+    [[ "$output" =~ "--log-format junit" ]]
     [[ "$output" =~ "Examples:" ]]
 }
 

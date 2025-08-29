@@ -84,7 +84,7 @@ jobs:
           mkdir -p test-results
           
           # Run grpctestify tests against examples with JUnit output
-          grpctestify examples --log-junit=test-results/gripmock-integration.xml || true
+          grpctestify examples --log-format junit --log-output test-results/gripmock-integration.xml
           
           # Also run without JUnit for compatibility check
           grpctestify examples

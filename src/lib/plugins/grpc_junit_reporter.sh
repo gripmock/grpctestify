@@ -154,7 +154,7 @@ JUnit Reporter Plugin
 
 Description: Generates JUnit XML reports compatible with CI/CD systems
 
-Usage: --log-junit <output_file>
+Usage: --log-format junit --log-output <output_file>
 
 Features:
 - Standard JUnit XML format
@@ -163,8 +163,8 @@ Features:
 - Proper XML escaping for error messages
 
 Examples:
-  grpctestify tests/ --log-junit results.xml
-  grpctestify test.gctf --log-junit reports/junit.xml
+  grpctestify tests/ --log-format junit --log-output results.xml
+  grpctestify test.gctf --log-format junit --log-output reports/junit.xml
 
 Requirements:
 - jq command for JSON processing

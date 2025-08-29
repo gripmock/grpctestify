@@ -168,12 +168,7 @@ setup_configuration() {
         fi
     fi
     
-    # Legacy support for --log-junit (deprecated)
-    if [[ -n "${args[--log-junit]}" ]]; then
-        log warning "--log-junit is deprecated, use --log-format junit --log-output <file>"
-        report_format="junit"
-        report_output_file="${args[--log-junit]}"
-    fi
+
 }
 
 # Determine optimal progress mode based on context

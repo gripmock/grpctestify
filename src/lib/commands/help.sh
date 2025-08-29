@@ -57,7 +57,7 @@ show_help() {
     echo "  $APP_NAME --no-color test.gctf"
     echo ""
     echo "  # Generate JUnit XML report"
-    echo "  $APP_NAME tests/ --log-junit results.xml"
+    echo "  $APP_NAME tests/ --log-format junit --log-output results.xml"
     echo ""
     echo "  # Check for updates"
     echo "  $APP_NAME --update"
@@ -233,7 +233,7 @@ _grpctestify() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     
-    opts="--help --version --update --completion --config --init-config --list-plugins --create-plugin --no-color --verbose --parallel --timeout --retry --retry-delay --no-retry --log-junit"
+    opts="--help --version --update --completion --config --init-config --list-plugins --create-plugin --no-color --verbose --parallel --timeout --retry --retry-delay --no-retry"
     
     case "${prev}" in
 
@@ -241,10 +241,7 @@ _grpctestify() {
             COMPREPLY=( $(compgen -W "bash zsh all" -- ${cur}) )
             return 0
             ;;
-        --log-junit)
-            COMPREPLY=( $(compgen -f -- ${cur}) )
-            return 0
-            ;;
+
     esac
     
     if [[ ${cur} == -* ]]; then
@@ -297,7 +294,7 @@ _grpctestify() {
         '--retry[Number of retries for failed network calls]:attempts:' \
         '--retry-delay[Initial delay between retries in seconds]:delay:' \
         '--no-retry[Disable retry mechanisms for network failures]' \
-        '--log-junit[Save test results in JUnit XML format]:file:_files' \
+
         '*:test_file:_files -g "*.gctf"'
 }
 
