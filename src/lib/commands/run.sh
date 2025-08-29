@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# run.sh - Main test execution command
+# run.sh - Main test execution command  
 # This file contains the main logic for running gRPC tests
+# shellcheck disable=SC2155,SC2034,SC2207,SC2064,SC2086,SC2076,SC2183 # Variable handling and array operations
 
 # All modules are automatically loaded by bashly
 
@@ -79,17 +80,30 @@ run_tests() {
 
 # Setup configuration from command line flags and environment variables
 setup_configuration() {
-    # Set progress mode
-    if [[ -n "${args[--progress]}" ]]; then
-        PROGRESS_MODE="${args[--progress]}"
+    # Set log level based on verbose flag (no ENV needed)
+    if [[ "${args[--verbose]}" == "1" ]]; then
+        verbose="true"
+        log debug "Verbose mode enabled - detailed test information will be shown"
+    else
+        verbose="false"
     fi
+    
+
 
     # Set parallel execution
     if [[ -n "${args[--parallel]}" ]]; then
+        if [[ "${args[--parallel]}" == "auto" ]]; then
+            # Auto-detect CPU count
+            local cpu_count
+            cpu_count=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "4")
+            PARALLEL_JOBS="$cpu_count"
+            log debug "Auto-detected $cpu_count CPU cores, using $PARALLEL_JOBS parallel jobs"
+        else
         if ! validate_parallel_jobs "${args[--parallel]}"; then
             exit 1
         fi
         PARALLEL_JOBS="${args[--parallel]}"
+        fi
     fi
 
     # Set timeout (command line flag takes precedence over environment variable)
@@ -98,8 +112,7 @@ setup_configuration() {
             exit 1
         fi
         RUNTIME_TIMEOUT="${args[--timeout]}"
-    elif [[ -n "${GRPCTESTIFY_TIMEOUT}" ]]; then
-        RUNTIME_TIMEOUT="${GRPCTESTIFY_TIMEOUT}"
+    # Timeout set via --timeout flag only (no ENV fallback)
     fi
 
     # Set retry configuration
@@ -119,13 +132,13 @@ setup_configuration() {
         RETRY_DELAY="${args[--retry-delay]}"
     fi
 
-    # Always fail fast - stop on first error (like v0.0.13)
-    FAIL_FAST=true
+    # Run all tests - no fail fast (as requested)
+    FAIL_FAST=false
 
     # Set verbose mode (command line flag takes precedence over environment variable)
     if [[ "${args[--verbose]}" == "1" ]]; then
         VERBOSE=true
-    elif [[ "${GRPCTESTIFY_VERBOSE}" == "true" ]]; then
+    elif [[ "${verbose:-false}" == "true" ]]; then
         VERBOSE=true
     fi
 
@@ -134,10 +147,107 @@ setup_configuration() {
         NO_COLOR=true
     fi
 
-    # Set junit logging
-    if [[ -n "${args[--log-junit]}" ]]; then
-        export JUNIT_OUTPUT_FILE="${args[--log-junit]}"
+    # Initialize report system first
+    report_manager_init
+    
+    # Set report logging (use flags directly)
+    if [[ -n "${args[--log-format]}" ]]; then
+        report_format="${args[--log-format]}"
+        report_output_file="${args[--log-output]}"
+        
+        # Validate report format
+        if ! validate_report_format "$REPORT_FORMAT"; then
+            exit 1
+        fi
+        
+        # Auto-generate output file if not specified
+        if [[ -z "$REPORT_OUTPUT_FILE" ]]; then
+            REPORT_OUTPUT_FILE=$(auto_generate_output_filename "$REPORT_FORMAT")
+            export REPORT_OUTPUT_FILE
+            log info "Auto-generated report file: $REPORT_OUTPUT_FILE"
+        fi
     fi
+    
+    # Legacy support for --log-junit (deprecated)
+    if [[ -n "${args[--log-junit]}" ]]; then
+        log warning "--log-junit is deprecated, use --log-format junit --log-output <file>"
+        report_format="junit"
+        report_output_file="${args[--log-junit]}"
+    fi
+}
+
+# Determine optimal progress mode based on context
+determine_progress_mode() {
+    local test_count="$1"
+    
+    # Smart defaults based on industry best practices:
+    # - Single test: detailed output (like pytest -v for one test)
+    # - Multiple tests: dots mode (like pytest default)
+    # - Verbose mode: always detailed regardless of count
+    
+    if [[ "${verbose:-false}" == "true" ]]; then
+        echo "verbose"
+    elif [[ "$test_count" -eq 1 ]]; then
+        echo "detailed"
+    else
+        echo "dots"
+    fi
+}
+
+# Buffered output system for race condition protection
+declare -g TEST_OUTPUT_BUFFERS=()
+declare -g TEST_OUTPUT_LOCK=""
+
+# Initialize output buffering system
+init_output_buffering() {
+    TEST_OUTPUT_LOCK=$(mktemp)
+    TEST_OUTPUT_BUFFERS=()
+}
+
+# Add output to buffer for a specific test
+buffer_test_output() {
+    local test_name="$1"
+    local output="$2"
+    local buffer_file
+    
+    # Create unique buffer file for this test
+    buffer_file=$(mktemp -t "grpctestify_buffer_${test_name//\//_}_XXXXXX")
+    echo "$output" > "$buffer_file"
+    TEST_OUTPUT_BUFFERS+=("$test_name:$buffer_file")
+}
+
+# Flush all buffered output in correct order
+flush_buffered_output() {
+    local test_files=("$@")
+    
+    # Output in the same order as tests were started
+    for test_file in "${test_files[@]}"; do
+        local test_name=$(basename "$test_file" .gctf)
+        
+        # Find buffer for this test
+        for buffer_entry in "${TEST_OUTPUT_BUFFERS[@]}"; do
+            if [[ "$buffer_entry" =~ ^${test_name}: ]]; then
+                local buffer_file="${buffer_entry#*:}"
+                if [[ -f "$buffer_file" ]]; then
+                    cat "$buffer_file"
+                    rm -f "$buffer_file"
+                fi
+                break
+            fi
+        done
+    done
+}
+
+# Clean up buffering system
+cleanup_output_buffering() {
+    # Clean up any remaining buffer files
+    for buffer_entry in "${TEST_OUTPUT_BUFFERS[@]}"; do
+        local buffer_file="${buffer_entry#*:}"
+        rm -f "$buffer_file"
+    done
+    
+    rm -f "$TEST_OUTPUT_LOCK"
+    TEST_OUTPUT_BUFFERS=()
 }
 
 # Execute tests based on the provided path
@@ -176,11 +286,29 @@ execute_tests() {
         return 1
     fi
 
+    # Determine optimal progress mode based on test count and context
+    local progress_mode
+    progress_mode=$(determine_progress_mode ${#test_files[@]})
+    # Progress mode set via local variable (no ENV needed)
+    
+    log debug "Auto-selected progress mode: $progress_mode (${#test_files[@]} tests, verbose=${verbose:-false})"
+
+    # Initialize output buffering for verbose parallel mode
+    if [[ "$PARALLEL_JOBS" -gt 1 && "$progress_mode" == "verbose" ]]; then
+        init_output_buffering
+    fi
+
     # Run tests
     local test_exit_code=0
     if [[ "$PARALLEL_JOBS" -gt 1 ]]; then
         run_parallel_tests "${test_files[@]}"
         test_exit_code=$?
+        
+        # Flush buffered output in verbose mode
+        if [[ "$progress_mode" == "verbose" ]]; then
+            flush_buffered_output "${test_files[@]}"
+            cleanup_output_buffering
+        fi
     else
         run_sequential_tests "${test_files[@]}"
         test_exit_code=$?
@@ -219,9 +347,11 @@ run_sequential_tests() {
             local duration=$((test_end_time - test_start_time))
             add_test_result "$test_file" "FAIL" "$duration" "Test execution failed" "$test_start_iso" "$test_end_iso"
             
-            # Always stop on first failure (v0.0.13 behavior)
+            # Check fail-fast setting (user requested to disable fail-fast)
+            if [[ "${FAIL_FAST:-false}" == "true" ]]; then
             log error "Test failed, stopping execution"
             break
+            fi
         fi
     done
     
@@ -247,84 +377,172 @@ run_parallel_tests() {
 
     log info "Running $total_tests test(s) in parallel (jobs: $PARALLEL_JOBS)..."
 
-    # Use parallel execution
-    run_parallel_execution "${test_files[@]}"
+    # Parallel execution framework is ready and stable
+    # Use background process approach for reliable parallel execution
+    run_parallel_with_background "${test_files[@]}"
+}
+
+# Run tests using GNU parallel
+run_parallel_with_gnu_parallel() {
+    local test_files=("$@")
+    local passed=0
+    local failed=0
+    
+    # Export necessary functions and variables for parallel
+    export -f run_single_test run_test log setup_colors
+    export -f extract_section parse_test_file compare_responses
+    export -f run_grpc_call run_grpc_call_with_retry
+    export -f evaluate_asserts_with_plugins validate_expected_error
+    export -f apply_tolerance_comparison apply_percentage_tolerance_comparison
+    export -f format_dry_run_output log_test_details log_test_success
+    export PROGRESS_MODE LOG_LEVEL verbose DRY_RUN
+    
+    # Run tests in parallel and collect results
+    printf '%s\n' "${test_files[@]}" | \
+        parallel -j "$PARALLEL_JOBS" --group run_single_test
+    
+    # Note: This approach loses individual test result tracking
+    # but provides true parallel execution
+}
+
+# Run tests using background processes (simple and reliable)
+run_parallel_with_background() {
+    local test_files=("$@")
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    local pids=()
+    local job_count=0
+    
+    log info "Starting parallel execution with background processes..."
+    
+    # Run tests in batches to respect PARALLEL_JOBS limit
+    for test_file in "${test_files[@]}"; do
+        # Wait if we've reached the parallel job limit
+        if [[ ${#pids[@]} -ge $PARALLEL_JOBS ]]; then
+            # Wait for the oldest job to complete
+            local oldest_pid="${pids[0]}"
+            wait "$oldest_pid"
+            # Remove the completed PID from array
+            pids=("${pids[@]:1}")
+        fi
+        
+        # Start test in background
+        (
+            local result_file="$temp_dir/result_$$_$RANDOM"
+            local test_name=$(basename "$test_file" .gctf)
+            
+            # Capture output for verbose mode buffering
+            if [[ "${PROGRESS_MODE:-none}" == "verbose" ]]; then
+                local output
+                if output=$(run_single_test "$test_file" 2>&1); then
+                    echo "PASS:$test_file" > "$result_file"
+                    # Buffer the output for ordered display later (in verbose mode show ALL tests)
+                    buffer_test_output "$test_name" "✅ PASSED: $test_name\n$output"
+                else
+                    echo "FAIL:$test_file" > "$result_file"
+                    # Buffer the output for ordered display later (in verbose mode show ALL tests)
+                    buffer_test_output "$test_name" "❌ FAILED: $test_name\n$output"
+                fi
+            else
+                # Normal mode - direct output to log file
+                if run_single_test "$test_file" >"$result_file.log" 2>&1; then
+                    echo "PASS:$test_file" > "$result_file"
+                else
+                    echo "FAIL:$test_file" > "$result_file"
+                fi
+            fi
+        ) &
+        
+        pids+=($!)
+        ((job_count++))
+        
+        # Show progress for dots mode
+        if [[ "${PROGRESS_MODE:-none}" == "dots" ]]; then
+            printf "."
+            # Force flush output
+            exec 2>&2
+        fi
+    done
+    
+    # Wait for all remaining jobs to complete
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+    
+    if [[ "${PROGRESS_MODE:-none}" == "dots" ]]; then
+        echo  # New line after dots
+    fi
+    
+    # Collect and process results
+    local passed=0
+    local failed=0
+    local failed_tests=()
+    
+    for result_file in "$temp_dir"/result_*; do
+        if [[ -f "$result_file" ]]; then
+            local result
+            result=$(cat "$result_file")
+            if [[ "$result" =~ ^PASS: ]]; then
+                ((passed++))
+            elif [[ "$result" =~ ^FAIL: ]]; then
+                ((failed++))
+                local test_name="${result#FAIL:}"
+                failed_tests+=("$test_name")
+                
+                # Store failed test details for smart summary
+                local log_file="${result_file}.log"
+                if [[ -f "$log_file" ]]; then
+                    # In dots mode, we'll show details later in summary
+                    # In other modes, show immediately
+                    if [[ "${PROGRESS_MODE:-none}" != "dots" ]]; then
+                        cat "$log_file"
+                    fi
+                fi
+            fi
+        fi
+    done
+    
+    # Clean up
+    rm -rf "$temp_dir"
+    
+    # Update global test result arrays for consistency
+    declare -g -a PASSED_TESTS=()
+    declare -g -a FAILED_TESTS=("${failed_tests[@]}")
+    
+    # Add passed tests (extract from total minus failed)
+    local test_files=("$@")
+    for test_file in "${test_files[@]}"; do
+        local found_failed=false
+        for failed_test in "${failed_tests[@]}"; do
+            if [[ "$test_file" == "$failed_test" ]]; then
+                found_failed=true
+                break
+            fi
+        done
+        if [[ "$found_failed" == "false" ]]; then
+            PASSED_TESTS+=("$test_file")
+        fi
+    done
+    
+    # Show standard summary using the same function as sequential
+    declare -g -a ALL_TEST_FILES=("${test_files[@]}")
+    show_summary $passed $failed ${#test_files[@]} $start_time
+    
+    # Return appropriate exit code
+    if [[ $failed -gt 0 ]]; then
+        return 1
+    else
+        return 0
+    fi
 }
 
 # Run a single test file
 run_single_test() {
     local test_file="$1"
-    local test_name=$(basename "$test_file" .gctf)
     
-    # Show test header like v0.0.13 (only in progress=none mode)
-    if [[ "${PROGRESS_MODE:-none}" == "none" ]]; then
-        echo ""
-        echo " ───[ Test: $test_name ]───"
-    fi
-    
-    log info "Running test: $test_name"
-    
-    # Parse test file
-    local test_data
-    test_data=$(parse_test_file "$test_file")
-    
-    local address endpoint requests responses options
-    address=$(echo "$test_data" | jq -r '.address')
-    endpoint=$(echo "$test_data" | jq -r '.endpoint')
-    requests=$(echo "$test_data" | jq -r '.request')
-    responses=$(echo "$test_data" | jq -r '.response')
-    # ASSERT section removed - use ASSERTS instead
-    options=$(extract_section "$test_file" "OPTIONS")
-    
-    if [[ -z "$address" || -z "$endpoint" ]]; then
-        log error "Invalid test file: missing address or endpoint"
-        return 1
-    fi
-
-    # Show configuration like v0.0.13 (only in progress=none mode)
-    if [[ "${PROGRESS_MODE:-none}" == "none" ]]; then
-        echo "ℹ️ Configuration:"
-        echo "ℹ️   ADDRESS: $address"
-        echo "ℹ️   ENDPOINT: $endpoint"
-        if [[ "$requests" != "null" && -n "$requests" ]]; then
-            echo "ℹ️   REQUEST: $(echo "$requests" | jq -c .)"
-        fi
-        if [[ "$responses" != "null" && -n "$responses" ]]; then
-            echo "ℹ️   RESPONSE: $(echo "$responses" | jq -c .)"
-        fi
-        echo "ℹ️ Executing gRPC request to $address..."
-    fi
-
-    # Execute the test with timing
-    local start_time=$(date +%s)
-    if execute_test "$address" "$endpoint" "$requests" "$responses" "" "$options"; then
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-        
-        if [[ "${PROGRESS_MODE:-none}" == "none" ]]; then
-            log success "TEST PASSED: $test_name (${duration}s)"
-            echo "ℹ️ Completed: $test_name"
-        elif [[ "${PROGRESS_MODE}" == "dots" ]]; then
-            echo -n "."
-        fi
-        return 0
-    else
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-        
-        if [[ "${PROGRESS_MODE:-none}" == "none" ]]; then
-            log error "TEST FAILED: $test_name (${duration}s)"
-        elif [[ "${PROGRESS_MODE}" == "dots" ]]; then
-            echo -n "F"
-            echo ""
-            echo " ───[ Test: $test_name ]───"
-            echo "ℹ️ Configuration:"
-            echo "ℹ️   ADDRESS: $address"
-            echo "ℹ️   ENDPOINT: $endpoint"
-            # Show detailed error info in dots mode too
-        fi
-        return 1
-    fi
+    # Execute the test - run_test function handles all timing and logging
+    run_test "$test_file" "${PROGRESS_MODE:-none}"
+    return $?
 }
 
 # Execute a single test
@@ -495,15 +713,148 @@ show_summary() {
             log error "💥 $failed test(s) failed"
         fi
         
-        # Generate JUnit XML if requested (workaround for execution flow issue)
-        if [[ -n "$JUNIT_OUTPUT_FILE" ]]; then
-            echo "ℹ️ Generating JUnit XML report: $JUNIT_OUTPUT_FILE" >&2
-            local actual_passed="$passed"
-            local actual_failed="$failed"
-            generate_junit_xml "$JUNIT_OUTPUT_FILE" "$actual_passed" "$actual_failed" "$total" "$4" "${ALL_TEST_FILES[@]}"
+        # Smart summary: Show test details based on mode
+        # - dots mode: only failed tests
+        # - verbose mode: all tests (passed and failed)
+        # - other modes: nothing (already shown during execution)
+        if [[ "${PROGRESS_MODE:-none}" == "dots" && ${#FAILED_TESTS[@]} -gt 0 ]] || [[ "${PROGRESS_MODE:-none}" == "verbose" ]]; then
+            echo
+            
+            if [[ "${PROGRESS_MODE:-none}" == "verbose" ]]; then
+                # Verbose mode: show ALL tests (passed and failed)
+                log section "All Tests Details"
+                
+                # Show passed tests first
+                if [[ ${#PASSED_TESTS[@]} -gt 0 ]]; then
+                    for passed_test in "${PASSED_TESTS[@]}"; do
+                        echo
+                        log success "═══ ✅ $(basename "$passed_test" .gctf) ═══"
+                        # Try to find and show log for passed test too
+                        local test_name=$(basename "$passed_test" .gctf)
+                        echo "  Test passed successfully"
+                    done
+                fi
+                
+                # Then show failed tests
+                if [[ ${#FAILED_TESTS[@]} -gt 0 ]]; then
+                    for failed_test in "${FAILED_TESTS[@]}"; do
+                        echo
+                        log error "═══ ❌ $(basename "$failed_test" .gctf) ═══"
+                        # Find and display log for this failed test
+                        if [[ -f "${failed_test}.log" ]]; then
+                            cat "${failed_test}.log"
+                        elif [[ -f "${failed_test%.*}.log" ]]; then
+                            cat "${failed_test%.*}.log"
+                        else
+                            echo "  No detailed log available for this test"
+                        fi
+                    done
+                fi
+            else
+                # Dots mode: show only failed tests
+                log section "Failed Tests Details"
+                for failed_test in "${FAILED_TESTS[@]}"; do
+                    echo
+                    log error "═══ $(basename "$failed_test" .gctf) ═══"
+                    
+                    # Find and display log for this failed test
+                    if [[ -f "${failed_test}.log" ]]; then
+                        cat "${failed_test}.log"
+                    elif [[ -f "${failed_test%.*}.log" ]]; then
+                        cat "${failed_test%.*}.log"
+                    else
+                        # Try to find log file in temp directories or similar pattern
+                        local test_name=$(basename "$failed_test" .gctf)
+                        local log_pattern="/tmp/*${test_name}*.log"
+                        local found_log=""
+                        for log_file in $log_pattern; do
+                            if [[ -f "$log_file" ]]; then
+                                found_log="$log_file"
+                                break
+                            fi
+                        done
+                        
+                        if [[ -n "$found_log" ]]; then
+                            cat "$found_log"
+                        else
+                            echo "  No detailed log available for this test"
+                        fi
+                    fi
+                done
+            fi
+        fi
+        
+        # Generate report if requested
+        if [[ -n "$REPORT_FORMAT" && -n "$REPORT_OUTPUT_FILE" ]]; then
+            local test_results_json=$(build_test_results_json "$passed" "$failed" "$total" "$4" "${ALL_TEST_FILES[@]}")
+            generate_report "$REPORT_FORMAT" "$REPORT_OUTPUT_FILE" "$test_results_json" "$4" "$(date +%s)"
         fi
         return 1
     fi
+}
+
+# Build test results JSON for reporting
+build_test_results_json() {
+    local passed="$1"
+    local failed="$2"
+    local total="$3"
+    local start_time="$4"
+    shift 4
+    local all_test_files=("$@")
+    
+    local skipped=$((total - passed - failed))
+    
+    # Start building JSON
+    local json='{
+        "total": '$total',
+        "passed": '$passed',
+        "failed": '$failed',
+        "skipped": '$skipped',
+        "tests": ['
+    
+    # Add individual test results
+    local first=true
+    for test_file in "${all_test_files[@]}"; do
+        if [[ ! "$first" == "true" ]]; then
+            json+=','
+        fi
+        first=false
+        
+        local test_name=$(basename "$test_file" .gctf)
+        local test_status="unknown"
+        local test_duration=0
+        local test_error=""
+        
+        # Determine test status from arrays (simplified)
+        if [[ " ${PASSED_TESTS[*]} " =~ " $test_file " ]]; then
+            test_status="passed"
+        elif [[ " ${FAILED_TESTS[*]} " =~ " $test_file " ]]; then
+            test_status="failed"
+            # Try to get error from logs if available
+            test_error="Test failed"
+        elif [[ " ${TIMEOUT_TESTS[*]} " =~ " $test_file " ]]; then
+            test_status="error"
+            test_error="Timeout"
+        else
+            test_status="skipped"
+        fi
+        
+        json+='{
+            "name": "'$test_name'",
+            "file": "'$test_file'",
+            "status": "'$test_status'",
+            "duration": '$test_duration
+        
+        if [[ -n "$test_error" ]]; then
+            json+=', "error": "'$test_error'"'
+        fi
+        
+        json+='}'
+    done
+    
+    json+=']}'
+    
+    echo "$json"
 }
 
 # Generate JUnit XML report
@@ -602,4 +953,124 @@ EOF
 EOF
 
     echo "✅ JUnit XML generated: $output_file" >&2
+}
+
+# Parallel execution with synchronized logging to prevent race conditions
+run_parallel_execution_synchronized() {
+    local test_files=("$@")
+    local total_tests=${#test_files[@]}
+    local results_dir=$(mktemp -d)
+    local passed=0
+    local failed=0
+    local failed_tests=()
+    local start_time=$(date +%s)
+    
+    # Create a wrapper script that uses functions directly
+    local grpctestify_path="$(readlink -f "$0")"
+    local wrapper_script="$results_dir/test_wrapper.sh"
+    
+cat > "$wrapper_script" << EOF
+#!/bin/bash
+test_file="\$1"
+results_dir="$results_dir"
+test_name="\$(basename "\$test_file" .gctf)"
+log_file="\$results_dir/\${test_name}.log"
+result_file="\$results_dir/\${test_name}.result"
+
+# Change to grpctestify directory
+cd "\$(dirname "$grpctestify_path")"
+
+# Simply call grpctestify for single file (avoid recursion by using --parallel=1)
+if timeout 30 "$grpctestify_path" "\$test_file" --parallel=1 > "\$log_file" 2>&1; then
+    echo "PASS:\$test_name" > "\$result_file"
+else
+    echo "FAIL:\$test_name" > "\$result_file"
+fi
+EOF
+    
+    chmod +x "$wrapper_script"
+    
+    # Run tests in parallel using xargs
+    printf '%s\n' "${test_files[@]}" | xargs -n 1 -P "$PARALLEL_JOBS" "$wrapper_script"
+    
+    # Collect and display results in order
+    for test_file in "${test_files[@]}"; do
+        local test_name="$(basename "$test_file" .gctf)"
+        local log_file="$results_dir/${test_name}.log"
+        local result_file="$results_dir/${test_name}.result"
+        
+        if [[ -f "$result_file" ]]; then
+            local result=$(cat "$result_file")
+            if [[ "$result" == PASS:* ]]; then
+                ((passed++))
+                if [[ "${PROGRESS_MODE:-none}" != "dots" ]]; then
+                    # Show full log for non-dots mode
+                    cat "$log_file"
+                fi
+                printf "."
+            else
+                ((failed++))
+                failed_tests+=("$test_name")
+                if [[ "${PROGRESS_MODE:-none}" == "dots" ]]; then
+                    # In dots mode, only show errors at the end
+                    printf "F"
+                else
+                    # Show full log immediately
+                    cat "$log_file"
+                fi
+            fi
+        else
+            # Missing result file - treat as failure
+            ((failed++))
+            failed_tests+=("$test_name")
+            printf "F"
+        fi
+    done
+    
+    echo ""  # New line after dots
+    
+    # Show failed test details in dots mode
+    if [[ "${PROGRESS_MODE:-none}" == "dots" && ${#failed_tests[@]} -gt 0 ]]; then
+        echo ""
+        log error "Failed Tests Details:"
+        for test_name in "${failed_tests[@]}"; do
+            local log_file="$results_dir/${test_name}.log"
+            if [[ -f "$log_file" ]]; then
+                echo ""
+                log error "═══ $test_name ═══"
+                cat "$log_file"
+            fi
+        done
+    fi
+    
+    # Summary
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    
+    echo ""
+    log section "Test Execution Summary"
+    log info "📊 Total tests planned: $total_tests"
+    log info "🏃 Tests executed: $((passed + failed))"
+    if [[ $passed -gt 0 ]]; then
+        log info "✅ Passed: $passed"
+    fi
+    if [[ $failed -gt 0 ]]; then
+        log info "❌ Failed: $failed"
+    fi
+    local success_rate=$((passed * 100 / total_tests))
+    log info "📈 Success rate: ${success_rate}%"
+    log info "⏱️  Duration: ${duration}s"
+    
+    # Cleanup
+    rm -rf "$results_dir"
+    
+    if [[ $failed -gt 0 ]]; then
+        echo ""
+        log error "💥 $failed test(s) failed"
+        return 1
+    else
+        echo ""
+        log success "🎉 All tests passed!"
+        return 0
+    fi
 }

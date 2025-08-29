@@ -23,14 +23,16 @@ Path to test file or directory to execute.
 
 #### `--parallel N`
 Run tests in parallel with N workers.
-- **Default**: `1` (sequential)
-- **Range**: `1-32`
-- **Example**: `--parallel 4`
+- **Default**: `auto` (auto-detect CPU count)  
+- **Range**: `1-32` or `auto`
+- **Example**: `--parallel 4` or `--parallel auto`
+- **Note**: Currently falls back to sequential mode due to recursion issue being resolved
 
-#### Fail-Fast Behavior
-**Always enabled**: Execution stops on first test failure (like v0.0.13).
-- **Behavior**: Tests stop at first failure
-- **Note**: No flag needed - this is the default and only behavior
+#### `--dry-run`
+Show commands that would be executed without running them.
+- **Default**: Execute tests normally
+- **Example**: `--dry-run`
+- **Use case**: Debug command formation and validation
 
 ### Output Control
 
@@ -44,17 +46,18 @@ Disable colored output.
 - **Default**: Colors enabled
 - **Example**: `--no-color`
 
-#### `--progress PROGRESS_MODE`
-Set progress indicator type.
-- **Options**: `none`, `dots`, `bar`
-- **Default**: `none`
-- **Example**: `--progress dots`
+#### `--log-format FORMAT`
+Generate test reports in specified format.
+- **Options**: `junit`, `json`
+- **Default**: None (no reports generated)
+- **Example**: `--log-format junit`
+- **Note**: Use with `--log-output` to specify output file
 
-#### `--log-junit JUNIT_FILE`
-Save test results in JUnit XML format to specified file.
-- **Format**: XML file path
-- **Example**: `--log-junit test-results.xml`
-- **Note**: Creates JUnit-compatible XML for CI/CD integration
+#### `--log-output OUTPUT_FILE`
+Output file for test reports (use with `--log-format`).
+- **Format**: File path
+- **Example**: `--log-output test-results.xml`
+- **Note**: File extension should match selected format
 
 ### Network & Timing
 
@@ -148,17 +151,20 @@ Enable verbose output by default.
 
 ### Advanced Usage
 ```bash
-# Parallel execution with progress
-./grpctestify.sh --parallel 8 --progress bar tests/
+# Parallel execution with automatic job detection
+./grpctestify.sh --parallel auto tests/
+
+# Dry-run mode for debugging
+./grpctestify.sh --dry-run tests/auth_test.gctf
 
 # Custom timeout and retries
 ./grpctestify.sh --timeout 60 --retry 5 --retry-delay 2 tests/
 
-# Minimal output for CI/CD (fail-fast is always enabled)
+# Minimal output for CI/CD  
 ./grpctestify.sh --no-color tests/
 
 # Generate JUnit XML for CI/CD integration
-./grpctestify.sh tests/ --log-junit test-results.xml
+./grpctestify.sh tests/ --log-format junit --log-output test-results.xml
 ```
 
 ### Development Usage

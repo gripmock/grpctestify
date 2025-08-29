@@ -2,8 +2,189 @@
 
 # runner.sh - Test execution logic
 # Core test execution functionality
+# shellcheck disable=SC2155,SC2001,SC2076,SC2086,SC2034,SC2181,SC2317 # Variable handling, exit codes, unreachable code
+
+# Detailed logging function for verbose mode
+log_test_details() {
+    local test_name="$1"
+    local address="$2" 
+    local endpoint="$3"
+    local request="$4"
+    local headers="$5"
+    local expected_response="$6"
+    local expected_error="$7"
+    local actual_response="$8"
+    local grpc_status="$9"
+    local execution_time="${10}"
+    
+    if [[ "${LOG_LEVEL:-info}" == "debug" ]]; then
+        log debug "════════════════════════════════════════"
+        log debug "📋 TEST DETAILS: $test_name"
+        log debug "════════════════════════════════════════"
+        log debug "🌐 Target: $address$endpoint"
+        
+        if [[ -n "$headers" ]]; then
+            log debug "📤 Headers:"
+            # Optimized: avoid while read loop for simple logging
+            log debug "    $headers"
+        fi
+        
+        if [[ -n "$request" ]]; then
+            log debug "📤 Request Data:"
+            # Optimized: use direct output instead of line-by-line processing
+            printf "%s\n" "$request" | sed 's/^/    /'
+        else
+            log debug "📤 Request: (empty)"
+        fi
+        
+        log debug "⏱️  Execution Time: ${execution_time}s"
+        log debug "🔢 gRPC Status Code: $grpc_status"
+        
+        if [[ -n "$actual_response" ]]; then
+            log debug "📥 Actual Response:"
+            # Optimized: use sed instead of while read
+            printf "%s\n" "$actual_response" | sed 's/^/    /'
+        else
+            log debug "📥 Actual Response: (empty)"
+        fi
+        
+        if [[ -n "$expected_response" ]]; then
+            log debug "✅ Expected Response:"
+            # Optimized: use sed instead of while read
+            printf "%s\n" "$expected_response" | sed 's/^/    /'
+        fi
+        
+        if [[ -n "$expected_error" ]]; then
+            log debug "⚠️  Expected Error:"
+            # Optimized: use sed instead of while read
+            printf "%s\n" "$expected_error" | sed 's/^/    /'
+        fi
+        
+        log debug "════════════════════════════════════════"
+    fi
+}
 
 # Source response comparison utilities
+
+# Helper function to log success messages only in non-dots mode
+log_test_success() {
+    local message="$1"
+    local progress_mode="$2"
+    
+    if [[ "$progress_mode" != "dots" ]]; then
+        log success "$message"
+    fi
+}
+
+# Beautiful dry-run formatter
+format_dry_run_output() {
+    local cmd=("$@")
+    local request="$1"
+    local headers="$2"
+    shift 2
+    local command_parts=("${@}")
+    
+    echo ""
+    log info "🔍 DRY-RUN MODE: Command Preview"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Extract endpoint from command for display
+    local endpoint=""
+    for arg in "${command_parts[@]}"; do
+        if [[ "$arg" =~ \. ]]; then
+            endpoint="$arg"
+            break
+        fi
+    done
+    
+    if [[ -n "$endpoint" ]]; then
+        log section "🎯 Target Endpoint"
+        echo "   $endpoint"
+        echo ""
+    fi
+    
+    # Command section
+    log section "📡 gRPC Command"
+    printf "   %s" "${command_parts[0]}"
+    for arg in "${command_parts[@]:1}"; do
+        if [[ "$arg" =~ ^- ]]; then
+            printf " \\\\\n      %s" "$arg"
+        else
+            printf " \\\\\n      '%s'" "$arg"
+        fi
+    done
+    echo ""
+    echo ""
+    
+    # Headers section (if any)
+    if [[ -n "$headers" ]]; then
+        log section "📋 Request Headers"
+        echo "$headers" | jq -C . 2>/dev/null || echo "   $headers"
+        echo ""
+    fi
+    
+    # Request data section
+    if [[ -n "$request" ]]; then
+        log section "📤 Request Data"
+        
+        # Check if this is streaming (multiple JSON objects separated by newlines)
+        # Count actual JSON objects, not just lines
+        local json_count=0
+        while IFS= read -r line; do
+            if [[ -n "$line" && "$line" =~ ^\{.*\}$ ]]; then
+                ((json_count++))
+            fi
+        done <<< "$request"
+        
+        if [[ $json_count -gt 1 ]]; then
+            log info "   🔄 Streaming Request (Multiple Messages):"
+            local msg_num=1
+            while IFS= read -r line; do
+                if [[ -n "$line" ]]; then
+                    echo "   ┌─ Message $msg_num ─┐"
+                    if command -v jq >/dev/null 2>&1; then
+                        echo "$line" | jq -C . 2>/dev/null | sed 's/^/   │ /' || echo "   │ $line"
+                    else
+                        echo "   │ $line"
+                    fi
+                    echo "   └──────────────────┘"
+                    ((msg_num++))
+                fi
+            done <<< "$request"
+        else
+            # Single request
+            if command -v jq >/dev/null 2>&1; then
+                # Pretty print JSON with colors if jq available
+                echo "$request" | jq -C . 2>/dev/null || {
+                    echo "   ┌─ Raw Request Data ─┐"
+                    while IFS= read -r line; do echo "   │ $line"; done <<< "$request"
+                    echo "   └────────────────────┘"
+                }
+            else
+                echo "   ┌─ Request Data ─┐"
+                while IFS= read -r line; do echo "   │ $line"; done <<< "$request"
+                echo "   └────────────────┘"
+            fi
+        fi
+        echo ""
+    fi
+    
+    # Show what would be returned
+    if [[ -n "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE:-}" && "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" != "null" ]]; then
+        log section "📥 Expected Response (Simulated)"
+        echo "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" | jq -C . 2>/dev/null || echo "   ${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}"
+        echo ""
+    elif [[ "${GRPCTESTIFY_DRY_RUN_EXPECT_ERROR:-false}" == "true" ]]; then
+        log section "⚠️ Expected Error (Simulated)"
+        echo '   {"code": 999, "message": "DRY-RUN: Simulated gRPC error"}'
+        echo ""
+    fi
+    
+    # Execution note
+    log info "✨ This command would be executed in normal mode"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
 
 run_grpc_call() {
     local address="$1"
@@ -11,16 +192,15 @@ run_grpc_call() {
     local request="$3"
     local headers="$4"
     local proto_file="$5"
+    local dry_run="${6:-false}"
     
     # Build command array
-    local cmd=("grpcurl" "-plaintext")
+    local cmd=("grpcurl" "-plaintext" "-format-error")
     
-
     if [[ -n "$proto_file" ]]; then
         cmd+=("-proto" "$proto_file")
     fi
     
-
     if [[ -n "$headers" ]]; then
         while IFS= read -r header; do
             if [[ -n "$header" ]]; then
@@ -31,11 +211,58 @@ run_grpc_call() {
     
 
     if [[ -n "$request" ]]; then
-        cmd+=("-d" "$request")
+        # Critical fix: Use stdin (-d @) for multiple REQUEST sections to preserve JSON properly
+        cmd+=("-d" "@")
     fi
     
     cmd+=("$address" "$endpoint")
-    "${cmd[@]}" 2>&1
+    
+    # Dry-run mode: show beautiful formatted command preview
+    if [[ "$dry_run" == "true" ]]; then
+        format_dry_run_output "$request" "$headers" "${cmd[@]}"
+        # Return appropriate response based on test expectations
+        # If we expect an error (detected by caller), simulate gRPC error
+        if [[ "${GRPCTESTIFY_DRY_RUN_EXPECT_ERROR:-false}" == "true" ]]; then
+            echo '{"code": 999, "message": "DRY-RUN: Simulated gRPC error", "details": []}'
+            return 1
+        else
+            # If there's an expected response, return it; otherwise return dry-run status
+            if [[ -n "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE:-}" && "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" != "null" ]]; then
+                echo "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}"
+            else
+                # Return structured JSON response for compatibility
+                echo '{"dry_run": true, "message": "Command preview completed", "status": "success"}'
+            fi
+            return 0
+        fi
+    fi
+    
+    # Only show debug info in verbose mode or non-dots progress mode
+    if [[ "${verbose:-false}" == "true" || "${LOG_LEVEL:-info}" == "debug" ]]; then
+        echo "DEBUG: Final command: ${cmd[*]}" >&2
+        echo "DEBUG: Request data being sent to stdin:" >&2
+        echo ">>>>>>>" >&2
+        echo "$request" >&2
+        echo "<<<<<<<<" >&2
+    fi
+    
+    # Execute with request data using temporary file (following v0.0.13 approach)
+    if [[ -n "$request" ]]; then
+        # Create temporary file for request data (like v0.0.13)
+        local request_tmp=$(mktemp)
+        # Use jq -c to compact JSON like v0.0.13 does
+        echo "$request" | jq -c . > "$request_tmp"
+        
+        # Execute grpcurl with file input
+        "${cmd[@]}" < "$request_tmp" 2>&1
+        local exit_code=$?
+        
+        # Clean up temporary file
+        rm -f "$request_tmp"
+        return $exit_code
+    else
+        "${cmd[@]}" 2>&1
+    fi
 }
 
 # Enhanced gRPC call with retry mechanism
@@ -45,11 +272,12 @@ run_grpc_call_with_retry() {
     local request="$3"
     local headers="$4"
     local proto_file="$5"
+    local dry_run="${6:-false}"
     
     # Check if retry is disabled
     if is_no_retry; then
         log debug "Retry mechanism disabled, using direct gRPC call"
-        run_grpc_call "$address" "$endpoint" "$request" "$headers" "$proto_file"
+        run_grpc_call "$address" "$endpoint" "$request" "$headers" "$proto_file" "$dry_run"
         return $?
     fi
     
@@ -60,7 +288,37 @@ run_grpc_call_with_retry() {
     log debug "Using retry mechanism: max_retries=$max_retries, delay=${retry_delay}s"
     
     # Use the retry mechanism from error_recovery.sh
-    retry_grpc_call "$address" "$endpoint" "$request" "$headers" "$max_retries"
+    retry_grpc_call "$address" "$endpoint" "$request" "$headers" "$max_retries" "$dry_run"
+}
+
+# Validate that actual error matches expected error from ERROR section
+validate_expected_error() {
+    local expected_error="$1"
+    local actual_error="$2"
+    
+    # Parse expected error JSON
+    local expected_message
+    expected_message=$(echo "$expected_error" | jq -r '.message // empty' 2>/dev/null)
+    local expected_code
+    expected_code=$(echo "$expected_error" | jq -r '.code // empty' 2>/dev/null)
+    
+    # If expected_error is not valid JSON, treat it as plain text message
+    if [[ -z "$expected_message" ]]; then
+        expected_message="$expected_error"
+    fi
+    
+    # Check if actual error contains expected message
+    if [[ -n "$expected_message" ]] && echo "$actual_error" | grep -q "$expected_message"; then
+        return 0  # Match found
+    fi
+    
+    # Check if expected code matches (if available)
+    if [[ -n "$expected_code" && "$expected_code" != "null" ]]; then
+        if echo "$actual_error" | grep -q "Code: $expected_code"; then
+            return 0  # Code match found
+        fi
+    fi
+    return 1  # No match found
 }
 
 compare_responses() {
@@ -86,6 +344,7 @@ compare_responses() {
                     type="$value"
                     ;;
                 "count")
+                    # shellcheck disable=SC2034  # Reserved for future counting features
                     count="$value"
                     ;;
                 "tolerance"*)
@@ -193,12 +452,15 @@ run_test() {
     local progress_mode="${2:-none}"
     local test_name="$(basename "$test_file" .gctf)"
     
-    log section "Test: $test_name"
+    # Only show test header in non-dots mode
+    if [[ "$progress_mode" != "dots" ]]; then
+        log section "Test: $test_name"
+    fi
     
     # Parse test file
     local test_data="$(parse_test_file "$test_file")"
     if [[ $? -ne 0 ]]; then
-        handle_error $ERROR_VALIDATION "Failed to parse test file: $test_file"
+        handle_error "${ERROR_VALIDATION}" "Failed to parse test file: $test_file"
         return 1
     fi
     
@@ -208,93 +470,144 @@ run_test() {
     local request=$(echo "$test_data" | jq -r '.request')
     local response=$(echo "$test_data" | jq -r '.response')
     local error=$(echo "$test_data" | jq -r '.error')
-    local headers=$(echo "$test_data" | jq -r '.request_headers')
+    local headers=$(echo "$test_data" | jq -r '.headers')
     
     # Validate required components
     if [[ -z "$endpoint" ]]; then
-        handle_error $ERROR_VALIDATION "Missing ENDPOINT in $test_file"
+        handle_error "${ERROR_VALIDATION}" "Missing ENDPOINT in $test_file"
         return 1
     fi
     
     # Check if we have ASSERTS (priority over RESPONSE)
     local asserts_content=$(extract_asserts "$test_file" "ASSERTS")
     
+
+    
     if [[ -z "$response" && -z "$error" && -z "$asserts_content" ]]; then
-        handle_error $ERROR_VALIDATION "Missing RESPONSE, ERROR, or ASSERTS in $test_file"
+        handle_error "${ERROR_VALIDATION}" "Missing RESPONSE, ERROR, or ASSERTS in $test_file"
         return 1
     fi
     
-    # Set default address if not provided
+    # Set default address if not provided  
+    # This should not happen if parser.sh works correctly
     if [[ -z "$address" ]]; then
-        address="localhost:4770"
+        if [[ -n "$GRPCTESTIFY_ADDRESS" ]]; then
+            address="$GRPCTESTIFY_ADDRESS"
+        else
+            address="localhost:4770"
+        fi
     fi
     
-    # Check service availability before running test (if retry is enabled)
+    # Network failures should ALWAYS = FAIL (not expected error)
+    # Quick check without waiting - following PROMPT.md principle
     if ! is_no_retry; then
         log debug "Checking service availability at $address"
         if ! check_service_health "$address"; then
-            log warning "Service at $address is not available, attempting to wait for it..."
-            if ! wait_for_service "$address" 30 2; then
-                log error "Service at $address is not available after waiting"
-                handle_network_failure "Service unavailable" "$test_file"
-
-                return 1
-            fi
+            log error "Network failure: Service at $address is not available"
+            handle_network_failure "Service unavailable" "$test_file"
+            return 1
         fi
     fi
     
     # Execute gRPC call with retry mechanism
-    local start_time=$(date +%s%3N)
+    local start_time=$(date +%s)
     local grpc_output
     local grpc_status
     
-    # Use enhanced gRPC call with retry mechanism
-    grpc_output=$(run_grpc_call_with_retry "$address" "$endpoint" "$request" "$headers" "")
-    grpc_status=$?
-    
-    local end_time=$(date +%s%3N)
-    local execution_time=$((end_time - start_time))
-    
-    # Handle network failures gracefully
-    if [[ $grpc_status -ne 0 ]]; then
-        handle_network_failure "$grpc_output" "$test_file"
+    # Get dry-run flag
+    local dry_run="false"
+    if [[ "${args[--dry-run]:-}" == "1" ]]; then
+        dry_run="true"
+        # Set expectations for dry-run based on test sections
+        if [[ -n "$error" && "$error" != "null" ]]; then
+            export GRPCTESTIFY_GRPCTESTIFY_DRY_RUN_EXPECT_ERROR="true"
+        else
+            export GRPCTESTIFY_GRPCTESTIFY_DRY_RUN_EXPECT_ERROR="false"
+            # If there's expected response, pass it to dry-run
+            if [[ -n "$response" && "$response" != "null" ]]; then
+                export GRPCTESTIFY_GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE="$response"
+            fi
+        fi
     fi
     
-    # Check if we have ASSERTS (highest priority - works with both success and error responses)
-    local actual_array="[$grpc_output]"
-    if evaluate_asserts_with_plugins "$test_file" "$actual_array" 2>/dev/null; then
-        # ASSERTS passed - test successful (regardless of gRPC status)
-        if [[ $grpc_status -ne 0 ]]; then
-            log success "TEST PASSED: $test_name (expected error, $execution_time ms)"
+    # Use enhanced gRPC call with retry mechanism
+    grpc_output=$(run_grpc_call_with_retry "$address" "$endpoint" "$request" "$headers" "" "$dry_run")
+    grpc_status=$?
+    
 
-        else
-            log success "TEST PASSED: $test_name ($execution_time ms)"
-
+    
+    local end_time=$(date +%s)
+    local execution_time=$((end_time - start_time))
+    
+    # Special handling for dry-run mode - check if output contains dry-run indicator
+    if [[ "$dry_run" == "true" ]] || [[ "$grpc_output" =~ "dry_run.*true" ]] || [[ "$grpc_output" =~ "Command preview completed" ]]; then
+        # Show the actual dry-run output in verbose mode
+        if [[ "${verbose:-false}" == "true" ]]; then
+            echo "$grpc_output" >&2
         fi
+        log_test_success "TEST PASSED: $test_name (dry-run preview, ${execution_time}s)" "$progress_mode"
         print_progress "." "$progress_mode"
         return 0
     fi
     
-    # No ASSERTS or they failed, check gRPC status
-    if [[ $grpc_status -ne 0 ]]; then
-        if [[ -n "$error" ]]; then
-            # Expected error case
-            log success "TEST PASSED: $test_name (expected error, $execution_time ms)"
-            print_progress "." "$progress_mode"
-
-            return 0
-        else
-            # Unexpected error - use error recovery if available
-            if declare -f handle_network_failure >/dev/null 2>&1; then
-                handle_network_failure "$grpc_output" "$test_file" "0"
-            else
-                log error "gRPC request failed with status $grpc_status"
-                log error "Response: $grpc_output"
-            fi
+    # Follow v0.0.13 logic: Check ERROR section first (highest priority)
+    if [[ -n "$error" ]]; then
+        # ERROR section is present - we expect gRPC to fail
+        if [[ $grpc_status -eq 0 ]]; then
+            log error "TEST FAILED: $test_name - Expected gRPC error but request succeeded (${execution_time}s)"
             print_progress "F" "$progress_mode"
-
             return 1
         fi
+        
+        # Validate that the actual error matches expected
+        if validate_expected_error "$error" "$grpc_output"; then
+            log_test_success "TEST PASSED: $test_name (expected error, ${execution_time}s)" "$progress_mode"
+            log_test_details "$test_name" "$address" "$endpoint" "$request" "$headers" "" "$error" "$grpc_output" "$grpc_status" "$execution_time"
+            print_progress "." "$progress_mode"
+            return 0
+        else
+            log error "TEST FAILED: $test_name - Error doesn't match expected (${execution_time}s)"
+            log error "Expected: $error"
+            log error "Actual: $grpc_output"
+            log_test_details "$test_name" "$address" "$endpoint" "$request" "$headers" "" "$error" "$grpc_output" "$grpc_status" "$execution_time"
+            print_progress "F" "$progress_mode"
+            return 1
+        fi
+    fi
+    
+    # No ERROR section - check if we have ASSERTS
+    local asserts_content=$(extract_section "$test_file" "ASSERTS")
+    if [[ -n "$asserts_content" ]]; then
+        # We have ASSERTS - evaluate them
+        local actual_array="[$grpc_output]"
+        if evaluate_asserts_with_plugins "$test_file" "$actual_array" 2>/dev/null; then
+            # ASSERTS passed - test successful regardless of gRPC status
+            if [[ $grpc_status -eq 0 ]]; then
+                log_test_success "TEST PASSED: $test_name (${execution_time}s)" "$progress_mode"
+            else
+                log_test_success "TEST PASSED: $test_name (expected error, ${execution_time}s)" "$progress_mode"
+            fi
+            log_test_details "$test_name" "$address" "$endpoint" "$request" "$headers" "" "" "$grpc_output" "$grpc_status" "$execution_time"
+            print_progress "." "$progress_mode"
+            return 0
+        else
+            # ASSERTS failed
+            log error "TEST FAILED: $test_name - ASSERTS failed (${execution_time}s)"
+            log_test_details "$test_name" "$address" "$endpoint" "$request" "$headers" "" "" "$grpc_output" "$grpc_status" "$execution_time"
+            print_progress "F" "$progress_mode"
+            return 1
+        fi
+    fi
+    
+    # No ERROR section and no ASSERTS - must have RESPONSE section
+    # Check gRPC status first
+    if [[ $grpc_status -ne 0 ]]; then
+        log error "TEST FAILED: $test_name - Unexpected gRPC error (${execution_time}s)"
+        log error "gRPC Status: $grpc_status"
+        log error "Response: $grpc_output"
+        log_test_details "$test_name" "$address" "$endpoint" "$request" "$headers" "$response" "" "$grpc_output" "$grpc_status" "$execution_time"
+        print_progress "F" "$progress_mode"
+        return 1
     fi
     
     # Success case - check RESPONSE
@@ -319,31 +632,38 @@ run_test() {
             if [[ "$with_asserts" == "true" && -n "$asserts_content" ]]; then
                 local actual_array="[$grpc_output]"
                 if ! evaluate_asserts_with_plugins "$test_file" "$actual_array" 2>/dev/null; then
-                    log error "TEST FAILED: $test_name - ASSERTS failed ($execution_time ms)"
+                    log error "TEST FAILED: $test_name - ASSERTS failed (${execution_time}s)"
                     print_progress "F" "$progress_mode"
                     return 1
                 fi
             fi
             
-            log success "TEST PASSED: $test_name ($execution_time ms)"
+            log_test_success "TEST PASSED: $test_name (${execution_time}s)" "$progress_mode"
+            log_test_details "$test_name" "$address" "$endpoint" "$request" "$headers" "$response" "" "$grpc_output" "$grpc_status" "$execution_time"
             print_progress "." "$progress_mode"
+            
+            # Debug output (v0.0.13 compatibility)
+            log debug "Test passed, continuing to next test"
 
             return 0
         else
-            log error "TEST FAILED: $test_name ($execution_time ms)"
+            log error "TEST FAILED: $test_name (${execution_time}s)"
             log error "--- Expected ---"
             printf "%s\n" "$response"
             log error "+++ Actual +++"
             printf "%s\n" "$grpc_output"
+            log_test_details "$test_name" "$address" "$endpoint" "$request" "$headers" "$response" "" "$grpc_output" "$grpc_status" "$execution_time"
             print_progress "F" "$progress_mode"
     
             return 1
         fi
     else
         # No RESPONSE and no ASSERTS - test passes (no validation)
-        log success "TEST PASSED: $test_name ($execution_time ms)"
+        log_test_success "TEST PASSED: $test_name (${execution_time}s)" "$progress_mode"
         print_progress "." "$progress_mode"
         
+        # Debug output (v0.0.13 compatibility)
+        log debug "Test passed, continuing to next test"
 
         return 0
     fi

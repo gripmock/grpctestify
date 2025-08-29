@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # response_comparison.sh - Response comparison utilities
+# shellcheck disable=SC2155 # Declare and assign separately - many simple variable assignments
 # Handles comparison of gRPC responses with various options
 
 # Compare responses with advanced options
@@ -22,9 +23,11 @@ compare_responses() {
         while IFS='=' read -r key value; do
             case "$key" in
                 "type") type="$value" ;;
-                "tolerance") tolerance="$value" ;;
-                "tol_percent") tol_percent="$value" ;;
-                "partial") partial="$value" ;;
+                "tolerance"*) tolerance="$key=$value" ;;
+                "tol_percent"*) tol_percent="$key=$value" ;;
+                "partial") 
+                    # shellcheck disable=SC2034  # Reserved for future partial matching feature
+                    partial="$value" ;;
                 "redact") redact="$value" ;;
                 "unordered_arrays") unordered_arrays="$value" ;;
                 "unordered_arrays_paths") unordered_arrays_paths="$value" ;;
@@ -142,7 +145,7 @@ apply_tolerance_comparison() {
         if [[ "$expected_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] && [[ "$actual_val" =~ ^-?[0-9]+\.?[0-9]*$ ]]; then
             # Calculate absolute difference
             local diff="$(echo "$expected_val - $actual_val" | bc -l 2>/dev/null || echo "0")"
-            local abs_diff="$(echo "$diff" | sed 's/^-//')"
+            local abs_diff="${diff#-}"
             
             # Check if difference is within tolerance
             if (( $(echo "$abs_diff <= $tolerance_value" | bc -l) )); then
@@ -180,7 +183,7 @@ apply_percentage_tolerance_comparison() {
         if [[ "$expected_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] && [[ "$actual_val" =~ ^-?[0-9]+\.?[0-9]*$ ]]; then
             # Calculate percentage difference
             local diff="$(echo "$expected_val - $actual_val" | bc -l 2>/dev/null || echo "0")"
-            local abs_diff="$(echo "$diff" | sed 's/^-//')"
+            local abs_diff="${diff#-}"
             local percent_diff="$(echo "scale=6; $abs_diff * 100 / $expected_val" | bc -l 2>/dev/null || echo "0")"
             
             # Check if percentage difference is within tolerance

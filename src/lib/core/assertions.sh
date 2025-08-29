@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # assertions.sh - Response comparison logic
+# shellcheck disable=SC2155,SC1090 # Variable assignments and dynamic sourcing
 # Simple, clear assertion functions
 
 

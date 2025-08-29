@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # grpc_type_validation.sh - Enhanced type validation plugin
+# shellcheck disable=SC2155,SC2206 # Variable assignments and array creation
 # Provides UUID, timestamp, URL, email, and other advanced validation types
 
 # UUID validation (RFC 4122)

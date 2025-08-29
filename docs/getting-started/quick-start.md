@@ -267,7 +267,7 @@ helloworld.Greeter/SayHello
 
 ### Run with Progress Indicator
 ```bash
-./grpctestify.sh tests/ --progress dots
+./grpctestify.sh tests/ --parallel auto
 ```
 
 ## 🎨 Advanced Features

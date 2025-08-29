@@ -21,4 +21,32 @@ jobs:
 
       - name: Check shell scripts
         run: |
-          find src -name "*.sh" -exec shellcheck {} \;
+          # Find all shell scripts and check them
+          # Exit with error if any warnings/errors are found
+          EXIT_CODE=0
+          for file in $(find src -name "*.sh"); do
+            echo "Checking $file..."
+            if ! shellcheck "$file"; then
+              EXIT_CODE=1
+            fi
+          done
+          
+          # Show summary
+          TOTAL_WARNINGS=$(find src -name "*.sh" -exec shellcheck {} \; 2>&1 | grep -c "SC[0-9]" || true)
+          echo "Total ShellCheck warnings: $TOTAL_WARNINGS"
+          
+          # Check if we should fail on warnings (default: warnings allowed for now)
+          FAIL_ON_WARNINGS=${SHELLCHECK_FAIL_ON_WARNINGS:-false}
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ ShellCheck found issues in shell scripts"
+            if [ "$FAIL_ON_WARNINGS" = "true" ]; then
+              echo "SHELLCHECK_FAIL_ON_WARNINGS=true - failing build"
+              exit 1
+            else
+              echo "SHELLCHECK_FAIL_ON_WARNINGS=false - warnings allowed for now"
+              echo "Set SHELLCHECK_FAIL_ON_WARNINGS=true in repository settings to enforce"
+            fi
+          else
+            echo "✅ All shell scripts passed ShellCheck"
+          fi

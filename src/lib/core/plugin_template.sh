@@ -27,6 +27,7 @@ register_standard_plugin() {
     register_plugin "$plugin_name" "$main_function" "$description" "$plugin_type"
     
     # Export the function
+    # shellcheck disable=SC2163  # Variable expansion needed for dynamic function export
     export -f "$main_function"
     
     log debug "Registered $plugin_type plugin: $plugin_name"

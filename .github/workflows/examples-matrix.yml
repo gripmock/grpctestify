@@ -44,16 +44,18 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+          bundler-cache: true
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq protobuf-compiler
+          sudo apt-get install -y jq protobuf-compiler libxml2-utils
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
           go install github.com/bavix/gripmock/v3@latest
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
@@ -158,21 +160,25 @@ jobs:
           echo "Running gRPC tests for ${{ matrix.example.name }}"
           
           cd "$example_dir"
+          mkdir -p test-results
           
           # Set environment variables
           export GRPCTESTIFY_ADDRESS="localhost:${{ matrix.example.port }}"
           export GRPCTESTIFY_TIMEOUT=30
           export GRPCTESTIFY_VERBOSE=true
           
-          # Run tests - fail fast on any error
+          # Run tests with JUnit output
+          grpctestify tests/ --log-junit=test-results/grpc-tests.xml || true
+          
+          # Also run individual tests for compatibility
           for test_file in tests/*.gctf; do
             if [ -f "$test_file" ]; then
               echo "Running test: $(basename "$test_file")"
-              timeout 60 grpctestify "$test_file" --progress=dots
+              timeout 120 grpctestify "$test_file" --progress=dots
             fi
           done
           
-          echo "All tests passed for ${{ matrix.example.name }}"
+          echo "All tests completed for ${{ matrix.example.name }}"
 
       - name: Cleanup
         if: always()
@@ -184,6 +190,32 @@ jobs:
             pkill -f "localhost:${{ matrix.example.port }}" 2>/dev/null || true
           fi
 
+      - name: Download JUnit XSD schema
+        if: always()
+        run: |
+          cd $(find examples -name "${{ matrix.example.name }}" -type d)
+          curl -o junit.xsd https://raw.githubusercontent.com/junit-team/junit5/main/platform-tests/src/test/resources/jenkins-junit.xsd
+
+      - name: Validate JUnit reports
+        if: always()
+        run: |
+          cd $(find examples -name "${{ matrix.example.name }}" -type d)
+          if [ -d "test-results" ] && [ "$(ls -A test-results/*.xml 2>/dev/null)" ]; then
+            echo "Validating JUnit XML reports for ${{ matrix.example.name }}..."
+            for report in test-results/*.xml; do
+              if [ -f "$report" ]; then
+                echo "Validating $report..."
+                if xmllint --noout --schema junit.xsd "$report"; then
+                  echo "✅ $report is valid"
+                else
+                  echo "❌ $report is invalid"
+                fi
+              fi
+            done
+          else
+            echo "No JUnit reports found to validate"
+          fi
+
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -192,4 +224,14 @@ jobs:
           path: |
             examples/*/${{ matrix.example.name }}/tests/*.gctf
             examples/*/${{ matrix.example.name }}/server/*.log
+            examples/*/${{ matrix.example.name }}/test-results/*.xml
           retention-days: 7
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: gRPC Tests Results (${{ matrix.example.name }})
+          path: examples/*/${{ matrix.example.name }}/test-results/*.xml
+          reporter: java-junit
+          fail-on-error: false

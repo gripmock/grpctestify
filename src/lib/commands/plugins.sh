@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # plugins.sh - Plugin management commands
+# shellcheck disable=SC2155,SC2148,SC2034 # Variable assignments, shebang detection, unused variables
 
 # List available plugins
 list_plugins_command() {

@@ -1,11 +1,15 @@
-name: Update Homebrew Formula
+name: Release and Update Homebrew Formula
 
 on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
-  update-homebrew:
+  release-and-homebrew:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -24,11 +28,22 @@ jobs:
         run: |
           make generate
 
-      - name: Generate checksum
+      - name: Generate checksums
         id: checksum
         run: |
           CHECKSUM=$(sha256sum grpctestify.sh | awk '{print $1}')
           echo "SHA256=$CHECKSUM" >> $GITHUB_ENV
+          echo "$(sha256sum grpctestify.sh | awk '{print $1}') grpctestify.sh" > checksums.txt
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            checksums.txt
+            grpctestify.sh
+          tag_name: ${{ github.event.release.tag_name }}
 
       - name: Generate Homebrew formula
         run: |

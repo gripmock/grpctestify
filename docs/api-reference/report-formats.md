@@ -1,6 +1,6 @@
 # Report Formats
 
-gRPC Testify supports console output and JUnit XML export for test results.
+gRPC Testify supports console output, JUnit XML, and JSON export for test results.
 
 ## Supported Formats
 
@@ -36,7 +36,7 @@ Human-readable output with colors and progress indicators.
 Machine-readable XML output for CI/CD integration.
 
 ```bash
-./grpctestify.sh tests/ --log-junit test-results.xml
+./grpctestify.sh tests/ --log-format junit --log-output test-results.xml
 ```
 
 **Features**:
@@ -46,7 +46,21 @@ Machine-readable XML output for CI/CD integration.
 - 🏷️ Test metadata (duration, failure messages)
 - 🔗 CI/CD tool integration
 
-**Example XML Output**:
+### JSON Format
+Structured JSON output for programmatic processing and API integrations.
+
+```bash
+./grpctestify.sh tests/ --log-format json --log-output test-results.json
+```
+
+**Features**:
+- 📄 Structured JSON format
+- ✅ Programmatic processing support
+- 🔗 API integration compatibility
+- 📊 Complete test metadata
+- 🏷️ Machine-readable format
+
+**Example JUnit XML Output**:
 ```xml
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 <testsuites name="grpctestify" tests="3" failures="1" errors="0" skipped="2">
@@ -73,37 +87,37 @@ Machine-readable XML output for CI/CD integration.
 ./grpctestify.sh tests/
 
 # Generate JUnit XML report
-./grpctestify.sh tests/ --log-junit results.xml
+./grpctestify.sh tests/ --log-format junit --log-output results.xml
 ```
 
 ### Progress Modes
 ```bash
 # Detailed output (default)
-./grpctestify.sh tests/ --progress=none
+./grpctestify.sh tests/ --verbose
 
 # Dots progress indicator
-./grpctestify.sh tests/ --progress=dots
+./grpctestify.sh tests/ --parallel auto
 ```
 
 ## Best Practices
 
 ### 1. **Local Development**
-Use console format with `--progress=none` for detailed debugging:
+Use verbose mode for detailed debugging:
 ```bash
-./grpctestify.sh tests/ --progress=none --verbose
+./grpctestify.sh tests/ --verbose
 ```
 
 ### 2. **CI/CD Integration**
 Use JUnit XML format for test result integration:
 ```bash
-./grpctestify.sh tests/ --progress=dots --log-junit test-results.xml
+./grpctestify.sh tests/ --parallel auto --log-format junit --log-output test-results.xml
 ```
 
 ### 3. **Archival and Reporting**
 Generate timestamped JUnit reports:
 ```bash
 # Include timestamp in filename
-./grpctestify.sh tests/ --log-junit "results-$(date +%Y%m%d-%H%M%S).xml"
+./grpctestify.sh tests/ --log-format junit --log-output "results-$(date +%Y%m%d-%H%M%S).xml"
 ```
 
 ## Troubleshooting
@@ -114,19 +128,19 @@ Generate timestamped JUnit reports:
 ```bash
 # Ensure output directory is writable
 mkdir -p reports && chmod 755 reports
-./grpctestify.sh tests/ --log-junit reports/test-results.xml
+./grpctestify.sh tests/ --log-format junit --log-output reports/test-results.xml
 ```
 
 #### 2. **Color Issues in CI**
 ```bash
 # Disable colors in CI environments
-./grpctestify.sh tests/ --no-color --log-junit results.xml
+./grpctestify.sh tests/ --no-color --log-format junit --log-output results.xml
 ```
 
 #### 3. **Output Redirection**
 ```bash
 # Capture console output while generating JUnit XML
-./grpctestify.sh tests/ --log-junit results.xml 2>&1 | tee console.log
+./grpctestify.sh tests/ --log-format junit --log-output results.xml 2>&1 | tee console.log
 ```
 
 The reporting system provides comprehensive output for development, testing, and CI/CD integration scenarios.

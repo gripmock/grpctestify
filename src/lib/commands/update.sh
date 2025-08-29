@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # update.sh - Update command implementation
+# shellcheck disable=SC2155,SC2119,SC2120,SC2086,SC2181 # Variable assignments, function arguments, exit codes
 # Handles updating grpctestify to the latest version
 
 # All modules are automatically loaded by bashly
@@ -10,6 +11,7 @@ update_command() {
     local force_update
     force_update=$(get_config "force_update" "false")
     
+    # shellcheck disable=SC2154  # version is provided by bashly framework
     log section "$APP_NAME $version - Update"
     
     # Initialize application
@@ -28,6 +30,7 @@ update_command() {
             log info "Update cancelled by user"
         fi
     else
+        # shellcheck disable=SC2154  # version is provided by bashly framework
         log info "Already up to date (current: $version)"
     fi
 }
@@ -43,6 +46,7 @@ check_for_updates() {
     fi
     
     # Compare versions
+    # shellcheck disable=SC2154  # version is provided by bashly framework
     if [[ "$latest_version" != "$version" ]]; then
         return 0  # Update available
     else
@@ -191,6 +195,7 @@ confirm_update() {
     local latest_version="$1"
     
     echo ""
+    # shellcheck disable=SC2154  # version is provided by bashly framework
     log info "Update available: $version -> $latest_version"
     echo -n "Do you want to update? [y/N]: "
     read -r response
@@ -260,5 +265,6 @@ show_update_help() {
     echo "  3. Verify checksum"
     echo "  4. Replace current script"
     echo ""
+    # shellcheck disable=SC2154  # version is provided by bashly framework
     echo "Current version: $version"
 }

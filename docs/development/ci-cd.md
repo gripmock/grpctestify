@@ -53,22 +53,17 @@ This section describes the GitHub Actions workflows used for continuous integrat
   - Parallel test execution
   - Coverage reporting
 
-#### 🏷️ `release.yml` - Release Management
-- **Purpose**: Automated release process
+#### 🏷️ `release.yml` - Release Management & Checksums  
+- **Purpose**: Comprehensive release process with integrity validation
 - **Triggers**: Tagged releases (v*)
 - **Features**:
+  - Automated script generation
+  - SHA256 checksum generation and validation
+  - Homebrew formula updates
   - Automated release notes
-  - Asset upload
+  - Asset upload with integrity verification
   - Version validation
   - Distribution management
-
-#### 📄 `checksum.yml` - File Integrity
-- **Purpose**: Generate and verify file checksums
-- **Triggers**: Release events
-- **Features**:
-  - SHA256 checksum generation
-  - Integrity verification
-  - Release asset validation
 
 #### 🚀 `deploy.yml` - Documentation Deployment
 - **Purpose**: VitePress documentation deployment
@@ -143,7 +138,6 @@ graph TD
     F[Examples Change] --> G[examples-matrix.yml]
     
     H[Tag Release] --> I[release.yml]
-    I --> J[checksum.yml]
     
     K[Docs Change] --> L[deploy.yml]
     

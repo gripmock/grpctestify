@@ -2,12 +2,33 @@
 
 # plugin_api.sh - Official Plugin Development API
 # Provides standardized interface for developing gRPC Testify plugins
+# shellcheck disable=SC2155,SC1083,SC2086,SC2034,SC2317,SC2231 # Variable assignments, brace expansions, unreachable code
 
 # Plugin API version
 # PLUGIN_API_VERSION is defined in config.sh
 
 # Plugin development utilities
 PLUGIN_DEV_MODE="${GRPCTESTIFY_PLUGIN_DEV:-false}"
+
+# Simple plugin registry (stub implementation)
+declare -A REGISTERED_PLUGINS
+
+# Register a plugin in the system
+register_plugin() {
+    local plugin_name="$1"
+    local plugin_function="$2"
+    local description="$3"
+    local plugin_type="${4:-internal}"
+    
+    # Store plugin information
+    # shellcheck disable=SC2034  # Used by plugin system for future features
+    REGISTERED_PLUGINS["$plugin_name"]="$plugin_function:$description:$plugin_type"
+    
+    # Debug output in dev mode
+    if [[ "$PLUGIN_DEV_MODE" == "true" ]]; then
+        log debug "Registered plugin: $plugin_name -> $plugin_function ($plugin_type)"
+    fi
+}
 
 # Plugin template generation
 create_plugin_template() {

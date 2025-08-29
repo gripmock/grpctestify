@@ -19,7 +19,7 @@ parse_test_file() {
     local endpoint
     endpoint="$(extract_section "$test_file" "ENDPOINT")"
     local request
-    request="$(extract_section "$test_file" "REQUEST")"
+    request="$(extract_all_request_sections "$test_file")"
     local response
     response="$(extract_section "$test_file" "RESPONSE")"
     local error
@@ -30,11 +30,18 @@ parse_test_file() {
     request_headers="$(extract_section "$test_file" "REQUEST_HEADERS")"
     # RESPONSE_HEADERS and RESPONSE_TRAILERS removed - use @header()/@trailer() assertions instead
     
-    # Set defaults for backward compatibility
+    # Set defaults for backward compatibility  
+    # ADDRESS section has priority over environment variable
     if [[ -z "$address" ]]; then
-        # Use environment variable if available, otherwise use default
-        address="${GRPCTESTIFY_ADDRESS:-localhost:4770}"
+        # Use GRPCTESTIFY_ADDRESS as fallback if no ADDRESS section
+        if [[ -n "$GRPCTESTIFY_ADDRESS" ]]; then
+            address="$GRPCTESTIFY_ADDRESS"
+        else
+            # Use hardcoded default if no ADDRESS section and no env var
+            address="localhost:4770"
+        fi
     fi
+    # If ADDRESS section exists, it takes priority and overrides everything
     
     if [[ -z "$endpoint" ]]; then
         log error "Missing ENDPOINT section in $test_file"

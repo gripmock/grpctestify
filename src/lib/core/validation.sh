@@ -3,14 +3,27 @@
 # validation.sh - Input validation utilities
 # Simple, clear validation functions
 
+# Handle error function - central error handling
+handle_error() {
+    local error_code="${1:-1}"
+    local error_message="${2:-Unknown error}"
+    local function_name="${3:-unknown}"
+    
+    # Log the error using the log function
+    log error "[$function_name] $error_message (code: $error_code)"
+    
+    # Return the error code
+    return "$error_code"
+}
+
 
 
 validate_address() {
     local address="$1"
     # Validate address format: hostname:port (e.g., localhost:4770, api.example.com:443)
     if ! echo "$address" | grep -qE '^[a-zA-Z0-9.-]+:[0-9]+$'; then
-        handle_error ${ERROR_VALIDATION:-7} "Invalid ADDRESS format: $address" "validate_address"
-        return ${ERROR_VALIDATION:-7}
+        handle_error "${ERROR_VALIDATION:-7}" "Invalid ADDRESS format: $address" "validate_address"
+        return "${ERROR_VALIDATION:-7}"
     fi
     return 0
 }
@@ -20,8 +33,8 @@ validate_json() {
     local context="$2"
     
     if ! echo "$json" | jq empty 2>/dev/null; then
-        handle_error ${ERROR_VALIDATION:-7} "Invalid JSON in $context section" "validate_json"
-        return ${ERROR_VALIDATION:-7}
+        handle_error "${ERROR_VALIDATION:-7}" "Invalid JSON in $context section" "validate_json"
+        return "${ERROR_VALIDATION:-7}"
     fi
     return 0
 }
@@ -30,8 +43,8 @@ validate_file_exists() {
     local file="$1"
     
     if [[ ! -f "$file" ]]; then
-        handle_error ${ERROR_FILE_NOT_FOUND:-3} "File not found: $file" "validate_file_exists"
-        return ${ERROR_FILE_NOT_FOUND:-3}
+        handle_error "${ERROR_FILE_NOT_FOUND:-3}" "File not found: $file" "validate_file_exists"
+        return "${ERROR_FILE_NOT_FOUND:-3}"
     fi
     return 0
 }
@@ -72,18 +85,7 @@ validate_parallel_jobs() {
     validate_positive_integer "$jobs" "Parallel jobs"
 }
 
-validate_progress_mode() {
-    local mode="$1"
-    case "$mode" in
-        "none"|"dots")
-            return 0
-            ;;
-        *)
-            log error "Invalid progress mode: $mode (must be none or dots)"
-            return 1
-            ;;
-    esac
-}
+
 
 validate_test_file() {
     local file="$1"

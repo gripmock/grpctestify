@@ -20,16 +20,19 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-          cache: false
+          cache: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+          bundler-cache: true
 
-      - name: Install grpcurl
+      - name: Install dependencies
         run: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
           grpcurl --version
 
@@ -78,11 +81,59 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/gripmock
+          mkdir -p test-results
           
-          # Run grpctestify tests against examples
+          # Run grpctestify tests against examples with JUnit output
+          grpctestify examples --log-junit=test-results/gripmock-integration.xml || true
+          
+          # Also run without JUnit for compatibility check
           grpctestify examples
           
           echo "GripMock integration test completed successfully"
+
+      - name: Download JUnit XSD schema
+        if: always()
+        run: |
+          cd /tmp/gripmock
+          curl -o junit.xsd https://raw.githubusercontent.com/junit-team/junit5/main/platform-tests/src/test/resources/jenkins-junit.xsd
+
+      - name: Validate JUnit reports
+        if: always()
+        run: |
+          cd /tmp/gripmock
+          if [ -d "test-results" ] && [ "$(ls -A test-results/*.xml 2>/dev/null)" ]; then
+            echo "Validating JUnit XML reports for GripMock integration..."
+            for report in test-results/*.xml; do
+              if [ -f "$report" ]; then
+                echo "Validating $report..."
+                if xmllint --noout --schema junit.xsd "$report"; then
+                  echo "✅ $report is valid"
+                else
+                  echo "❌ $report is invalid"
+                fi
+              fi
+            done
+          else
+            echo "No JUnit reports found to validate"
+          fi
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gripmock-integration-results
+          path: |
+            /tmp/gripmock/test-results/*.xml
+          retention-days: 30
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: GripMock Integration Results
+          path: /tmp/gripmock/test-results/*.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Cleanup gripmock server
         if: always()

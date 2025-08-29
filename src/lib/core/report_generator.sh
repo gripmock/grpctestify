@@ -61,8 +61,8 @@ add_test_result() {
     local end_time="${6:-$(date -Iseconds)}"
     
     # shellcheck disable=SC2034  # Used in future versions
-    local test_name
-    test_name=$(basename "$test_file" .gctf)
+    # shellcheck disable=SC2155
+    local test_name=$(basename "$test_file" .gctf)
     # shellcheck disable=SC2034  # Used in future versions
     local test_key="${test_file//\//_}"
     

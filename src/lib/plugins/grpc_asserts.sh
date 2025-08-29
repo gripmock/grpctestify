@@ -2,6 +2,7 @@
 
 # Enhanced Asserts Plugin for grpctestify
 # Handles advanced assertion types including indexed assertions
+# shellcheck disable=SC2155 # Declare and assign separately - many simple variable assignments
 
 # Function to register Enhanced Asserts plugin
 register_asserts_plugin() {

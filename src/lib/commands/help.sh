@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # help.sh - Help command implementation
+# shellcheck disable=SC2155,SC2221,SC2222 # Pattern matching and variable assignments
 # Shows help information and usage examples
 
 # Dependencies are loaded by loader.sh in root_command.sh
@@ -21,10 +22,7 @@ show_help() {
     echo "  --verbose, -v"
     echo "    Enable verbose debug output"
     echo ""
-    echo "  --progress PROGRESS_MODE"
-    echo "    Show progress indicator"
-    echo "    Default: none"
-    echo ""
+
     echo "  --parallel JOBS"
     echo "    Run N tests in parallel"
     echo "    Default: 1"
@@ -53,7 +51,7 @@ show_help() {
     echo "  $APP_NAME --verbose examples/"
     echo ""
     echo "  # Run tests in parallel with progress"
-    echo "  $APP_NAME examples/ --parallel 4 --progress=dots"
+    echo "  $APP_NAME examples/ --parallel 4"
     echo ""
     echo "  # Disable colors"
     echo "  $APP_NAME --no-color test.gctf"
@@ -89,6 +87,7 @@ show_help() {
 
 # Show version information
 show_version() {
+    # shellcheck disable=SC2154  # version is provided by bashly framework
     echo "$APP_NAME $version"
 }
 
@@ -104,6 +103,7 @@ show_update_help() {
     echo "  3. Verify checksum"
     echo "  4. Replace current script"
     echo ""
+    # shellcheck disable=SC2154  # version is provided by bashly framework
     echo "Current version: $version"
 }
 
@@ -126,6 +126,7 @@ show_completion_help() {
 show_configuration() {
     echo "Current configuration:"
     echo ""
+    # shellcheck disable=SC2154  # version is provided by bashly framework
     echo "  Version: $version"
     echo "  Script: $(basename "$0")"
     echo "  Working directory: $(pwd)"
@@ -176,7 +177,7 @@ create_default_config() {
 # Test execution settings
 parallel_jobs=1
 test_timeout=30
-progress_mode=none
+
 
 # Retry settings
 retry_attempts=3
@@ -232,13 +233,10 @@ _grpctestify() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     
-    opts="--help --version --update --completion --config --init-config --list-plugins --create-plugin --no-color --verbose --progress --parallel --timeout --retry --retry-delay --no-retry --log-junit"
+    opts="--help --version --update --completion --config --init-config --list-plugins --create-plugin --no-color --verbose --parallel --timeout --retry --retry-delay --no-retry --log-junit"
     
     case "${prev}" in
-        --progress)
-            COMPREPLY=( $(compgen -W "none dots" -- ${cur}) )
-            return 0
-            ;;
+
         --completion)
             COMPREPLY=( $(compgen -W "bash zsh all" -- ${cur}) )
             return 0
@@ -292,7 +290,7 @@ _grpctestify() {
         '--create-plugin[Create a new plugin template]:plugin_name:' \
         '--no-color[Disable colored output]' \
         '--verbose[Enable verbose debug output]' \
-        '--progress[Show progress indicator]:mode:(none dots)' \
+
         '--parallel[Run N tests in parallel]:jobs:' \
         '--timeout[Timeout for individual tests in seconds]:seconds:' \
 

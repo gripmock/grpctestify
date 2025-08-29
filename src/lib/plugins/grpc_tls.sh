@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # TLS Plugin for grpctestify
+# shellcheck disable=SC2155,SC2231 # Variable assignments and glob expansions
 # Handles TLS/mTLS configuration and grpcurl flag generation
 # Thread-safe implementation using local variables
 
@@ -169,7 +170,7 @@ generate_tls_flags() {
     esac
     
     # Trim leading space
-    tls_flags=$(echo "$tls_flags" | sed 's/^[[:space:]]*//')
+    tls_flags="${tls_flags#"${tls_flags%%[![:space:]]*}"}"
     
     # Return mode and flags as pipe-separated string
     echo "$mode|$tls_flags"

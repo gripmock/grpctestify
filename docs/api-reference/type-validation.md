@@ -445,7 +445,7 @@ echo $?  # 0 for success, 1 for failure
 ```yaml
 - name: Run Type Validation Tests
   run: |
-    ./grpctestify.sh tests/type-validation/ --report-format=json --report-output=validation-results.json
+    ./grpctestify.sh tests/type-validation/ --log-format json --log-output validation-results.json
     
     # Check for specific validation failures
     if jq -e '.tests[] | select(.error | contains("validation failed"))' validation-results.json; then

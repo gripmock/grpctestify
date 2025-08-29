@@ -4,13 +4,16 @@
 # Single source of truth for all configuration values
 
 # Application metadata
+# shellcheck disable=SC2034  # Used by help system and future features
 readonly APP_NAME="grpctestify"
+# shellcheck disable=SC2034  # Used by version command and future features  
 readonly APP_VERSION="v1.0.0"
+# shellcheck disable=SC2034  # Used for config compatibility checks
 readonly CONFIG_VERSION="1.0.0"
 
 # Default values
 readonly DEFAULT_TIMEOUT=30
-readonly DEFAULT_ADDRESS="localhost:4770"
+# DEFAULT_ADDRESS removed - use GRPCTESTIFY_ADDRESS instead
 # shellcheck disable=SC2034  # Used in future versions
 readonly DEFAULT_CACHE_TTL=3600
 # shellcheck disable=SC2034  # Used in future versions
@@ -27,13 +30,19 @@ readonly DEFAULT_AUTHOR="Your Name"
 readonly DEFAULT_EMAIL="your.email@domain.com"
 
 # File paths and directories (SECURITY: safe defaults)
+# shellcheck disable=SC2034  # Used by plugin system
 readonly DEFAULT_PLUGIN_DIR="$HOME/.grpctestify/plugins"
+# shellcheck disable=SC2034  # Used by caching system
 readonly DEFAULT_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/grpctestify"
+# shellcheck disable=SC2034  # Used by config system
 readonly DEFAULT_CONFIG_FILE="$HOME/.grpctestify/config"
 
 # Performance settings
+# shellcheck disable=SC2034  # Used by parser caching
 readonly PARSE_CACHE_ENABLED=true
+# shellcheck disable=SC2034  # Used by dependency caching
 readonly DEPENDENCY_CACHE_TTL=3600
+# shellcheck disable=SC2034  # Used by parallel execution limits
 readonly MAX_PARALLEL_JOBS=16
 readonly STARTUP_TIMEOUT=10
 
@@ -48,6 +57,19 @@ readonly PROGRESS_LINE_LENGTH=80
 readonly LOG_TIMESTAMP_FORMAT="%Y-%m-%d %H:%M:%S"
 readonly COLOR_SUCCESS='\033[0;32m'
 readonly COLOR_ERROR='\033[0;31m'
+
+# Retry configuration helper functions
+is_no_retry() {
+    [[ "${RETRY_COUNT:-$DEFAULT_RETRY_ATTEMPTS}" -eq 0 ]]
+}
+
+get_retry_count() {
+    echo "${RETRY_COUNT:-$DEFAULT_RETRY_ATTEMPTS}"
+}
+
+get_retry_delay() {
+    echo "${RETRY_DELAY:-$DEFAULT_RETRY_DELAY}"
+}
 readonly COLOR_WARNING='\033[1;33m'
 readonly COLOR_INFO='\033[0;34m'
 readonly COLOR_RESET='\033[0m'
@@ -78,9 +100,7 @@ readonly ERROR_CONFIGURATION=12
 
 # Environment variable names
 readonly ENV_ADDRESS="GRPCTESTIFY_ADDRESS"
-readonly ENV_TIMEOUT="GRPCTESTIFY_TIMEOUT"
-readonly ENV_PARALLEL="GRPCTESTIFY_PARALLEL"
-readonly ENV_VERBOSE="GRPCTESTIFY_VERBOSE"
+# ENV variables for flags removed - use flags directly
 readonly ENV_NO_COLOR="GRPCTESTIFY_NO_COLOR"
 readonly ENV_PLUGIN_PATH="GRPCTESTIFY_PLUGIN_PATH"
 readonly ENV_CACHE_DIR="GRPCTESTIFY_CACHE_DIR"
@@ -150,16 +170,11 @@ validate_config() {
 # Initialize configuration
 init_config() {
     # Set global variables from configuration
-    GRPCTESTIFY_TIMEOUT=$(get_config "timeout" "$DEFAULT_TIMEOUT" "$ENV_TIMEOUT")
-    GRPCTESTIFY_ADDRESS=$(get_config "address" "$DEFAULT_ADDRESS" "$ENV_ADDRESS")
-    GRPCTESTIFY_PARALLEL=$(get_config "parallel" "$DEFAULT_PARALLEL_JOBS" "$ENV_PARALLEL")
+    # Only address uses ENV fallback (no flag equivalent)
+    GRPCTESTIFY_ADDRESS=$(get_config "address" "localhost:4770" "$ENV_ADDRESS")
     GRPCTESTIFY_CACHE_DIR=$(get_config "cache_dir" "$DEFAULT_CACHE_DIR" "$ENV_CACHE_DIR")
     
-    # Validate critical configuration
-    if ! validate_config "timeout" "$GRPCTESTIFY_TIMEOUT"; then
-        echo "Error: Invalid timeout value: $GRPCTESTIFY_TIMEOUT" >&2
-        return 1
-    fi
+    # Validation moved to flag processing in run.sh
     
     if ! validate_config "address" "$GRPCTESTIFY_ADDRESS"; then
         echo "Error: Invalid address format: $GRPCTESTIFY_ADDRESS" >&2

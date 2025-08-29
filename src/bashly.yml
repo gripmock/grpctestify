@@ -14,13 +14,7 @@ environment_variables:
   - name: grpctestify_address
     help: Default gRPC server address (e.g., localhost:4770)
     default: localhost:4770
-  - name: grpctestify_timeout
-    help: Default timeout for gRPC calls in seconds
-    default: "30"
-  - name: grpctestify_verbose
-    help: Enable verbose output (true/false)
-    default: "false"
-  - name: external_plugin_dir
+  - name: grpctestify_plugin_dir
     help: Directory for external plugins
     default: "~/.grpctestify/plugins"
 
@@ -38,18 +32,16 @@ flags:
     help: Enable verbose debug output
     arg: false
 
-  - long: --progress
-    help: Show progress indicator
-    arg: progress_mode
-    default: "none"
-    allowed:
-      - none
-      - dots
+  - long: --dry-run
+    help: Show commands that would be executed without running them
+    arg: false
+
+
 
   - long: --parallel
-    help: Run N tests in parallel
+    help: Run N tests in parallel (default auto-detect CPU count)
     arg: parallel
-    default: "1"
+    default: "auto"
 
   - long: --timeout
     help: Timeout for individual tests in seconds
@@ -94,9 +86,14 @@ flags:
     help: Create a new plugin template
     arg: plugin_name
 
-  - long: --log-junit
-    help: Save test results in JUnit XML format to specified file
-    arg: junit_file
+  - long: --log-format
+    help: Generate test reports in specified format (junit, json)
+    arg: format
+    allowed: [junit, json]
+
+  - long: --log-output
+    help: Output file for test reports (use with --log-format)
+    arg: output_file
 
 # Arguments - main functionality (direct file argument like original)
 args:

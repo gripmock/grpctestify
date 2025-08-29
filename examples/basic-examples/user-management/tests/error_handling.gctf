@@ -13,17 +13,13 @@ user.UserService/GetUser
     "include_profile": true
 }
 
---- RESPONSE ---
-{
-    "user": null,
-    "profile": null,
-    "found": false
-}
+--- ERROR ---
+.code == 5
+.message | contains("not found")
 
 --- ASSERTS ---
-.user == null
-.profile == null
-.found == false
+.error.code == 5
+.error.message | contains("not found")
 
 --- OPTIONS ---
 timeout: 30

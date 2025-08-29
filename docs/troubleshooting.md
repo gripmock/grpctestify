@@ -184,8 +184,12 @@ This guide helps you resolve common issues when using gRPC Testify.
    ca_file: "ca.crt"
    ```
 
-#### Future Features
-**Note**: Streaming functionality is currently under development. For now, use unary RPC patterns only.
+#### Streaming Support
+**Status**: All streaming types are now fully supported:
+- ✅ **Client Streaming**: Multiple REQUEST sections
+- ✅ **Server Streaming**: Single request, streaming responses
+- ✅ **Bidirectional Streaming**: Interactive request/response patterns
+- ✅ **Unary RPC**: Standard request/response patterns
 
 ### 🚀 Performance Issues
 
@@ -195,7 +199,7 @@ This guide helps you resolve common issues when using gRPC Testify.
 **Solutions**:
 1. **Use parallel execution**:
    ```bash
-   ./grpctestify.sh tests/ --parallel=4
+   ./grpctestify.sh tests/ --parallel 4
    ```
 
 2. **Optimize timeouts**:
@@ -212,7 +216,7 @@ This guide helps you resolve common issues when using gRPC Testify.
 **Solutions**:
 1. **Reduce parallel workers**:
    ```bash
-   ./grpctestify.sh tests/ --parallel=2
+   ./grpctestify.sh tests/ --parallel 2
    ```
 
 2. **Split large test suites**
@@ -220,10 +224,20 @@ This guide helps you resolve common issues when using gRPC Testify.
 
 ## Debugging Tips
 
-### 🔍 Verbose Mode
+### 🔍 Verbose Mode & Dry-Run
 Enable detailed logging:
 ```bash
 ./grpctestify.sh test.gctf --verbose
+```
+
+Preview commands without execution (for debugging):
+```bash
+./grpctestify.sh test.gctf --dry-run
+```
+
+Combined debugging:
+```bash
+./grpctestify.sh test.gctf --dry-run --verbose
 ```
 
 ### 📊 Test Individual Files

@@ -282,11 +282,15 @@ user.UserService/GetUser
 }
 ```
 
-### Future Features
+### Streaming Support
 
-> **Note**: Advanced streaming patterns are currently under development and not yet supported.
+> **Fully Implemented**: All gRPC streaming patterns are fully supported and tested.
 
-Current version focuses on unary RPC patterns. Streaming support (client, server, and bidirectional) will be added in future releases.
+gRPC Testify supports all streaming patterns:
+- **Client Streaming**: Multiple requests, single response
+- **Server Streaming**: Single request, multiple responses  
+- **Bidirectional Streaming**: Multiple requests and responses
+- **Unary**: Single request, single response (traditional)
 
 ## 🔧 Configuration
 
@@ -296,7 +300,7 @@ Current version focuses on unary RPC patterns. Streaming support (client, server
 |--------|-------------|---------|
 | `--verbose` | Detailed output | `--verbose` |
 | `--parallel N` | Parallel execution | `--parallel 4` |
-| `--progress TYPE` | Progress display | `--progress dots` |
+| `--log-format FORMAT` | Report format (junit, json) | `--log-format junit` |
 | `--timeout SECONDS` | Global timeout | `--timeout 60` |
 | `--no-color` | Disable colors | `--no-color` |
 

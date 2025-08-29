@@ -2,23 +2,22 @@
 
 # error_recovery.sh - Error recovery and retry mechanisms
 
-# Default retry configuration
-DEFAULT_MAX_RETRIES=3
-# DEFAULT_RETRY_DELAY is defined in config.sh
-DEFAULT_BACKOFF_MULTIPLIER=2
-DEFAULT_MAX_RETRY_DELAY=30
+# Default retry configuration - use GRPCTESTIFY_* variables instead
+readonly GRPCTESTIFY_DEFAULT_MAX_RETRIES=3
+readonly GRPCTESTIFY_DEFAULT_BACKOFF_MULTIPLIER=2
+readonly GRPCTESTIFY_DEFAULT_MAX_RETRY_DELAY=30
 
 # Retry a function with exponential backoff (SECURITY: no eval)
 retry_with_backoff() {
     local func_name="$1"
     shift
-    local max_retries="${1:-$DEFAULT_MAX_RETRIES}"
+    local max_retries="${1:-$GRPCTESTIFY_DEFAULT_MAX_RETRIES}"
     shift
     local initial_delay="${1:-$DEFAULT_RETRY_DELAY}"
     shift
-    local backoff_multiplier="${1:-$DEFAULT_BACKOFF_MULTIPLIER}"
+    local backoff_multiplier="${1:-$GRPCTESTIFY_DEFAULT_BACKOFF_MULTIPLIER}"
     shift
-    local max_delay="${1:-$DEFAULT_MAX_RETRY_DELAY}"
+    local max_delay="${1:-$GRPCTESTIFY_DEFAULT_MAX_RETRY_DELAY}"
     shift
     # Remaining arguments passed to function
     
@@ -61,7 +60,8 @@ retry_grpc_call() {
     local endpoint="$2"
     local request="$3"
     local headers="$4"
-    local max_retries="${5:-$DEFAULT_MAX_RETRIES}"
+    local max_retries="${5:-$GRPCTESTIFY_DEFAULT_MAX_RETRIES}"
+    local dry_run="${6:-false}"
     
     local retry_count=0
     local last_error=""
@@ -71,7 +71,7 @@ retry_grpc_call() {
         
         # Attempt the gRPC call
         local grpc_output
-        grpc_output=$(run_grpc_call "$address" "$endpoint" "$request" "$headers" "")
+        grpc_output=$(run_grpc_call "$address" "$endpoint" "$request" "$headers" "" "$dry_run")
         local grpc_status=$?
         
         if [[ $grpc_status -eq 0 ]]; then
@@ -86,7 +86,7 @@ retry_grpc_call() {
         
         # Check if this is a retryable error
         if ! is_retryable_error "$grpc_output" "$grpc_status"; then
-            log error "Non-retryable error: $grpc_output"
+            log debug "gRPC error (non-retryable): $grpc_output"
             echo "$grpc_output"
             return $grpc_status
         fi
@@ -96,8 +96,8 @@ retry_grpc_call() {
         if [[ $retry_count -lt $max_retries ]]; then
             local delay
             delay=$((DEFAULT_RETRY_DELAY * (2 ** (retry_count - 1))))
-            if [[ $delay -gt $DEFAULT_MAX_RETRY_DELAY ]]; then
-                delay="$DEFAULT_MAX_RETRY_DELAY"
+            if [[ $delay -gt $GRPCTESTIFY_DEFAULT_MAX_RETRY_DELAY ]]; then
+                delay="$GRPCTESTIFY_DEFAULT_MAX_RETRY_DELAY"
             fi
             
             log warning "gRPC call failed (attempt $retry_count/$max_retries), retrying in ${delay}s..."
@@ -260,13 +260,13 @@ get_retry_config() {
     
     case "$config_key" in
         "max_retries")
-            echo "${MAX_RETRIES:-${default_value:-$DEFAULT_MAX_RETRIES}}"
+            echo "${GRPCTESTIFY_MAX_RETRIES:-${default_value:-$GRPCTESTIFY_DEFAULT_MAX_RETRIES}}"
             ;;
         "retry_delay")
             echo "${RETRY_DELAY:-${default_value:-$DEFAULT_RETRY_DELAY}}"
             ;;
         "backoff_multiplier")
-            echo "${BACKOFF_MULTIPLIER:-${default_value:-$DEFAULT_BACKOFF_MULTIPLIER}}"
+            echo "${GRPCTESTIFY_BACKOFF_MULTIPLIER:-${default_value:-$GRPCTESTIFY_DEFAULT_BACKOFF_MULTIPLIER}}"
             ;;
         "max_retry_delay")
             echo "${MAX_RETRY_DELAY:-${default_value:-$DEFAULT_MAX_RETRY_DELAY}}"

@@ -18,9 +18,9 @@ Automate gRPC server testing with configuration files. Validate endpoints, reque
 
 ## ✨ Features
 
-- 🌊 **gRPC streaming support**: Basic unary calls (streaming patterns under development)
+- 🌊 **gRPC streaming support**: Unary, client streaming, server streaming, and bidirectional streaming
 - ⚡ **Parallel execution** with `--parallel N` option
-- 📊 **Progress indicators** with `--progress=dots`
+- 📊 **Smart progress indicators** - automatically adapts based on test count and verbose mode
 - 🎯 **Advanced assertions** with jq-based validation
 - 🔧 **Inline options** for response validation (tolerance, partial matching, etc.)
 - 🔄 **Self-updating** with `--update` flag
@@ -241,20 +241,16 @@ Generate reports in multiple formats for different use cases:
 ./grpctestify.sh tests/
 
 # JSON for CI/CD integration
-./grpctestify.sh tests/ --report-format=json --report-output=results.json
+./grpctestify.sh tests/ --log-format json --log-output results.json
 
 # XML (JUnit compatible) for test management tools
-./grpctestify.sh tests/ --report-format=xml --report-output=junit.xml
-
-# Interactive HTML reports
-./grpctestify.sh tests/ --report-format=html --report-output=report.html
+./grpctestify.sh tests/ --log-format junit --log-output junit.xml
 ```
 
 **Supported Formats:**
-- `console` - Human-readable colored output
+- `console` - Human-readable colored output (default)
 - `json` - Machine-readable JSON with full metadata
-- `xml` - JUnit-compatible XML for CI/CD tools
-- `html` - Interactive web reports with charts and filtering
+- `junit` - JUnit-compatible XML for CI/CD tools
 
 **ASSERTS vs RESPONSE:**
 - **ASSERTS** (priority): Flexible jq-based validation

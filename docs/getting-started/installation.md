@@ -119,7 +119,7 @@ After installation, verify that everything is working:
 ./grpctestify.sh --version
 
 # Check dependencies
-./grpctestify.sh --check-deps
+./grpctestify.sh --config
 
 # Run a simple test
 ./grpctestify.sh --help
@@ -135,10 +135,10 @@ Options:
   --version, -v       Show version information
   --verbose           Enable verbose output
   --parallel N        Run tests in parallel (N workers)
-  --progress TYPE     Progress display type (dots, bar, none)
+  --log-format FORMAT Report format (junit, json)
   --timeout SECONDS   Global timeout for all tests
   --no-color          Disable colored output
-  --check-deps        Check system dependencies
+  --config            Show current configuration
 ```
 
 ## 🔧 Configuration
@@ -221,7 +221,7 @@ chmod +x grpctestify.sh
 
 If you encounter issues:
 
-1. **Check Dependencies**: Run `./grpctestify.sh --check-deps`
+1. **Check Configuration**: Run `./grpctestify.sh --config`
 2. **Enable Verbose Mode**: Run with `--verbose` flag
 3. **Check Logs**: Look for error messages in the output
 4. **Report Issues**: Create an issue on GitHub with:

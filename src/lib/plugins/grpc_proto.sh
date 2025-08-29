@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Proto Plugin for grpctestify
+# shellcheck disable=SC2155 # Declare and assign separately - many simple variable assignments
 # Handles proto contracts and descriptor files configuration
 
 # Proto state management - using local variables to avoid race conditions
@@ -177,7 +178,7 @@ generate_proto_flags() {
     esac
     
     # Trim leading space
-    PROTO_FLAGS=$(echo "$PROTO_FLAGS" | sed 's/^[[:space:]]*//')
+    PROTO_FLAGS="${PROTO_FLAGS#"${PROTO_FLAGS%%[![:space:]]*}"}"
 }
 
 # Function to resolve proto paths (support ENV variables)

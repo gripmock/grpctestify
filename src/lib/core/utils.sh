@@ -6,7 +6,8 @@
 # Process line with comment and quote handling
 process_line() {
     local line="$1"
-    local in_str=0
+    local in_double_str=0
+    local in_single_str=0
     local escaped=0
     local res=""
     
@@ -18,10 +19,13 @@ process_line() {
         elif [[ "$c" == "\\" ]]; then
             res+="$c"
             escaped=1
-        elif [[ "$c" == "\"" ]]; then
+        elif [[ "$c" == "\"" && $in_single_str -eq 0 ]]; then
             res+="$c"
-            in_str=$((!in_str))
-        elif [[ "$c" == "#" && $in_str -eq 0 ]]; then
+            in_double_str=$((!in_double_str))
+        elif [[ "$c" == "'" && $in_double_str -eq 0 ]]; then
+            res+="$c"
+            in_single_str=$((!in_single_str))
+        elif [[ "$c" == "#" && $in_double_str -eq 0 && $in_single_str -eq 0 ]]; then
             break
         else
             res+="$c"
@@ -126,7 +130,11 @@ ensure_directory() {
 # Get file extension
 get_file_extension() {
     local file="$1"
-    echo "${file##*.}"
+    if [[ "$file" == *.* ]]; then
+        echo "${file##*.}"
+    else
+        echo ""
+    fi
 }
 
 # Trim leading and trailing whitespace
@@ -139,6 +147,54 @@ trim_whitespace() {
 expand_tilde() {
     local path="$1"
     echo "${path/#\~/$HOME}"
+}
+
+# Extract ALL REQUEST sections for client streaming
+# Returns each JSON object on a separate line for streaming
+extract_all_request_sections() {
+    local test_file="$1"
+    
+    awk '
+    # Smart comment removal: processes line character-by-character to handle quotes correctly
+    function process_line(line) {
+        in_str = 0
+        escaped = 0
+        res = ""
+        for (i = 1; i <= length(line); i++) {
+            c = substr(line, i, 1)
+            if (escaped) {
+                res = res c
+                escaped = 0
+            } else if (c == "\\") {
+                res = res c
+                escaped = 1
+            } else if (c == "\"") {
+                res = res c
+                in_str = !in_str
+            } else if (c == "#" && !in_str) {
+                break
+            } else {
+                res = res c
+            }
+        }
+        return res
+    }
+    $0 ~ /^[[:space:]]*#/ { next } # skip comment lines
+    $0 ~ "^[[:space:]]*---[[:space:]]*REQUEST[[:space:]]*---" { 
+        found=1 
+        next 
+    } 
+    /^[[:space:]]*---/ { 
+        found=0 
+    } 
+    found {
+        # Process comments inside JSON strings
+        processed = process_line($0)
+        gsub(/[[:space:]]+$/, "", processed)
+        if (length(processed) > 0) {
+            printf "%s\n", processed
+        }
+    }' "$test_file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 }
 
 # Unused error functions removed

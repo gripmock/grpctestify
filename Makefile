@@ -28,12 +28,12 @@ test: generate
 test-gripmock: generate
 	@echo "🧪 Testing with gripmock examples..."
 	@echo "Note: This requires gripmock to be running on localhost:4770"
-	@./$(MAIN_SCRIPT) /tmp/gripmock/examples/types/well-known-types/ --progress dots || echo "gripmock tests failed"
+	@./$(MAIN_SCRIPT) /tmp/gripmock/examples/types/well-known-types/ || echo "gripmock tests failed"
 
 .PHONY: test-examples
 test-examples: generate
 	@echo "🧪 Testing local examples..."
-	@./$(MAIN_SCRIPT) examples/basic-examples/user-management/tests/ --progress dots || echo "local examples need servers running"
+	@./$(MAIN_SCRIPT) examples/basic-examples/user-management/tests/ || echo "local examples need servers running"
 
 # Utility targets
 .PHONY: check
