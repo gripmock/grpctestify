@@ -87,8 +87,7 @@ show_help() {
 
 # Show version information
 show_version() {
-    # shellcheck disable=SC2154  # version is provided by bashly framework
-    echo "$APP_NAME $version"
+    echo "$APP_NAME $APP_VERSION"
 }
 
 # Show update information
@@ -103,8 +102,7 @@ show_update_help() {
     echo "  3. Verify checksum"
     echo "  4. Replace current script"
     echo ""
-    # shellcheck disable=SC2154  # version is provided by bashly framework
-    echo "Current version: $version"
+    echo "Current version: $APP_VERSION"
 }
 
 # Show completion installation information

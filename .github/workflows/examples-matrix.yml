@@ -55,9 +55,24 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq protobuf-compiler libxml2-utils netcat-openbsd
+          sudo apt-get install -y jq libxml2-utils netcat-openbsd curl unzip
+          
+          # Install latest protoc (Protocol Buffers compiler)
+          echo "Installing latest protoc..."
+          PROTOC_VERSION=$(curl -s https://api.github.com/repos/protocolbuffers/protobuf/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+          echo "Latest protoc version: $PROTOC_VERSION"
+          
+          # Download and install protoc
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          sudo unzip -o "protoc-${PROTOC_VERSION}-linux-x86_64.zip" -d /usr/local bin/protoc
+          sudo unzip -o "protoc-${PROTOC_VERSION}-linux-x86_64.zip" -d /usr/local 'include/*'
+          rm "protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          
+          # Verify protoc installation
+          protoc --version
+          
+          # Install Go protobuf plugins
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
-          go install github.com/bavix/gripmock/v3@latest
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
           

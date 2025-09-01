@@ -2,8 +2,13 @@
 
 # help.bats - Tests for help.sh module
 
-# Load the help module
-source "${BATS_TEST_DIRNAME}/help.sh"
+setup() {
+    # Load configuration to get APP_NAME and APP_VERSION
+    source "${BATS_TEST_DIRNAME}/../kernel/config.sh"
+    
+    # Load the help module
+    source "${BATS_TEST_DIRNAME}/help.sh"
+}
 
 @test "show_help function shows help information" {
     # Test help display
@@ -16,7 +21,8 @@ source "${BATS_TEST_DIRNAME}/help.sh"
     # Test version display
     run show_version
     [ $status -eq 0 ]
-    [[ "$output" =~ "version" ]]
+    [[ "$output" =~ "grpctestify" ]]
+    [[ "$output" =~ "v1.0.0" ]]
 }
 
 @test "show_update_help function shows update help" {

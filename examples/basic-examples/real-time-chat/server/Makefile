@@ -88,7 +88,8 @@ check-protoc:
 	@if ! command -v protoc >/dev/null 2>&1; then \
 		echo "❌ protoc is not installed. Please install Protocol Buffers compiler."; \
 		echo "   macOS: brew install protobuf"; \
-		echo "   Ubuntu: sudo apt-get install protobuf-compiler"; \
+		echo "   Ubuntu: Install latest version from https://github.com/protocolbuffers/protobuf/releases"; \
+		echo "   Quick install: curl -sSL https://get.protoc.sh | bash"; \
 		exit 1; \
 	fi
 	@if ! command -v protoc-gen-go >/dev/null 2>&1; then \
