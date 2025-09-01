@@ -71,7 +71,7 @@ jobs:
           # Verify protoc installation
           protoc --version
           
-          # Install Go protobuf plugins
+          # Install Go protobuf plugins with latest versions
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
@@ -116,13 +116,26 @@ jobs:
           
           echo "Example structure validation passed"
 
-      - name: Build gRPC server
+      - name: Update dependencies and build gRPC server
         run: |
           set -euo pipefail
           example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
           echo "Building gRPC server for ${{ matrix.example.name }}"
           
           cd "$example_dir/server"
+          
+          # Update dependencies to latest versions
+          echo "Updating dependencies..."
+          go mod tidy
+          go get -u google.golang.org/grpc@latest
+          go get -u google.golang.org/protobuf@latest
+          go mod tidy
+          
+          # Regenerate protobuf files with latest plugins
+          echo "Regenerating protobuf files..."
+          make proto
+          
+          # Build server
           make build
 
       - name: Start gRPC server using centralized script

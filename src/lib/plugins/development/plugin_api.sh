@@ -73,6 +73,13 @@ create_plugin_template() {
     local plugin_type="${2:-assertion}"  # assertion, validation, utility
     local output_dir="${3:-plugins}"
     
+    # Load configuration if not already loaded
+    if [[ -z "${PLUGIN_API_VERSION:-}" ]]; then
+        if [[ -f "${BASH_SOURCE[0]%/*}/../../kernel/config.sh" ]]; then
+            source "${BASH_SOURCE[0]%/*}/../../kernel/config.sh"
+        fi
+    fi
+    
     if [[ -z "$plugin_name" ]]; then
     tlog error "Plugin name is required"
         return 1

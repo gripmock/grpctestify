@@ -84,7 +84,7 @@ list_plugins_command() {
     
     # Check for external plugins
     local plugin_dir="${EXTERNAL_PLUGIN_DIR:-~/.grpctestify/plugins}"
-    plugin_dir=$(expand_tilde "$plugin_dir")
+    plugin_dir="${plugin_dir/#\~/$HOME}"
     
     if [[ -d "$plugin_dir" ]]; then
         local external_plugins=()
@@ -96,6 +96,10 @@ list_plugins_command() {
             echo "External plugins (${#external_plugins[@]} found in $plugin_dir):"
             for plugin_file in "${external_plugins[@]}"; do
                 local plugin_name=$(basename "$plugin_file" .sh)
+                # Remove grpc_ prefix if present
+                if [[ "$plugin_name" =~ ^grpc_(.+)$ ]]; then
+                    plugin_name="${BASH_REMATCH[1]}"
+                fi
                 echo "  - $plugin_name (external)"
             done
         else
@@ -127,7 +131,7 @@ create_plugin_command() {
     
     # Create plugin directory
     local plugin_dir="${EXTERNAL_PLUGIN_DIR:-~/.grpctestify/plugins}"
-    plugin_dir=$(expand_tilde "$plugin_dir")
+    plugin_dir="${plugin_dir/#\~/$HOME}"
     ensure_directory "$plugin_dir"
     
     # Use official Plugin API to create template

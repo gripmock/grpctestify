@@ -113,6 +113,9 @@ service ChatService {
     rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
     rpc GetRooms(GetRoomsRequest) returns (GetRoomsResponse);
     rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+    rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+    rpc UpdateUserStatus(UpdateUserStatusRequest) returns (UpdateUserStatusResponse);
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }
 
 // Room management messages
@@ -259,5 +262,36 @@ message GetUsersRequest {
 
 message GetUsersResponse {
     repeated User users = 1;
+}
+
+message GetUserProfileRequest {
+    string user_id = 1;
+}
+
+message GetUserProfileResponse {
+    User user = 1;
+    bool found = 2;
+}
+
+message UpdateUserStatusRequest {
+    string user_id = 1;
+    bool online = 2;
+    map<string, string> status = 3;
+}
+
+message UpdateUserStatusResponse {
+    User user = 1;
+    bool success = 2;
+    string error_message = 3;
+}
+
+message HealthCheckRequest {
+    string service = 1;
+}
+
+message HealthCheckResponse {
+    string status = 1;
+    string timestamp = 2;
+    map<string, string> details = 3;
 }
 
