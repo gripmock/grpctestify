@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	mediapb "github.com/gripmock/grpctestify/examples/media-streaming/server/mediapb"
+	mediapb "github.com/gripmock/grpctestify/examples/advanced-examples/media-streaming/server/mediapb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

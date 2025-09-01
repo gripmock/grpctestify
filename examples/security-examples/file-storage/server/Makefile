@@ -25,5 +25,5 @@ test: build
 	@echo "Testing file storage server..."
 	@timeout 5s ./server &
 	@sleep 2
-	@grpcurl -plaintext localhost:50051 filestorage.FileStorageService/HealthCheck
+	@grpcurl -plaintext localhost:50058 filestorage.FileStorageService/HealthCheck
 	@pkill -f file-storage-server || true

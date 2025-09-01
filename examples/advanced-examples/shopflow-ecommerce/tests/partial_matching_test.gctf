@@ -1,5 +1,5 @@
 --- ADDRESS ---
-localhost:50054
+localhost:50056
 
 --- ENDPOINT ---
 shopflow.ShopFlowService/GetProduct

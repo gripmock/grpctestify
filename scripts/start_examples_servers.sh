@@ -57,13 +57,13 @@ get_server_port() {
     local server_name=$(basename "$(dirname "$server_dir")")
     case "$server_name" in
         "user-management") echo "50051" ;;
-        "real-time-chat") echo "50052" ;;
-        "iot-monitoring") echo "50053" ;;
+        "iot-monitoring") echo "50052" ;;
+        "fintech-payment") echo "50053" ;;
         "ai-chat") echo "50054" ;;
         "media-streaming") echo "50055" ;;
-        "shopflow-ecommerce") echo "50056" ;;  # Use different port than ai-chat
-        "file-storage") echo "50057" ;;
-        "fintech-payment") echo "50058" ;;
+        "shopflow-ecommerce") echo "50056" ;;
+        "real-time-chat") echo "50057" ;;
+        "file-storage") echo "50058" ;;
         *) echo "50059" ;;
     esac
 }

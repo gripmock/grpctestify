@@ -1,6 +1,6 @@
-module github.com/gripmock/grpctestify/examples/user-management/server
+module github.com/gripmock/grpctestify/examples/basic-examples/user-management/server
 
-go 1.21
+go 1.25
 
 require (
 	google.golang.org/grpc v1.60.1

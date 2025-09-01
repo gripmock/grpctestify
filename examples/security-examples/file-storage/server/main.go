@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	filestoragepb "github.com/gripmock/grpctestify/examples/file-storage/server/filestoragepb"
+	filestoragepb "github.com/gripmock/grpctestify/examples/security-examples/file-storage/server/filestoragepb"
 )
 
 // FileStorageServer implements the FileStorageService
@@ -207,20 +207,20 @@ func main() {
 		}
 
 		// Create TLS listener
-		lis, err = tls.Listen("tcp", ":50052", tlsConfig)
+		lis, err = tls.Listen("tcp", ":50058", tlsConfig)
 		if err != nil {
 			log.Fatalf("Failed to listen with TLS: %v", err)
 		}
 
-		log.Println("🔒 File Storage Service is running with TLS on port 50052...")
+		log.Println("🔒 File Storage Service is running with TLS on port 50058...")
 	} else {
 		// Create plain TCP listener
-		lis, err = net.Listen("tcp", ":50052")
+		lis, err = net.Listen("tcp", ":50058")
 		if err != nil {
 			log.Fatalf("Failed to listen: %v", err)
 		}
 
-		log.Println("⚠️  File Storage Service is running without TLS on port 50052...")
+		log.Println("⚠️  File Storage Service is running without TLS on port 50058...")
 		log.Println("   Run 'make tls' in user-management/server to generate TLS certificates")
 	}
 

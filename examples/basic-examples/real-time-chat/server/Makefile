@@ -41,7 +41,7 @@ deps:
 
 ## Run the server
 run: build
-	@echo "🚀 Starting chat server on :50051..."
+	@echo "🚀 Starting chat server on :50057..."
 	./$(BINARY_NAME)
 
 ## Run tests

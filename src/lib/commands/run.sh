@@ -324,6 +324,10 @@ generate_junit_report() {
     local skipped="$5"
     local duration_ms="$6"
     local start_time="$7"
+    # New parameters for test details
+    local passed_tests_ref="$8"
+    local failed_tests_ref="$9"
+    local skipped_tests_ref="${10}"
     
     local duration_seconds=$(echo "scale=3; $duration_ms / 1000" | bc 2>/dev/null || echo "0")
     local timestamp=$(date -Iseconds 2>/dev/null || date)
@@ -347,28 +351,51 @@ generate_junit_report() {
   <testsuite name="grpctestify" tests="$total" failures="$failed" skipped="$skipped" time="$duration_seconds" timestamp="$timestamp">
 EOF
 
-    # Add test cases (simplified for now, can be enhanced later)
-    for (( i=0; i<passed; i++ )); do
-        cat >> "$output_file" << EOF
-    <testcase classname="grpctestify" name="test_$((i+1))" time="0.1"/>
+    # Add passed test cases with actual test information
+    if [[ -n "$passed_tests_ref" ]]; then
+        eval "local passed_tests=(\"\${${passed_tests_ref}[@]}\")"
+        for test_info in "${passed_tests[@]}"; do
+            IFS='|' read -r test_file test_duration <<< "$test_info"
+            local classname=$(dirname "$test_file")
+            local name=$(basename "$test_file" .gctf)
+            local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
+            cat >> "$output_file" << EOF
+    <testcase classname="$classname" name="$name" time="$time_seconds"/>
 EOF
-    done
+        done
+    fi
     
-    for (( i=0; i<failed; i++ )); do
-        cat >> "$output_file" << EOF
-    <testcase classname="grpctestify" name="failed_test_$((i+1))" time="0.1">
-      <failure message="Test failed" type="failure">Test case failed during execution</failure>
+    # Add failed test cases with actual test information
+    if [[ -n "$failed_tests_ref" ]]; then
+        eval "local failed_tests=(\"\${${failed_tests_ref}[@]}\")"
+        for test_info in "${failed_tests[@]}"; do
+            IFS='|' read -r test_file test_duration error_msg <<< "$test_info"
+            local classname=$(dirname "$test_file")
+            local name=$(basename "$test_file" .gctf)
+            local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
+            cat >> "$output_file" << EOF
+    <testcase classname="$classname" name="$name" time="$time_seconds">
+      <failure message="Test failed" type="failure">$error_msg</failure>
     </testcase>
 EOF
-    done
+        done
+    fi
     
-    for (( i=0; i<skipped; i++ )); do
-        cat >> "$output_file" << EOF
-    <testcase classname="grpctestify" name="skipped_test_$((i+1))" time="0.0">
+    # Add skipped test cases with actual test information
+    if [[ -n "$skipped_tests_ref" ]]; then
+        eval "local skipped_tests=(\"\${${skipped_tests_ref}[@]}\")"
+        for test_info in "${skipped_tests[@]}"; do
+            IFS='|' read -r test_file test_duration <<< "$test_info"
+            local classname=$(dirname "$test_file")
+            local name=$(basename "$test_file" .gctf)
+            local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
+            cat >> "$output_file" << EOF
+    <testcase classname="$classname" name="$name" time="$time_seconds">
       <skipped message="Test skipped"/>
     </testcase>
 EOF
-    done
+        done
+    fi
 
     cat >> "$output_file" << EOF
   </testsuite>
@@ -387,6 +414,10 @@ generate_json_report() {
     local skipped="$5"
     local duration_ms="$6"
     local start_time="$7"
+    # New parameters for test details
+    local passed_tests_ref="$8"
+    local failed_tests_ref="$9"
+    local skipped_tests_ref="${10}"
     
     local timestamp=$(date -Iseconds 2>/dev/null || date)
     
@@ -395,7 +426,7 @@ generate_json_report() {
     output_dir=$(dirname "$output_file")
     mkdir -p "$output_dir" || return 1
     
-    # Generate JSON report
+    # Start JSON report
     cat > "$output_file" << EOF
 {
   "grpctestify": {
@@ -414,6 +445,130 @@ generate_json_report() {
       "username": "$(whoami 2>/dev/null || echo 'unknown')",
       "os": "${OSTYPE:-unknown}",
       "shell": "${SHELL:-unknown}"
+    },
+    "tests": {
+EOF
+
+    # Add passed tests
+    if [[ -n "$passed_tests_ref" ]]; then
+        eval "local passed_tests=(\"\${${passed_tests_ref}[@]}\")"
+        if [[ ${#passed_tests[@]} -gt 0 ]]; then
+            cat >> "$output_file" << EOF
+      "passed": [
+EOF
+            local first=true
+            for test_info in "${passed_tests[@]}"; do
+                IFS='|' read -r test_file test_duration <<< "$test_info"
+                local classname=$(dirname "$test_file")
+                local name=$(basename "$test_file" .gctf)
+                local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
+                
+                if [[ "$first" == "true" ]]; then
+                    first=false
+                else
+                    echo "," >> "$output_file"
+                fi
+                
+                cat >> "$output_file" << EOF
+        {
+          "file": "$test_file",
+          "classname": "$classname",
+          "name": "$name",
+          "duration_ms": $test_duration,
+          "duration_s": $time_seconds,
+          "status": "passed"
+        }
+EOF
+            done
+            cat >> "$output_file" << EOF
+      ]
+EOF
+        fi
+    fi
+    
+    # Add failed tests
+    if [[ -n "$failed_tests_ref" ]]; then
+        eval "local failed_tests=(\"\${${failed_tests_ref}[@]}\")"
+        if [[ ${#failed_tests[@]} -gt 0 ]]; then
+            if [[ -n "$passed_tests_ref" && ${#passed_tests[@]} -gt 0 ]]; then
+                echo "," >> "$output_file"
+            fi
+            cat >> "$output_file" << EOF
+      "failed": [
+EOF
+            local first=true
+            for test_info in "${failed_tests[@]}"; do
+                IFS='|' read -r test_file test_duration error_msg <<< "$test_info"
+                local classname=$(dirname "$test_file")
+                local name=$(basename "$test_file" .gctf)
+                local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
+                
+                if [[ "$first" == "true" ]]; then
+                    first=false
+                else
+                    echo "," >> "$output_file"
+                fi
+                
+                cat >> "$output_file" << EOF
+        {
+          "file": "$test_file",
+          "classname": "$classname",
+          "name": "$name",
+          "duration_ms": $test_duration,
+          "duration_s": $time_seconds,
+          "status": "failed",
+          "error": "$error_msg"
+        }
+EOF
+            done
+            cat >> "$output_file" << EOF
+      ]
+EOF
+        fi
+    fi
+    
+    # Add skipped tests
+    if [[ -n "$skipped_tests_ref" ]]; then
+        eval "local skipped_tests=(\"\${${skipped_tests_ref}[@]}\")"
+        if [[ ${#skipped_tests[@]} -gt 0 ]]; then
+            if [[ ( -n "$passed_tests_ref" && ${#passed_tests[@]} -gt 0 ) || ( -n "$failed_tests_ref" && ${#failed_tests[@]} -gt 0 ) ]]; then
+                echo "," >> "$output_file"
+            fi
+            cat >> "$output_file" << EOF
+      "skipped": [
+EOF
+            local first=true
+            for test_info in "${skipped_tests[@]}"; do
+                IFS='|' read -r test_file test_duration <<< "$test_info"
+                local classname=$(dirname "$test_file")
+                local name=$(basename "$test_file" .gctf)
+                local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
+                
+                if [[ "$first" == "true" ]]; then
+                    first=false
+                else
+                    echo "," >> "$output_file"
+                fi
+                
+                cat >> "$output_file" << EOF
+        {
+          "file": "$test_file",
+          "classname": "$classname",
+          "name": "$name",
+          "duration_ms": $test_duration,
+          "duration_s": $time_seconds,
+          "status": "skipped"
+        }
+EOF
+            done
+            cat >> "$output_file" << EOF
+      ]
+EOF
+        fi
+    fi
+    
+    # Close JSON structure
+    cat >> "$output_file" << EOF
     }
   }
 }
@@ -887,6 +1042,11 @@ EOF
     # Global counter for warnings (accessible by run_single_test)
     headers_warnings=0
     
+    # Arrays to store test details for JUnit report
+    local passed_tests=()
+    local failed_tests=()
+    local skipped_tests=()
+    
     if [[ "$total" -eq 1 ]]; then
         log info "Running 1 test sequentially..."
         [[ "$verbose" == "1" ]] && log info "Verbose mode enabled - detailed test information will be shown"
@@ -904,20 +1064,57 @@ EOF
     for (( i=0; i<${#test_files[@]}; i++ )); do
         local test_file="${test_files[$i]}"
         local test_name=$(basename "$test_file" .gctf)
+        
+        # Start timing for this test
+        local test_start_time
+        if command -v python3 >/dev/null 2>&1; then
+            test_start_time=$(python3 -c "import time; print(int(time.time() * 1000))")
+        elif command -v node >/dev/null 2>&1; then
+            test_start_time=$(node -e "console.log(Date.now())")
+        else
+            test_start_time=$(($(date +%s) * 1000))
+        fi
+        
         # Pytest-style UI: verbose vs dots mode
         if [[ "$verbose" == "1" ]]; then
             printf "Testing %s ... " "$test_name"
             if run_single_test "$test_file" "$([[ "$dry_run" == "1" ]] && echo "true" || echo "false")"; then
                 echo "✅ PASS"
                 passed=$((passed + 1))
+                
+                # Calculate test duration
+                local test_end_time
+                if command -v python3 >/dev/null 2>&1; then
+                    test_end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
+                elif command -v node >/dev/null 2>&1; then
+                    test_end_time=$(node -e "console.log(Date.now())")
+                else
+                    test_end_time=$(($(date +%s) * 1000))
+                fi
+                local test_duration=$((test_end_time - test_start_time))
+                passed_tests+=("$test_file|$test_duration")
             else
                 local exit_code=$?
+                
+                # Calculate test duration
+                local test_end_time
+                if command -v python3 >/dev/null 2>&1; then
+                    test_end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
+                elif command -v node >/dev/null 2>&1; then
+                    test_end_time=$(node -e "console.log(Date.now())")
+                else
+                    test_end_time=$(($(date +%s) * 1000))
+                fi
+                local test_duration=$((test_end_time - test_start_time))
+                
                 if [[ "$exit_code" -eq 3 ]]; then
                     echo "🔍 SKIP (dry-run)"
                     skipped=$((skipped + 1))
+                    skipped_tests+=("$test_file|$test_duration")
                 else
                     echo "❌ FAIL"
                     failed=$((failed + 1))
+                    failed_tests+=("$test_file|$test_duration|Test execution failed")
                 fi
             fi
         else
@@ -928,18 +1125,32 @@ EOF
                 local exit_code=$?
             fi
             
+            # Calculate test duration
+            local test_end_time
+            if command -v python3 >/dev/null 2>&1; then
+                test_end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
+            elif command -v node >/dev/null 2>&1; then
+                test_end_time=$(node -e "console.log(Date.now())")
+            else
+                test_end_time=$(($(date +%s) * 1000))
+            fi
+            local test_duration=$((test_end_time - test_start_time))
+            
             case $exit_code in
                 0)
                     printf "."
                     passed=$((passed + 1))
+                    passed_tests+=("$test_file|$test_duration")
                     ;;
                 3)
                     printf "S"
                     skipped=$((skipped + 1))
+                    skipped_tests+=("$test_file|$test_duration")
                     ;;
                 *)
                     printf "E"
                     failed=$((failed + 1))
+                    failed_tests+=("$test_file|$test_duration|Test execution failed")
                     ;;
             esac
         fi
@@ -1064,10 +1275,11 @@ EOF
         
         case "$log_format" in
             "junit")
-                generate_junit_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time"
+                # Pass test details to generate_junit_report
+                generate_junit_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time" "passed_tests" "failed_tests" "skipped_tests"
                 ;;
             "json")
-                generate_json_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time"
+                generate_json_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time" "passed_tests" "failed_tests" "skipped_tests"
                 ;;
         esac
         

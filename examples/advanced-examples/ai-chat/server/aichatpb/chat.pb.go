@@ -2824,7 +2824,7 @@ const file_chat_proto_rawDesc = "" +
 	"\n" +
 	"StreamChat\x12\x19.aichat.StreamChatRequest\x1a\x13.aichat.ChatMessage0\x01\x12P\n" +
 	"\x13BulkProcessMessages\x12\x1a.aichat.BulkMessageRequest\x1a\x1b.aichat.BulkProcessResponse(\x01\x12?\n" +
-	"\x10ChatConversation\x12\x13.aichat.UserMessage\x1a\x12.aichat.AIResponse(\x010\x01BBZ@github.com/gripmock/grpctestify/examples/ai-chat/server/aichatpbb\x06proto3"
+	"\x10ChatConversation\x12\x13.aichat.UserMessage\x1a\x12.aichat.AIResponse(\x010\x01BTZRgithub.com/gripmock/grpctestify/examples/advanced-examples/ai-chat/server/aichatpbb\x06proto3"
 
 var (
 	file_chat_proto_rawDescOnce sync.Once

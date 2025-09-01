@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
-	userpb "github.com/gripmock/grpctestify/examples/user-management/server/userpb"
+	userpb "github.com/gripmock/grpctestify/examples/basic-examples/user-management/server/userpb"
 )
 
 // server implements the UserService

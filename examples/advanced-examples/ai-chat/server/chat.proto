@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package aichat;
 
-option go_package = "github.com/gripmock/grpctestify/examples/ai-chat/server/aichatpb";
+option go_package = "github.com/gripmock/grpctestify/examples/advanced-examples/ai-chat/server/aichatpb";
 
 import "google/protobuf/timestamp.proto";
 

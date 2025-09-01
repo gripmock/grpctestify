@@ -1,6 +1,6 @@
-module github.com/gripmock/grpctestify/examples/ai-chat/server
+module github.com/gripmock/grpctestify/examples/advanced-examples/ai-chat/server
 
-go 1.21
+go 1.25
 
 require (
 	google.golang.org/grpc v1.59.0

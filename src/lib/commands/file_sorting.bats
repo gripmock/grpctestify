@@ -32,7 +32,9 @@ teardown() {
     args[--sort]="path"
     
     local files=()
-    collect_test_files "$TEST_DIR" files
+    while IFS= read -r file; do
+        files+=("$file")
+    done < <(collect_test_files "$TEST_DIR" "path")
     
     # Should have 4 files
     [ ${#files[@]} -eq 4 ]
@@ -50,7 +52,9 @@ teardown() {
     args[--sort]="name"
     
     local files=()
-    collect_test_files "$TEST_DIR" files
+    while IFS= read -r file; do
+        files+=("$file")
+    done < <(collect_test_files "$TEST_DIR" "name")
     
     # Should have 4 files
     [ ${#files[@]} -eq 4 ]
@@ -68,7 +72,9 @@ teardown() {
     args[--sort]="random"
     
     local files=()
-    collect_test_files "$TEST_DIR" files
+    while IFS= read -r file; do
+        files+=("$file")
+    done < <(collect_test_files "$TEST_DIR" "random")
     
     # Should still have 4 files
     [ ${#files[@]} -eq 4 ]

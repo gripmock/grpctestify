@@ -2,7 +2,7 @@
 # Tests user profile management with nested objects
 
 --- ADDRESS ---
-localhost:4770
+localhost:50051
 
 --- ENDPOINT ---
 user.UserService/GetUserProfile

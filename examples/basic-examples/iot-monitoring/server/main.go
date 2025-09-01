@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	monitoringpb "github.com/gripmock/grpctestify/examples/iot-monitoring/server/monitoringpb"
+	monitoringpb "github.com/gripmock/grpctestify/examples/basic-examples/iot-monitoring/server/monitoringpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

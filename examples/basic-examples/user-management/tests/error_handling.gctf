@@ -2,7 +2,7 @@
 # Tests error scenarios and edge cases
 
 --- ADDRESS ---
-localhost:4770
+localhost:50051
 
 --- ENDPOINT ---
 user.UserService/GetUser

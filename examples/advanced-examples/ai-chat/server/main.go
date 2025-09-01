@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	aichatpb "github.com/gripmock/grpctestify/examples/ai-chat/server/aichatpb"
+	aichatpb "github.com/gripmock/grpctestify/examples/advanced-examples/ai-chat/server/aichatpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

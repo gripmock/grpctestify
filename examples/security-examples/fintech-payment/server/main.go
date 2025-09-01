@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
-	paymentpb "github.com/gripmock/grpctestify/examples/fintech-payment/server/paymentpb"
+	paymentpb "github.com/gripmock/grpctestify/examples/security-examples/fintech-payment/server/paymentpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

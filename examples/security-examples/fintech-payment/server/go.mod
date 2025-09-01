@@ -1,6 +1,6 @@
-module github.com/gripmock/grpctestify/examples/fintech-payment/server
+module github.com/gripmock/grpctestify/examples/security-examples/fintech-payment/server
 
-go 1.21
+go 1.25
 
 require (
 	google.golang.org/grpc v1.59.0

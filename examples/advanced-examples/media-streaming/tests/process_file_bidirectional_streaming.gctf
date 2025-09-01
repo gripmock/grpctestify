@@ -1,5 +1,5 @@
 --- ADDRESS ---
-localhost:4770
+localhost:50055
 
 --- ENDPOINT ---
 media.MediaStreamingService/ProcessFile

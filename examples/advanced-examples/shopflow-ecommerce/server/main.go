@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
-	shopflowpb "github.com/gripmock/grpctestify/examples/shopflow-ecommerce/server/shopflowpb"
+	shopflowpb "github.com/gripmock/grpctestify/examples/advanced-examples/shopflow-ecommerce/server/shopflowpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -629,19 +629,19 @@ func main() {
 			Certificates: []tls.Certificate{cert},
 		}
 
-		lis, err = tls.Listen("tcp", ":50054", config)
+		lis, err = tls.Listen("tcp", ":50056", config)
 		if err != nil {
 			log.Fatalf("Failed to listen with TLS: %v", err)
 		}
 
-		fmt.Println("🔒 ShopFlow E-commerce Service is running with TLS on port 50054...")
+		fmt.Println("🔒 ShopFlow E-commerce Service is running with TLS on port 50056...")
 	} else {
-		lis, err = net.Listen("tcp", ":50054")
+		lis, err = net.Listen("tcp", ":50056")
 		if err != nil {
 			log.Fatalf("Failed to listen: %v", err)
 		}
 
-		fmt.Println("⚠️  ShopFlow E-commerce Service is running without TLS on port 50054...")
+		fmt.Println("⚠️  ShopFlow E-commerce Service is running without TLS on port 50056...")
 		fmt.Println("   Run 'make tls' to generate TLS certificates")
 	}
 

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
-	pb "github.com/gripmock/grpctestify/examples/real-time-chat/server/chatpb"
+	pb "github.com/gripmock/grpctestify/examples/basic-examples/real-time-chat/server/chatpb"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -35,8 +35,8 @@ type ChatServer struct {
 // NewChatServer creates a new chat server instance
 func NewChatServer() *ChatServer {
 	server := &ChatServer{
-		rooms:    make(map[string]*ChatRoom),
-		users:    make(map[string]*User),
+		rooms:    make(map[string]*pb.ChatRoom),
+		users:    make(map[string]*pb.User),
 		messages: make(map[string][]*pb.ChatMessage),
 		streams:  make(map[string][]pb.ChatService_ChatServer),
 	}
@@ -49,7 +49,7 @@ func NewChatServer() *ChatServer {
 // initializeSampleData creates sample rooms and users for testing
 func (s *ChatServer) initializeSampleData() {
 	// Sample rooms
-	s.rooms["room1"] = &ChatRoom{
+	s.rooms["room1"] = &pb.ChatRoom{
 		Id:          "room1",
 		Name:        "General Discussion",
 		Description: "General chat room for all users",
@@ -360,11 +360,11 @@ func (s *ChatServer) broadcastActionToRoom(roomID string, action *pb.ChatAction,
 }
 
 // GetRooms retrieves available chat rooms (Unary RPC)
-func (s *ChatServer) GetRooms(ctx context.Context, req *GetRoomsRequest) (*GetRoomsResponse, error) {
+func (s *ChatServer) GetRooms(ctx context.Context, req *pb.GetRoomsRequest) (*pb.GetRoomsResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rooms := make([]*ChatRoom, 0, len(s.rooms))
+	rooms := make([]*pb.ChatRoom, 0, len(s.rooms))
 	for _, room := range s.rooms {
 		// Filter private rooms if user is not a member
 		if room.IsPrivate && req.UserId != "" {
@@ -382,13 +382,13 @@ func (s *ChatServer) GetRooms(ctx context.Context, req *GetRoomsRequest) (*GetRo
 		rooms = append(rooms, room)
 	}
 
-	return &GetRoomsResponse{
+	return &pb.GetRoomsResponse{
 		Rooms: rooms,
 	}, nil
 }
 
 // GetUsers retrieves users in a room (Unary RPC)
-func (s *ChatServer) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsersResponse, error) {
+func (s *ChatServer) GetUsers(ctx context.Context, req *pb.GetUsersRequest) (*pb.GetUsersResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -567,20 +567,20 @@ func main() {
 		}
 
 		// Create TLS listener
-		listener, err = tls.Listen("tcp", ":50051", tlsConfig)
+		listener, err = tls.Listen("tcp", ":50057", tlsConfig)
 		if err != nil {
 			log.Fatalf("Failed to listen with TLS: %v", err)
 		}
 
-		log.Println("🔒 Real-time Chat gRPC Server starting with TLS on :50051")
+		log.Println("🔒 Real-time Chat gRPC Server starting with TLS on :50057")
 	} else {
 		// Create plain TCP listener
-		listener, err = net.Listen("tcp", ":50051")
+		listener, err = net.Listen("tcp", ":50057")
 		if err != nil {
-			log.Fatalf("Failed to listen on port 50051: %v", err)
+			log.Fatalf("Failed to listen on port 50057: %v", err)
 		}
 
-		log.Println("⚠️  Real-time Chat gRPC Server starting without TLS on :50051")
+		log.Println("⚠️  Real-time Chat gRPC Server starting without TLS on :50057")
 		log.Println("   Run 'make tls' in user-management/server to generate TLS certificates")
 	}
 

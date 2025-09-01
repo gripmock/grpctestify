@@ -2,7 +2,7 @@
 # Tests user search functionality with pagination
 
 --- ADDRESS ---
-localhost:4770
+localhost:50051
 
 --- ENDPOINT ---
 user.UserService/SearchUsers

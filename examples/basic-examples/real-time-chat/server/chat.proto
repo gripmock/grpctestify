@@ -107,6 +107,12 @@ service ChatService {
     // Message history
     rpc GetMessageHistory(GetMessageHistoryRequest) returns (stream ChatMessage);
     rpc SearchMessages(SearchMessagesRequest) returns (stream ChatMessage);
+    
+    // Additional unary RPCs
+    rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+    rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
+    rpc GetRooms(GetRoomsRequest) returns (GetRoomsResponse);
+    rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
 }
 
 // Room management messages
@@ -215,5 +221,43 @@ message SearchMessagesRequest {
     string query = 2;
     int32 limit = 3;
     string user_id = 4;
+}
+
+// Additional message types for unary RPCs
+message SendMessageRequest {
+    ChatMessage message = 1;
+}
+
+message SendMessageResponse {
+    ChatMessage message = 1;
+    bool success = 2;
+    string error_message = 3;
+}
+
+message GetMessagesRequest {
+    string room_id = 1;
+    int32 limit = 2;
+    int32 offset = 3;
+}
+
+message GetMessagesResponse {
+    repeated ChatMessage messages = 1;
+    int32 total = 2;
+}
+
+message GetRoomsRequest {
+    string user_id = 1;
+}
+
+message GetRoomsResponse {
+    repeated ChatRoom rooms = 1;
+}
+
+message GetUsersRequest {
+    string room_id = 1;
+}
+
+message GetUsersResponse {
+    repeated User users = 1;
 }
 
