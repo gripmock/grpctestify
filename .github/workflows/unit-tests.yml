@@ -9,12 +9,10 @@ on:
 
 jobs:
   bats-tests:
-    name: BATS Unit Tests
-    runs-on: ${{ matrix.os }}
+    name: BATS Unit Tests (Fail Fast)
+    runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
+      fail-fast: true  # FAIL FAST: Stop immediately on first failure
     
     steps:
       - uses: actions/checkout@v4
@@ -34,11 +32,11 @@ jobs:
       - name: Install bats-core
         run: |
           sudo apt-get update
-          sudo apt-get install -y bats
+          sudo apt-get install -y bats jq bc
           
       - name: Install dependencies
         run: |
-          sudo apt-get install -y jq bc libxml2-utils
+          sudo apt-get install -y libxml2-utils
           
           # Install grpcurl for BATS tests
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
@@ -55,39 +53,65 @@ jobs:
           chmod +x ~/bin/grpctestify
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Run core unit tests
-        continue-on-error: true
+      - name: Run BATS unit tests (FAIL FAST)
         run: |
-          if [ -d "src/lib/core" ]; then
-            echo "Running core unit tests..."
-            find src/lib/core -name "*.bats" -print0 | xargs -0 -I {} bats {} || echo "Some core tests failed (known BATS environment issues)"
+          set -euo pipefail  # Fail immediately on any error
+          
+          echo "🧪 Running all BATS unit tests with FAIL FAST strategy..."
+          echo "⚡ First failed test will stop entire workflow!"
+          
+          # Find all bats files and run them sequentially
+          # Use timeout to prevent hanging tests
+          failed_tests=0
+          total_tests=0
+          
+          # Get list of all bats files
+          bats_files=$(find src/ -name "*.bats" | sort)
+          
+          if [ -z "$bats_files" ]; then
+            echo "❌ ERROR: No BATS test files found!"
+            exit 1
           fi
+          
+          echo "📋 Found BATS test files:"
+          echo "$bats_files"
+          echo
+          
+          # Run each bats file, fail immediately on first failure
+          for bats_file in $bats_files; do
+            total_tests=$((total_tests + 1))
+            echo "🔍 Testing: $bats_file"
+            
+            # Run with timeout and strict error handling
+            if ! timeout 120 bats "$bats_file"; then
+              echo
+              echo "❌ FAIL FAST: Test failed in $bats_file"
+              echo "🛑 Stopping workflow immediately!"
+              echo "📊 Progress: $failed_tests failures in $total_tests tests"
+              exit 1
+            fi
+            
+            echo "✅ PASSED: $bats_file"
+            echo
+          done
+          
+          echo "🎉 SUCCESS: All $total_tests BATS test files passed!"
+          echo "✅ No failures detected - workflow continues"
 
-      - name: Run plugin unit tests
-        continue-on-error: true
+      - name: Test Coverage Report (only if all tests pass)
         run: |
-          if [ -d "src/lib/plugins" ]; then
-            echo "Running plugin unit tests..."
-            find src/lib/plugins -name "*.bats" -print0 | xargs -0 -I {} bats {} || echo "Some plugin tests failed (known BATS environment issues)"
-          fi
-
-      - name: Run command unit tests
-        continue-on-error: true
-        run: |
-          if [ -d "src/lib/commands" ]; then
-            echo "Running command unit tests..."
-            find src/lib/commands -name "*.bats" -print0 | xargs -0 -I {} bats {} || echo "Some command tests failed (known BATS environment issues)"
-          fi
-
-      - name: Calculate test coverage
-        run: |
+          echo "📊 Calculating test coverage..."
+          
           total_files=$(find src/lib -name "*.sh" | wc -l)
           tested_files=0
+          untested_files=""
           
-          for sh_file in $(find src/lib -name "*.sh"); do
+          for sh_file in $(find src/lib -name "*.sh" | sort); do
             bats_file="${sh_file%.sh}.bats"
             if [ -f "$bats_file" ]; then
               tested_files=$((tested_files + 1))
+            else
+              untested_files="$untested_files\n  - $sh_file"
             fi
           done
           
@@ -97,4 +121,16 @@ jobs:
             coverage=0
           fi
           
-          echo "Test coverage: $coverage% ($tested_files/$total_files files)"
+          echo "📈 Test Coverage: $coverage% ($tested_files/$total_files files have tests)"
+          
+          if [ -n "$untested_files" ]; then
+            echo "📋 Files without BATS tests:"
+            echo -e "$untested_files"
+          fi
+          
+          # Set minimum coverage threshold
+          if [ $coverage -lt 70 ]; then
+            echo "⚠️  WARNING: Test coverage below 70% threshold"
+          else
+            echo "✅ Test coverage meets 70% threshold"
+          fi

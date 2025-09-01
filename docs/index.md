@@ -1,149 +1,219 @@
 ---
 layout: home
-
 hero:
-  name: "gRPC Testify"
-  text: "Automate gRPC Testing"
-  tagline: "Validate endpoints, requests, and responses using simple .gctf files"
-  image: https://github.com/user-attachments/assets/d331a8db-4f4c-4296-950c-86b91ea5540a
+  name: gRPC Testify
+  text: Powerful gRPC Testing Framework
+  tagline: Test your gRPC services with ease. Simple syntax, powerful assertions, comprehensive coverage.
   actions:
     - theme: brand
       text: Get Started
-      link: /getting-started/installation
+      link: /guides/getting-started/installation
     - theme: alt
       text: View on GitHub
       link: https://github.com/gripmock/grpctestify
-    - theme: alt
-      text: Try Generator
-      link: /generator
-
 features:
-  - title: 🌊 Full gRPC Streaming Support
-    details: Test unary, client, server, and bidirectional streams with comprehensive validation
-  - title: ⚡ Parallel Execution
-    details: Run multiple tests simultaneously with --parallel N option for faster testing
-  - title: 🎯 Advanced Assertions
-    details: Powerful jq-based validation with custom plugins and flexible matching
-  - title: 📂 Recursive Processing
-    details: Automatically discover and run all .gctf files in directories and subdirectories
-  - title: 📊 JUnit XML Reports
-    details: Generate JUnit-compatible XML reports for seamless CI/CD integration
+  - icon: 🚀
+    title: Simple & Fast
+    details: Write tests in a simple .gctf format. Execute in parallel for maximum speed.
+  - icon: 🎯
+    title: Comprehensive Testing
+    details: Support for unary, streaming, authentication, and error scenarios.
+  - icon: 🔧
+    title: Plugin System
+    details: Extend functionality with custom plugins for authentication, validation, and more.
+  - icon: 📊
+    title: Rich Reporting
+    details: Detailed test reports with timing, coverage, and failure analysis.
+  - icon: 🔒
+    title: Security First
+    details: Built-in TLS support, header validation, and secure authentication testing.
+  - icon: 🛠️
+    title: Developer Friendly
+    details: VS Code extension, web generator, and comprehensive documentation.
+  - icon: 🔄
+    title: CI/CD Ready
+    details: Perfect integration with GitHub Actions, Jenkins, and other CI systems.
+  - icon: 📈
+    title: Performance Focused
+    details: Optimized for high-performance testing with minimal overhead.
 ---
 
-## 🚀 Quick Start
+## Quick Start
+
+### 1. Install
 
 ```bash
-# Download and install
 curl -LO https://github.com/gripmock/grpctestify/releases/latest/download/grpctestify.sh
 chmod +x grpctestify.sh
-
-# Run your first test
-./grpctestify.sh examples/user-management/tests/user_creation.gctf
 ```
 
-## 📋 Requirements
+### 2. Write Test
 
-- [grpcurl](https://github.com/fullstorydev/grpcurl) - gRPC client
-- [jq](https://stedolan.github.io/jq/) - JSON processor
-- Docker (for integration tests)
-
-## 📚 Documentation
-
-- **[Getting Started](./getting-started/quick-start)** - Installation and basic concepts
-- **[API Reference](./api-reference/)** - Complete feature documentation
-- **[Examples](./examples/)** - Real-world usage examples
-- **[Development](./development/)** - CI/CD workflows and development guides
-- **[Troubleshooting](./troubleshooting)** - Common issues and solutions
-
-## 🎯 What You Can Test
-
-### Unary RPC
-```php
+```gctf
 --- ADDRESS ---
 localhost:4770
 
 --- ENDPOINT ---
-user.UserService/CreateUser
+hello.HelloService/SayHello
 
 --- REQUEST ---
 {
-    "username": "john_doe",
-    "email": "john@example.com"
+  "name": "World"
 }
 
 --- RESPONSE ---
 {
-    "user": {
-        "id": "user_123",
-        "username": "john_doe",
-        "email": "john@example.com"
-    },
-    "success": true
+  "message": "Hello, World!"
 }
-
---- ASSERTS ---
-.user.id | type == "string"
-.user.username == "john_doe"
-.success == true
 ```
 
-### Client Streaming
-```php
---- ADDRESS ---
-localhost:4770
+**Note**: For unary RPC, use either `RESPONSE` OR `ASSERTS`, not both. Use `RESPONSE with_asserts` if you need both.
+
+### 3. Run Test
+
+```bash
+./grpctestify.sh test.gctf
+```
+
+## What You Can Test
+
+### 📡 gRPC Patterns
+
+gRPC supports four main communication patterns, each with different testing approaches:
+
+#### Unary RPC (Request-Response)
+Simple one-to-one communication - perfect for basic operations
+
+```gctf
+--- ENDPOINT ---
+user.UserService/GetUser
+
+--- REQUEST ---
+{ "user_id": "123" }
+
+--- RESPONSE ---
+{ "user": { "id": "123", "name": "John" } }
+```
+
+**Note**: Use either `RESPONSE` OR `ASSERTS` for unary RPC.
+
+#### Server Streaming (One-to-Many)
+Server sends multiple responses to a single request - ideal for real-time data
+
+```gctf
+--- ENDPOINT ---
+monitor.DeviceService/StreamMetrics
+
+--- REQUEST ---
+{ "device_id": "sensor_001" }
+
+--- ASSERTS ---
+.metric_type == "temperature"
+.metric_value > 0
+
+--- ASSERTS ---
+.metric_type == "humidity"
+.metric_value <= 100
+```
+
+#### Client Streaming (Many-to-One)
+Client sends multiple requests, server responds once - great for batch operations
+
+```gctf
+--- ENDPOINT ---
+upload.FileService/UploadChunks
+
+--- REQUEST ---
+{ "chunk": "data1", "sequence": 1 }
+
+--- REQUEST ---
+{ "chunk": "data2", "sequence": 2 }
+
+--- RESPONSE ---
+{ "status": "completed", "total_chunks": 2 }
+```
+
+#### Bidirectional Streaming (Many-to-Many)
+Full duplex communication - perfect for real-time applications
+
+```gctf
+--- ENDPOINT ---
+chat.ChatService/StreamMessages
+
+--- REQUEST ---
+{ "message": "Hello", "user": "alice" }
+
+--- ASSERTS ---
+.message | contains("Hello")
+.user == "alice"
+
+--- REQUEST ---
+{ "message": "Hi there!", "user": "bob" }
+
+--- ASSERTS ---
+.message | contains("Hi")
+.user == "bob"
+```
+
+### 🔒 Security & Authentication
+TLS, headers, and secure endpoints
+
+```gctf
+--- TLS ---
+ca_cert: ./certs/ca.pem
+cert: ./certs/client.pem
+
+--- REQUEST_HEADERS ---
+authorization: Bearer token
+x-api-key: your-secret-key
 
 --- ENDPOINT ---
-storage.FileService/UploadFile
-
---- REQUEST ---
-{
-    "file_id": "file_001",
-    "chunk_number": 1,
-    "data": "SGVsbG8gV29ybGQh",
-    "is_last": false
-}
-
---- REQUEST ---
-{
-    "file_id": "file_001", 
-    "chunk_number": 2,
-    "data": "RmluYWwgY2h1bms=",
-    "is_last": true
-}
-
---- RESPONSE ---
-{
-    "file_id": "file_001",
-    "total_chunks": 2,
-    "success": true
-}
-
---- ASSERTS ---
-.file_id == "file_001"
-.total_chunks == 2
-.success == true
+secure.SecureService/GetData
 ```
 
-## 🏗️ Real-World Examples
 
-Explore our comprehensive examples that demonstrate real-world gRPC testing scenarios:
 
-- **[User Management System](./examples/user-management)** - Complete user management with unary RPC
-- **[Real-time Chat](./examples/real-time-chat)** - Chat system with bidirectional streaming
+## Documentation
 
-## 🎓 Learning Path
+### 🚀 Getting Started
+- [Installation Guide](/guides/getting-started/installation)
+- [Your First Test](/guides/getting-started/first-test)
+- [Basic Concepts](/guides/getting-started/basic-concepts)
 
-1. **[Installation](./getting-started/installation)** - Get gRPC Testify running
-2. **[Quick Start](./getting-started/quick-start)** - Run your first test
-3. **[Basic Concepts](./getting-started/basic-concepts)** - Understand the fundamentals
-4. **[Examples](./examples/)** - Explore real-world scenarios
-5. **[API Reference](./api-reference/)** - Master all features
+### 🎯 Testing Patterns
+- [Testing Patterns](/guides/testing-patterns/testing-patterns)
 
-## 🔗 Community
+### 📖 Reference
+- [Command Line Reference](/guides/reference/api/command-line)
+- [Test File Format](/guides/reference/api/test-files)
 
-- **GitHub**: [gripmock/grpctestify](https://github.com/gripmock/grpctestify)
-- **Issues**: [Report bugs or request features](https://github.com/gripmock/grpctestify/issues)
+## Learning Path
 
----
+1. **Install & Setup** - Get gRPC Testify running on your system
+   → [Start Here](/guides/getting-started/installation)
 
-**Ready to test your gRPC services?** Start with our [installation guide](./getting-started/installation) or try the [online generator](./generator)!
+2. **Write First Test** - Create and run your first gRPC test
+   → [Learn More](/guides/getting-started/first-test)
+
+3. **Master Patterns** - Learn unary, streaming, and error testing
+   → [Explore](/guides/testing-patterns/testing-patterns)
+
+4. **Advanced Features** - Parallel execution, plugins, and performance
+   → [Advanced](/guides/getting-started/basic-concepts)
+
+## IDE Integration
+
+### 📝 VS Code Extension
+Enhanced .gctf editing with syntax highlighting, auto-completion, and validation
+→ [Install Extension](https://marketplace.visualstudio.com/items?itemName=gripmock.grpctestify)
+
+### 🌐 Web Generator
+Interactive web interface for creating .gctf files with templates and examples
+→ [Try Generator](/generator)
+
+## Ready to Start?
+
+Begin your gRPC testing journey. Join thousands of developers who trust gRPC Testify for their testing needs.
+
+- [🚀 Get Started Now](/guides/getting-started/installation)
+- [🐙 View on GitHub](https://github.com/gripmock/grpctestify)

@@ -36,7 +36,10 @@ flags:
     help: Show commands that would be executed without running them
     arg: false
 
-
+  - long: --sort
+    help: Sort test files by type (path, random, name, size, mtime)
+    arg: sort_type
+    default: "path"
 
   - long: --parallel
     help: Run N tests in parallel (default auto-detect CPU count)

@@ -1,276 +1,181 @@
-# Installation Guide
+# Installation
 
-This guide will help you install and set up gRPC Testify on your system.
+Multiple ways to install gRPC Testify on your system.
 
-## 📋 Prerequisites
+## 📦 Quick Install (Recommended)
 
-Before installing gRPC Testify, ensure you have the following prerequisites:
-
-### Required Dependencies
-
-- **Bash 4.0+** - The framework is built on Bash
-- **curl** - For downloading dependencies
-- **jq** - For JSON processing
-- **grpcurl** - For gRPC communication
-- **Docker** (optional) - For containerized testing
-
-### System Requirements
-
-- **Operating System**: Linux, macOS, or Windows (with WSL)
-- **Memory**: Minimum 512MB RAM
-- **Disk Space**: 100MB for installation
-- **Network**: Internet connection for downloading dependencies
-
-## 🚀 Installation Methods
-
-### Method 1: Clone from Repository
-
-The recommended way to install gRPC Testify:
+The fastest way to get started:
 
 ```bash
-git clone https://github.com/gripmock/grpctestify.git
-cd grpctestify
+curl -sSL https://raw.githubusercontent.com/gripmock/grpctestify/main/install.sh | bash
 ```
 
 This will:
-- Download the complete source code
-- Include all examples and documentation
-- Allow you to contribute back to the project
+- Download the latest version
+- Verify checksums for security
+- Install to `/usr/local/bin/grpctestify`
+- Set proper permissions
 
-### Method 2: Direct Download
+## 🔧 Manual Installation
 
-#### Step 1: Download the Repository
+### Download Release
 
 ```bash
-# Create installation directory
-mkdir -p ~/grpctestify
-cd ~/grpctestify
+# Download latest release
+wget https://github.com/gripmock/grpctestify/releases/latest/download/grpctestify.sh
 
-# Download the repository
-curl -L -o grpctestify.zip https://github.com/gripmock/grpctestify/archive/main.zip
+# Make executable
+chmod +x grpctestify.sh
 
-# Extract the archive
-unzip grpctestify.zip
-mv grpctestify-main/* .
-rm -rf grpctestify-main grpctestify.zip
+# Install globally (optional)
+sudo mv grpctestify.sh /usr/local/bin/grpctestify
 ```
 
-#### Step 2: Install Dependencies
+### From Source
 
-**On Ubuntu/Debian:**
 ```bash
+# Clone repository
+git clone https://github.com/gripmock/grpctestify.git
+cd grpctestify
+
+# Install bashly (required for building)
+gem install bashly
+
+# Generate script
+make generate
+
+# Install
+sudo cp grpctestify.sh /usr/local/bin/grpctestify
+sudo chmod +x /usr/local/bin/grpctestify
+```
+
+## 🧰 Dependencies
+
+gRPC Testify requires these tools to be installed:
+
+### Required Dependencies
+
+```bash
+# macOS (using Homebrew)
+brew install grpcurl jq
+
+# Ubuntu/Debian
 sudo apt-get update
-sudo apt-get install -y bash jq curl
+sudo apt-get install -y jq
+# For grpcurl, download from GitHub releases
+
+# CentOS/RHEL
+sudo yum install -y jq
+# For grpcurl, download from GitHub releases
 ```
 
-**On CentOS/RHEL:**
-```bash
-sudo yum install -y bash jq curl
-```
-
-**On macOS:**
-```bash
-# Install Homebrew if not already installed
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install dependencies
-brew install bash jq curl
-```
-
-#### Step 3: Install grpcurl
+### Installing grpcurl
 
 ```bash
-# Download grpcurl
-curl -L -o grpcurl.tar.gz https://github.com/fullstorydev/grpcurl/releases/latest/download/grpcurl_linux_x86_64.tar.gz
-
-# Extract and install
-tar -xzf grpcurl.tar.gz
+# Download latest grpcurl
+curl -LO https://github.com/fullstorydev/grpcurl/releases/latest/download/grpcurl_linux_x86_64.tar.gz
+tar -xzf grpcurl_linux_x86_64.tar.gz
 sudo mv grpcurl /usr/local/bin/
 sudo chmod +x /usr/local/bin/grpcurl
 ```
 
-#### Step 4: Set Up Environment
-
-```bash
-# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
-echo 'export PATH="$HOME/grpctestify:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### Method 3: Using Docker (Custom Build)
-
-If you prefer using Docker, you can build your own image:
-
-```bash
-# Build the Docker image
-docker build -t grpctestify .
-
-# Create an alias for easy usage
-echo 'alias grpctestify="docker run --rm -v $(pwd):/workspace -w /workspace grpctestify"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-## ✅ Verification
-
-After installation, verify that everything is working:
+## ✅ Verify Installation
 
 ```bash
 # Check gRPC Testify version
-./grpctestify.sh --version
+grpctestify --version
 
-# Check dependencies
-./grpctestify.sh --config
+# Verify dependencies
+grpcurl --version
+jq --version
 
-# Run a simple test
-./grpctestify.sh --help
+# Test basic functionality
+grpctestify --help
 ```
 
 Expected output:
 ```
 gRPC Testify v1.0.0
-Usage: grpctestify.sh [OPTIONS] &lt;test-file-or-directory&gt;
-
-Options:
-  --help, -h          Show this help message
-  --version, -v       Show version information
-  --verbose           Enable verbose output
-  --parallel N        Run tests in parallel (N workers)
-  --log-format FORMAT Report format (junit, json)
-  --timeout SECONDS   Global timeout for all tests
-  --no-color          Disable colored output
-  --config            Show current configuration
+grpcurl v1.8.9
+jq-1.6
 ```
 
-## 🔧 Configuration
+## 🔄 Updates
 
-### Environment Variables
-
-Set these environment variables for customization:
+Keep your installation up to date:
 
 ```bash
-# Default gRPC server address
-export GRPCTESTIFY_ADDRESS=localhost:4770
+# Auto-update to latest version
+grpctestify --update
 
-# Default timeout for tests (seconds)
-export GRPCTESTIFY_TIMEOUT=30
-
-# Default parallel workers
-export GRPCTESTIFY_PARALLEL=4
-
-# Progress display type
-export GRPCTESTIFY_PROGRESS=dots
-
-# Disable colors
-export GRPCTESTIFY_NO_COLOR=false
+# Check for updates without installing
+grpctestify --update --dry-run
 ```
 
-### Configuration File
+## 🐳 Docker Usage
 
-Create a `.grpctestifyrc` file in your project root:
+Run gRPC Testify in a container:
 
-```json
-{
-  "address": "localhost:4770",
-  "timeout": 30,
-  "parallel": 4,
-  "progress": "dots",
-  "noColor": false,
-  "verbose": false
-}
-```
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### Issue: "command not found: grpctestify"
-**Solution**: Ensure the installation directory is in your PATH:
 ```bash
-echo 'export PATH="$HOME/grpctestify:$PATH"' >> ~/.bashrc
+# Pull official image
+docker pull gripmock/grpctestify:latest
+
+# Run tests
+docker run --rm -v $(pwd):/workspace gripmock/grpctestify:latest /workspace/tests/
+
+# Interactive shell
+docker run --rm -it -v $(pwd):/workspace gripmock/grpctestify:latest bash
+```
+
+## 🚀 IDE Integration
+
+### VS Code Extension
+
+Install the official VS Code extension for enhanced .gctf editing:
+
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X)
+3. Search for "gRPCTestify"
+4. Click Install
+
+Features:
+- Syntax highlighting for .gctf files
+- Auto-completion
+- Inline validation
+- Test runner integration
+
+### Other Editors
+
+For other editors, you can use the generic JSON syntax highlighting for the REQUEST/RESPONSE sections.
+
+## 🛠️ Troubleshooting
+
+### Permission Denied
+
+```bash
+# Fix permissions
+chmod +x grpctestify
+```
+
+### Command Not Found
+
+```bash
+# Add to PATH
+echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-#### Issue: "jq: command not found"
-**Solution**: Install jq:
-```bash
-# Ubuntu/Debian
-sudo apt-get install jq
-
-# macOS
-brew install jq
-
-# CentOS/RHEL
-sudo yum install jq
-```
-
-#### Issue: "grpcurl: command not found"
-**Solution**: Install grpcurl:
-```bash
-curl -L -o grpcurl.tar.gz https://github.com/fullstorydev/grpcurl/releases/latest/download/grpcurl_linux_x86_64.tar.gz
-tar -xzf grpcurl.tar.gz
-sudo mv grpcurl /usr/local/bin/
-```
-
-#### Issue: Permission Denied
-**Solution**: Make the script executable:
-```bash
-chmod +x grpctestify.sh
-```
-
-### Getting Help
-
-If you encounter issues:
-
-1. **Check Configuration**: Run `./grpctestify.sh --config`
-2. **Enable Verbose Mode**: Run with `--verbose` flag
-3. **Check Logs**: Look for error messages in the output
-4. **Report Issues**: Create an issue on GitHub with:
-   - Operating system and version
-   - Installation method used
-   - Full error output
-   - Steps to reproduce
-
-## 🔄 Updating
-
-To update gRPC Testify to the latest version:
+### Dependency Issues
 
 ```bash
-# If you cloned the repository
-cd grpctestify
-git pull origin main
+# Check if dependencies are in PATH
+which grpcurl
+which jq
 
-# If you downloaded manually
-cd ~/grpctestify
-curl -L -o grpctestify.zip https://github.com/gripmock/grpctestify/archive/main.zip
-unzip -o grpctestify.zip
-mv grpctestify-main/* .
-rm -rf grpctestify-main grpctestify.zip
+# If missing, reinstall dependencies
+# See dependency installation section above
 ```
 
-## 🗑️ Uninstallation
+## 🔗 Next Steps
 
-To remove gRPC Testify:
-
-```bash
-# Remove installation directory
-rm -rf ~/grpctestify
-
-# Remove from PATH (edit ~/.bashrc, ~/.zshrc, etc.)
-# Remove the line: export PATH="$HOME/grpctestify:$PATH"
-
-# Remove configuration file
-rm -f ~/.grpctestifyrc
-```
-
-## 📚 Next Steps
-
-Now that you have gRPC Testify installed:
-
-1. **Learn the Basics**: Read the [Quick Start Guide](quick-start.md)
-2. **Understand Concepts**: Check out [Basic Concepts](basic-concepts.md)
-3. **Explore Examples**: Browse the [Examples](../examples/)
-4. **Write Your First Test**: Follow the [Quick Start Guide](quick-start.md)
-
----
-
-**Ready to start testing?** Head over to the [Quick Start Guide](quick-start.md) to write your first gRPC test!
+Once installed, proceed to [Your First Test](first-test.md) to write and run your first gRPC test.

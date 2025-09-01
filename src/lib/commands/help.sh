@@ -23,7 +23,7 @@ show_help() {
     echo "    Enable verbose debug output"
     echo ""
 
-    echo "  --parallel JOBS"
+    echo "  --parallel N"
     echo "    Run N tests in parallel"
     echo "    Default: 1"
     echo ""
@@ -158,15 +158,15 @@ create_default_config() {
     local config_file="$1"
     
     if [[ -z "$config_file" ]]; then
-        log error "Config file path is required"
+    tlog error "Config file path is required"
         return 1
     fi
     
     # Configuration is handled via command line flags only
     
-    if [[ -f "$config_file" ]]; then
-        log warning "Configuration file already exists: $config_file"
-        log info "Use --init-config with a different filename to create a new config file"
+        if [[ -f "$config_file" ]]; then
+	tlog debug "Configuration file already exists: $config_file"
+	tlog info "Use --init-config with a different filename to create a new config file"
         return 0
     fi
     
@@ -195,8 +195,8 @@ plugin_path=./plugins
 default_address=localhost:4770
 EOF
     
-    log success "Configuration file created: $config_file"
-    log info "You can edit this file to customize your settings"
+    tlog info "Configuration file created: $config_file"
+    tlog info "You can edit this file to customize your settings"
 }
 
 # Install shell completion
@@ -211,8 +211,8 @@ install_completion() {
             install_zsh_completion
             ;;
         *)
-            log error "Unsupported shell type: $shell_type"
-            log info "Supported shells: bash, zsh, all"
+    tlog error "Unsupported shell type: $shell_type"
+    tlog info "Supported shells: bash, zsh, all"
             return 1
             ;;
     esac
@@ -256,8 +256,8 @@ _grpctestify() {
 complete -F _grpctestify grpctestify
 EOF
     
-    log success "Bash completion installed for user"
-    log info "Add 'source ~/.local/share/bash-completion/completions/grpctestify' to your ~/.bashrc"
+    tlog info "Bash completion installed for user"
+    tlog info "Add 'source ~/.local/share/bash-completion/completions/grpctestify' to your ~/.bashrc"
 }
 
 # Install zsh completion
@@ -301,6 +301,10 @@ _grpctestify() {
 _grpctestify "$@"
 EOF
     
-    log success "Zsh completion installed to fpath"
-    log info "Add '/Users/babichev/.local/share/zsh/site-functions' to your fpath in ~/.zshrc"
+    tlog info "Zsh completion installed to fpath"
+    tlog info "Add '/Users/babichev/.local/share/zsh/site-functions' to your fpath in ~/.zshrc"
 }
+
+# Export functions
+export -f show_help show_version show_configuration create_default_config
+export -f install_bash_completion install_zsh_completion

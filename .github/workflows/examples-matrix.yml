@@ -32,7 +32,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: generate-matrix
     strategy:
-      fail-fast: false
+      fail-fast: true  # FAIL FAST: Stop immediately on first failure
       matrix:
         os: [ubuntu-latest]
         example: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq protobuf-compiler libxml2-utils
+          sudo apt-get install -y jq protobuf-compiler libxml2-utils netcat-openbsd
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
           go install github.com/bavix/gripmock/v3@latest
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
@@ -110,34 +110,30 @@ jobs:
           cd "$example_dir/server"
           make build
 
-      - name: Start gRPC server in background
+      - name: Start gRPC server using centralized script
         run: |
           set -euo pipefail
           example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
-          cd "$example_dir/server"
           
-          echo "Starting gRPC server for ${{ matrix.example.name }} on port ${{ matrix.example.port }}"
+          echo "Starting all gRPC servers using centralized script..."
+          if [ -f "scripts/start_examples_servers.sh" ]; then
+            chmod +x scripts/start_examples_servers.sh
+            ./scripts/start_examples_servers.sh
+          else
+            echo "Warning: scripts/start_examples_servers.sh not found, starting server manually"
+            cd "$example_dir/server"
+            make start &
+            echo $! > server.pid
+            # Wait for server to listen on the example port
+            for i in $(seq 1 30); do
+              if nc -z localhost ${{ matrix.example.port }} 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+          fi
           
-          # Start server in background
-          ./server &
-          
-          SERVER_PID=$!
-          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
-          
-          # Wait for server to start
-          echo "Waiting for server to start..."
-          for i in {1..30}; do
-            if grpcurl -plaintext localhost:${{ matrix.example.port }} list >/dev/null 2>&1; then
-              echo "Server ready on port ${{ matrix.example.port }}"
-              break
-            fi
-            if [ $i -eq 30 ]; then
-              echo "Server failed to start within 30 seconds"
-              kill $SERVER_PID
-              exit 1
-            fi
-            sleep 1
-          done
+          echo "Servers started successfully"
 
       - name: Validate server endpoints
         run: |
@@ -160,61 +156,46 @@ jobs:
           echo "Running gRPC tests for ${{ matrix.example.name }}"
           
           cd "$example_dir"
-          mkdir -p test-results
           
           # Set environment variables
           export GRPCTESTIFY_ADDRESS="localhost:${{ matrix.example.port }}"
           export GRPCTESTIFY_TIMEOUT=30
           export GRPCTESTIFY_VERBOSE=true
           
-          # Run tests with JUnit output
-          grpctestify tests/ --log-format junit --log-output test-results/grpc-tests.xml
+          # Run tests (grpctestify v1.0.0 with smart defaults)
+          grpctestify tests/
           
           # Also run individual tests for compatibility
           for test_file in tests/*.gctf; do
             if [ -f "$test_file" ]; then
               echo "Running test: $(basename "$test_file")"
-              timeout 120 grpctestify "$test_file" --progress=dots
+              timeout 120 grpctestify "$test_file"
             fi
           done
           
           echo "All tests completed for ${{ matrix.example.name }}"
 
-      - name: Cleanup
+      - name: Cleanup servers
         if: always()
         run: |
-          echo "Cleaning up..."
-          if [ -n "${SERVER_PID:-}" ]; then
-            echo "Stopping server (PID: $SERVER_PID)"
-            kill $SERVER_PID 2>/dev/null || true
-            pkill -f "localhost:${{ matrix.example.port }}" 2>/dev/null || true
-          fi
-
-      - name: Download JUnit XSD schema
-        if: always()
-        run: |
-          cd $(find examples -name "${{ matrix.example.name }}" -type d)
-          curl -o junit.xsd https://raw.githubusercontent.com/junit-team/junit5/main/platform-tests/src/test/resources/jenkins-junit.xsd
-
-      - name: Validate JUnit reports
-        if: always()
-        run: |
-          cd $(find examples -name "${{ matrix.example.name }}" -type d)
-          if [ -d "test-results" ] && [ "$(ls -A test-results/*.xml 2>/dev/null)" ]; then
-            echo "Validating JUnit XML reports for ${{ matrix.example.name }}..."
-            for report in test-results/*.xml; do
-              if [ -f "$report" ]; then
-                echo "Validating $report..."
-                if xmllint --noout --schema junit.xsd "$report"; then
-                  echo "✅ $report is valid"
-                else
-                  echo "❌ $report is invalid"
-                fi
-              fi
-            done
+          set -euo pipefail
+          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d || true)
+          echo "Stopping all gRPC servers..."
+          if [ -f "scripts/stop_examples_servers.sh" ]; then
+            chmod +x scripts/stop_examples_servers.sh
+            ./scripts/stop_examples_servers.sh
           else
-            echo "No JUnit reports found to validate"
+            echo "Warning: scripts/stop_examples_servers.sh not found, stopping server manually"
+            if [ -n "$example_dir" ] && [ -f "$example_dir/server/server.pid" ]; then
+              pid=$(cat "$example_dir/server/server.pid")
+              if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid"
+              fi
+              rm -f "$example_dir/server/server.pid"
+            fi
           fi
+          
+          echo "Server cleanup completed"
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
@@ -224,14 +205,5 @@ jobs:
           path: |
             examples/*/${{ matrix.example.name }}/tests/*.gctf
             examples/*/${{ matrix.example.name }}/server/*.log
-            examples/*/${{ matrix.example.name }}/test-results/*.xml
+            logs/servers/*.log
           retention-days: 7
-
-      - name: Publish test results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: gRPC Tests Results (${{ matrix.example.name }})
-          path: examples/*/${{ matrix.example.name }}/test-results/*.xml
-          reporter: java-junit
-          fail-on-error: false

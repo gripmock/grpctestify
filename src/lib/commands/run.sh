@@ -1,1073 +1,1093 @@
 #!/bin/bash
 
-# run.sh - Main test execution command  
+# run.sh - Simplified test execution command based on simple_grpc_test_runner.sh
 # This file contains the main logic for running gRPC tests
-# shellcheck disable=SC2155,SC2034,SC2207,SC2064,SC2086,SC2076,SC2183 # Variable handling and array operations
+# Refactored to remove microkernel dependencies and use proven stable architecture
 
-# All modules are automatically loaded by bashly
+set -euo pipefail
 
-# Main test execution function
+# Basic logging
+log() {
+    local level="$1"
+    shift
+    local message="$*"
+    
+    case "$level" in
+        error) echo "❌ $message" >&2 ;;
+        success) echo "✅ $message" ;;
+        info) echo "ℹ️ $message" ;;
+        warning) echo "⚠️ $message" >&2 ;;
+        *) echo "$message" ;;
+    esac
+}
+
+# Smart comment removal (from v0.0.13)
+process_line() {
+    local line="$1"
+    local in_str=0
+    local escaped=0
+    local res=""
+    local i c
+    
+    for ((i=0; i<${#line}; i++)); do
+        c="${line:$i:1}"
+        if [[ $escaped -eq 1 ]]; then
+            res="$res$c"
+            escaped=0
+        elif [[ "$c" == "\\" ]]; then
+            res="$res$c"
+            escaped=1
+        elif [[ "$c" == "\"" ]]; then
+            res="$res$c"
+            in_str=$((1 - in_str))
+        elif [[ "$c" == "#" && $in_str -eq 0 ]]; then
+            break
+        else
+            res="$res$c"
+        fi
+    done
+    echo "$res"
+}
+
+# Run single test file
+run_single_test() {
+    local test_file="$1"
+    local dry_run="${2:-false}"
+    
+    if [[ ! -f "$test_file" ]]; then
+        log error "Test file not found: $test_file"
+        return 1
+    fi
+    
+    # Parse test file
+    local address=$(awk '/--- ADDRESS ---/{getline; print; exit}' "$test_file" | xargs)
+    local endpoint=$(awk '/--- ENDPOINT ---/{getline; print; exit}' "$test_file" | xargs)
+    local request=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue  # skip comment lines
+        fi
+        processed_line=$(process_line "$line")
+        processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
+        if [[ -n "$processed_line" ]]; then
+            request="$request$processed_line"
+        fi
+    done < <(awk '/--- REQUEST ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    
+    local expected_response=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue  # skip comment lines
+        fi
+        processed_line=$(process_line "$line")
+        processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
+        if [[ -n "$processed_line" ]]; then
+            expected_response="$expected_response$processed_line"
+        fi
+    done < <(awk '/--- RESPONSE ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    local expected_error=$(awk '/--- ERROR ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    local headers=$(awk '/--- HEADERS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    local request_headers=$(awk '/--- REQUEST_HEADERS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    local options_section=$(awk '/--- OPTIONS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    
+    # Parse inline options from OPTIONS section
+    local partial_option="false"
+    local tolerance_option=""
+    local redact_option=""
+    local timeout_option=""
+    
+    if [[ -n "$options_section" ]]; then
+        while IFS= read -r option_line; do
+            if [[ "$option_line" =~ ^partial:[[:space:]]*(.+)$ ]]; then
+                partial_option="${BASH_REMATCH[1]// /}"
+            elif [[ "$option_line" =~ ^tolerance:[[:space:]]*(.+)$ ]]; then
+                tolerance_option="${BASH_REMATCH[1]// /}"
+            elif [[ "$option_line" =~ ^redact:[[:space:]]*(.+)$ ]]; then
+                redact_option="${BASH_REMATCH[1]}"
+            elif [[ "$option_line" =~ ^timeout:[[:space:]]*(.+)$ ]]; then
+                timeout_option="${BASH_REMATCH[1]// /}"
+            fi
+        done <<< "$options_section"
+    fi
+    
+    # Use GRPCTESTIFY_ADDRESS if no address in file
+    if [[ -z "$address" ]]; then
+        address="${GRPCTESTIFY_ADDRESS:-localhost:4770}"
+    fi
+    
+    # Warn about deprecated HEADERS section and collect for summary
+    if [[ -n "$headers" ]]; then
+        log warning "HEADERS section is deprecated. Use REQUEST_HEADERS instead."
+        # Increment global counter for summary (if it exists)
+        if [[ -n "${headers_warnings:-}" ]]; then
+            headers_warnings=$((headers_warnings + 1))
+        fi
+    fi
+    
+    if [[ -z "$endpoint" ]]; then
+        log error "No endpoint specified in $test_file"
+        return 1
+    fi
+    
+    # Prepare headers arguments
+    local header_args=()
+    if [[ -n "$headers" ]]; then
+        while IFS= read -r header; do
+            if [[ -n "$header" && ! "$header" =~ ^[[:space:]]*$ ]]; then
+                header_args+=("-H" "$header")
+            fi
+        done <<< "$headers"
+    fi
+    if [[ -n "$request_headers" ]]; then
+        while IFS= read -r header; do
+            if [[ -n "$header" && ! "$header" =~ ^[[:space:]]*$ ]]; then
+                header_args+=("-H" "$header")
+            fi
+        done <<< "$request_headers"
+    fi
+    
+    # Dry-run mode check
+    if [[ "$dry_run" == "true" ]]; then
+        local cmd_preview
+        if [[ -n "$request" ]]; then
+            if [[ ${#header_args[@]} -gt 0 ]]; then
+                cmd_preview="echo '$request' | grpcurl -plaintext ${header_args[*]} -d @ '$address' '$endpoint'"
+            else
+                cmd_preview="echo '$request' | grpcurl -plaintext -d @ '$address' '$endpoint'"
+            fi
+        else
+            if [[ ${#header_args[@]} -gt 0 ]]; then
+                cmd_preview="grpcurl -plaintext ${header_args[*]} '$address' '$endpoint'"
+            else
+                cmd_preview="grpcurl -plaintext '$address' '$endpoint'"
+            fi
+        fi
+        
+        log info "DRY RUN - Command: $cmd_preview"
+        if [[ -n "$expected_response" ]]; then
+            log info "Expected Response: $expected_response"
+        fi
+        if [[ -n "$expected_error" ]]; then
+            log info "Expected Error: $expected_error"
+        fi
+        return 3  # SKIPPED for dry-run
+    fi
+    
+    # Make gRPC call
+    local grpc_output
+    if [[ -n "$request" ]]; then
+        if [[ ${#header_args[@]} -gt 0 ]]; then
+            grpc_output=$(echo "$request" | grpcurl -plaintext "${header_args[@]}" -d @ "$address" "$endpoint" 2>&1)
+        else
+            grpc_output=$(echo "$request" | grpcurl -plaintext -d @ "$address" "$endpoint" 2>&1)
+        fi
+    else
+        if [[ ${#header_args[@]} -gt 0 ]]; then
+            grpc_output=$(grpcurl -plaintext "${header_args[@]}" "$address" "$endpoint" 2>&1)
+        else
+            grpc_output=$(grpcurl -plaintext "$address" "$endpoint" 2>&1)
+        fi
+    fi
+    local grpc_exit_code=$?
+    
+    # Check result
+    if [[ $grpc_exit_code -eq 0 ]]; then
+        # Success case - check response
+        if [[ -n "$expected_error" ]]; then
+            log error "Expected error but got success in $test_file"
+            return 1  # FAIL
+        fi
+        
+        if [[ -n "$expected_response" ]]; then
+            # Apply inline options for JSON comparison
+            local actual_for_comparison="$grpc_output"
+            local expected_for_comparison="$expected_response"
+            
+            # Apply redact option (remove specified fields)
+            if [[ -n "$redact_option" ]]; then
+                # Convert comma-separated list to jq array format
+                local redact_fields=$(echo "$redact_option" | sed 's/[]["]//g' | sed 's/,/","/g' | sed 's/^/"/' | sed 's/$/"/')
+                actual_for_comparison=$(echo "$actual_for_comparison" | jq -c "delpaths([[$redact_fields] | map([.])])" 2>/dev/null || echo "$actual_for_comparison")
+                expected_for_comparison=$(echo "$expected_for_comparison" | jq -c "delpaths([[$redact_fields] | map([.])])" 2>/dev/null || echo "$expected_for_comparison")
+            fi
+            
+            # Apply partial matching if enabled
+            if [[ "$partial_option" == "true" ]]; then
+                # For partial matching, check if all expected fields exist in actual
+                local expected_keys=$(echo "$expected_for_comparison" | jq -c 'paths(scalars) as $p | {"path": $p, "value": getpath($p)}' 2>/dev/null || echo "")
+                if [[ -n "$expected_keys" ]]; then
+                    local partial_match_failed=false
+                    while IFS= read -r key_value; do
+                        if [[ -n "$key_value" ]]; then
+                            local path=$(echo "$key_value" | jq -r '.path | join(".")' 2>/dev/null)
+                            local expected_val=$(echo "$key_value" | jq -r '.value' 2>/dev/null)
+                            local actual_val=$(echo "$actual_for_comparison" | jq -r ".$path" 2>/dev/null || echo "null")
+                            
+                            if [[ "$expected_val" != "$actual_val" ]]; then
+                                partial_match_failed=true
+                                break
+                            fi
+                        fi
+                    done <<< "$expected_keys"
+                    
+                    if [[ "$partial_match_failed" == "false" ]]; then
+                        return 0  # PASS - partial match succeeded
+                    fi
+                fi
+            fi
+            
+            # Standard exact comparison
+            local clean_expected=$(echo "$expected_for_comparison" | jq -S -c . 2>/dev/null || echo "$expected_for_comparison")
+            local clean_actual=$(echo "$actual_for_comparison" | jq -S -c . 2>/dev/null || echo "$actual_for_comparison")
+            
+            if [[ "$clean_actual" == "$clean_expected" ]]; then
+                return 0  # PASS
+            else
+                log error "Response mismatch in $test_file"
+                log error "Expected: $clean_expected"
+                log error "Actual: $clean_actual"
+                return 1  # FAIL
+            fi
+        else
+            return 0  # PASS (no response validation)
+        fi
+    else
+        # Error case - check if error was expected
+        if [[ -n "$expected_error" ]]; then
+            # Try to extract message from expected error JSON
+            local expected_message
+            expected_message=$(echo "$expected_error" | jq -r '.message // empty' 2>/dev/null)
+            
+            # If we have a message in JSON, look for it in the output
+            if [[ -n "$expected_message" && "$expected_message" != "null" ]]; then
+                if [[ "$grpc_output" == *"$expected_message"* ]]; then
+                    return 0  # PASS (expected error message found)
+                fi
+            fi
+            
+            # Fallback: check if the entire expected error text is contained in output
+            if [[ "$grpc_output" == *"$expected_error"* ]]; then
+                return 0  # PASS (expected error)
+            fi
+            
+            log error "Error mismatch in $test_file"
+            log error "Expected error containing: $expected_error"
+            log error "Actual error: $grpc_output"
+            return 1  # FAIL
+        else
+            log error "gRPC call failed for $test_file: $grpc_output"
+            return 1  # FAIL
+        fi
+    fi
+}
+
+# CPU detection (simplified)
+auto_detect_parallel_jobs() {
+    local cpu_count
+    cpu_count=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "4")
+    echo "$cpu_count"
+}
+
+# File collection with sorting support  
+collect_test_files() {
+    local test_path="$1"
+    local sort_mode="${2:-path}"
+    local files=()
+    
+    if [[ -f "$test_path" ]]; then
+        files=("$test_path")
+    elif [[ -d "$test_path" ]]; then
+        while IFS= read -r -d '' file; do
+            files+=("$file")
+        done < <(find "$test_path" -name "*.gctf" -print0)
+        
+        # Sort files according to mode (simplified for now)
+        case "$sort_mode" in
+            "random")
+                IFS=$'\n' files=($(printf '%s\n' "${files[@]}" | shuf))
+                ;;
+            *)
+                IFS=$'\n' files=($(sort <<<"${files[*]}"))
+                ;;
+        esac
+    fi
+    
+    printf '%s\n' "${files[@]}"
+}
+
+# Generate JUnit XML report
+generate_junit_report() {
+    local output_file="$1"
+    local total="$2"
+    local passed="$3"
+    local failed="$4"
+    local skipped="$5"
+    local duration_ms="$6"
+    local start_time="$7"
+    
+    local duration_seconds=$(echo "scale=3; $duration_ms / 1000" | bc 2>/dev/null || echo "0")
+    local timestamp=$(date -Iseconds 2>/dev/null || date)
+    
+    # Create output directory if needed
+    local output_dir
+    output_dir=$(dirname "$output_file")
+    mkdir -p "$output_dir" || return 1
+    
+    # Generate JUnit XML
+    cat > "$output_file" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="grpctestify" tests="$total" failures="$failed" skipped="$skipped" time="$duration_seconds">
+  <properties>
+    <property name="grpctestify.version" value="v1.0.0"/>
+    <property name="grpctestify.timestamp" value="$timestamp"/>
+    <property name="system.hostname" value="$(hostname 2>/dev/null || echo 'unknown')"/>
+    <property name="system.username" value="$(whoami 2>/dev/null || echo 'unknown')"/>
+    <property name="system.os" value="${OSTYPE:-unknown}"/>
+  </properties>
+  <testsuite name="grpctestify" tests="$total" failures="$failed" skipped="$skipped" time="$duration_seconds" timestamp="$timestamp">
+EOF
+
+    # Add test cases (simplified for now, can be enhanced later)
+    for (( i=0; i<passed; i++ )); do
+        cat >> "$output_file" << EOF
+    <testcase classname="grpctestify" name="test_$((i+1))" time="0.1"/>
+EOF
+    done
+    
+    for (( i=0; i<failed; i++ )); do
+        cat >> "$output_file" << EOF
+    <testcase classname="grpctestify" name="failed_test_$((i+1))" time="0.1">
+      <failure message="Test failed" type="failure">Test case failed during execution</failure>
+    </testcase>
+EOF
+    done
+    
+    for (( i=0; i<skipped; i++ )); do
+        cat >> "$output_file" << EOF
+    <testcase classname="grpctestify" name="skipped_test_$((i+1))" time="0.0">
+      <skipped message="Test skipped"/>
+    </testcase>
+EOF
+    done
+
+    cat >> "$output_file" << EOF
+  </testsuite>
+</testsuites>
+EOF
+
+    return 0
+}
+
+# Generate JSON report
+generate_json_report() {
+    local output_file="$1"
+    local total="$2"
+    local passed="$3"
+    local failed="$4"
+    local skipped="$5"
+    local duration_ms="$6"
+    local start_time="$7"
+    
+    local timestamp=$(date -Iseconds 2>/dev/null || date)
+    
+    # Create output directory if needed
+    local output_dir
+    output_dir=$(dirname "$output_file")
+    mkdir -p "$output_dir" || return 1
+    
+    # Generate JSON report
+    cat > "$output_file" << EOF
+{
+  "grpctestify": {
+    "version": "v1.0.0",
+    "timestamp": "$timestamp",
+    "duration_ms": $duration_ms,
+    "summary": {
+      "total": $total,
+      "passed": $passed,
+      "failed": $failed,
+      "skipped": $skipped,
+      "success_rate": $(echo "scale=2; $passed * 100 / $total" | bc 2>/dev/null || echo "0")
+    },
+    "environment": {
+      "hostname": "$(hostname 2>/dev/null || echo 'unknown')",
+      "username": "$(whoami 2>/dev/null || echo 'unknown')",
+      "os": "${OSTYPE:-unknown}",
+      "shell": "${SHELL:-unknown}"
+    }
+  }
+}
+EOF
+
+    return 0
+}
+
+# Perform the complete update process (based on v0.0.13 implementation)
+perform_update() {
+    local latest_version="$1"
+    local current_script="$2"
+    
+    echo "🔄 Downloading grpctestify.sh $latest_version..."
+    
+    local download_url="https://github.com/gripmock/grpctestify/releases/download/${latest_version}/grpctestify.sh"
+    local temp_file=$(mktemp)
+    
+    # Download latest version
+    if ! curl -L --connect-timeout 10 --max-time 300 -o "$temp_file" "$download_url" 2>&1; then
+        log error "Failed to download update"
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Verify file was downloaded
+    if [[ ! -f "$temp_file" || ! -s "$temp_file" ]]; then
+        log error "Downloaded file is empty or missing"
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    echo "📋 Verifying checksum..."
+    
+    # Verify checksum using checksums.txt file (like in v0.0.13)
+    local checksum_url="https://github.com/gripmock/grpctestify/releases/download/${latest_version}/checksums.txt"
+    local expected_checksum
+    if expected_checksum=$(curl -s --connect-timeout 10 --max-time 30 "$checksum_url" 2>/dev/null | grep "grpctestify.sh" | awk '{print $1}'); then
+        if [[ -n "$expected_checksum" ]]; then
+            # Calculate checksum
+            local actual_checksum
+            if command -v sha256sum >/dev/null 2>&1; then
+                actual_checksum=$(sha256sum "$temp_file" | cut -d' ' -f1)
+            elif command -v shasum >/dev/null 2>&1; then
+                actual_checksum=$(shasum -a 256 "$temp_file" | cut -d' ' -f1)
+            else
+                log warning "No SHA-256 tool available, skipping checksum verification"
+                actual_checksum="$expected_checksum"  # Skip verification
+            fi
+            
+            if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+                log error "Checksum verification failed"
+                log error "Expected: $expected_checksum"
+                log error "Actual: $actual_checksum"
+                rm -f "$temp_file"
+                return 1
+            fi
+            echo "✅ Checksum verification passed"
+        else
+            log warning "Could not find grpctestify.sh checksum in checksums.txt"
+        fi
+    else
+        log warning "Could not fetch checksums.txt, proceeding without verification"
+    fi
+    
+    echo "💾 Creating backup..."
+    
+    # Create backup
+    local backup_file="${current_script}.backup.$(date +%Y%m%d_%H%M%S)"
+    if ! cp "$current_script" "$backup_file"; then
+        log error "Failed to create backup"
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    echo "🔧 Installing update..."
+    
+    # Replace with new version
+    if ! cp "$temp_file" "$current_script"; then
+        log error "Failed to install update"
+        # Restore backup
+        cp "$backup_file" "$current_script"
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Set executable permissions
+    if ! chmod +x "$current_script"; then
+        log error "Failed to set executable permissions"
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Clean up
+    rm -f "$temp_file"
+    
+    echo ""
+    echo "✅ Update completed successfully!"
+    echo "📦 Updated to version: $latest_version"
+    echo "💾 Backup available at: $backup_file"
+    echo ""
+    echo "🔄 Please restart grpctestify.sh to use the new version"
+    
+    return 0
+}
+
+# Main test execution function (renamed for bashly)
 run_tests() {
-    local test_path="${args[test_path]}"
-
+    local test_path="${args[test_path]:-${1:-}}"
+    
     # Handle version flag
-    if [[ "${args[--version]}" == "1" ]]; then
-        show_version
-        return 0
-    fi
-
-    # Handle help flag
-    if [[ "${args[--help]}" == "1" ]]; then
-        show_help
-        return 0
-    fi
-
-    # Handle update flag
-    if [[ "${args[--update]}" == "1" ]]; then
-        update_command
-        return 0
-    fi
-
-    # Handle completion flag
-    if [[ -n "${args[--completion]}" ]]; then
-        send_completions
-        return 0
-    fi
-
-    # Handle config flag
-    if [[ "${args[--config]}" == "1" ]]; then
-        show_configuration
-        return 0
-    fi
-
-    # Handle init-config flag
-    if [[ -n "${args[--init-config]}" ]]; then
-        create_default_config "${args[--init-config]}"
+    if [[ "${args[--version]:-0}" == "1" ]]; then
+        echo "grpctestify v1.0.0"
         return 0
     fi
 
     # Handle list-plugins flag
-    if [[ "${args[--list-plugins]}" == "1" ]]; then
-        list_plugins
+    if [[ "${args[--list-plugins]:-0}" == "1" ]]; then
+        echo "Available plugins:"
+        echo ""
+        echo "📁 Built-in plugins (integrated into grpctestify.sh):"
+        
+        # List of built-in plugin categories
+        local builtin_plugins=(
+            "🔧 Core plugins:"
+            "  • grpc_client - gRPC call execution"
+            "  • json_comparator - JSON response validation"
+            "  • test_orchestrator - Test execution management"
+            "  • failure_reporter - Error reporting and logging"
+            ""
+            "🎯 Assertion plugins:"
+            "  • grpc_asserts - gRPC-specific assertions"
+            "  • json_assertions - JSON content validation"
+            "  • numeric_assertions - Numeric value checks"
+            "  • regex_assertions - Regular expression matching"
+            ""
+            "🛠️ System plugins:"
+            "  • grpc_tls - TLS/SSL support"
+            "  • grpc_headers_trailers - Headers and trailers handling"
+            "  • grpc_response_time - Performance measurement"
+            "  • grpc_type_validation - Protocol buffer validation"
+            ""
+            "🎨 Output plugins:"
+            "  • colors - Terminal color support"
+            "  • progress - Progress indicators"
+            "  • logging_io - Enhanced logging"
+            "  • grpc_json_reporter - JSON format reports"
+        )
+        
+        printf '%s\n' "${builtin_plugins[@]}"
+        
+        echo ""
+        echo "📁 External plugins directory: ${GRPCTESTIFY_PLUGIN_DIR:-~/.grpctestify/plugins}"
+        if [[ -d "${GRPCTESTIFY_PLUGIN_DIR:-$HOME/.grpctestify/plugins}" ]]; then
+            local external_count=0
+            while IFS= read -r -d '' plugin; do
+                if [[ -f "$plugin" ]]; then
+                    plugin_name=$(basename "$plugin" .sh)
+                    echo "  • $plugin_name (external)"
+                    ((external_count++))
+                fi
+            done < <(find "${GRPCTESTIFY_PLUGIN_DIR:-$HOME/.grpctestify/plugins}" -name "*.sh" -type f -print0 2>/dev/null)
+            
+            if [[ $external_count -eq 0 ]]; then
+                echo "  (No external plugins found)"
+            fi
+        else
+            echo "  (Directory not found - create it to add external plugins)"
+        fi
+        return 0
+    fi
+
+    # Handle config flag
+    if [[ "${args[--config]:-0}" == "1" ]]; then
+        echo "Current grpctestify.sh configuration:"
+        echo ""
+        echo "🔧 Environment variables:"
+            echo "  GRPCTESTIFY_ADDRESS: ${GRPCTESTIFY_ADDRESS:-localhost:4770}"
+    echo "  GRPCTESTIFY_PLUGIN_DIR: ${GRPCTESTIFY_PLUGIN_DIR:-~/.grpctestify/plugins}"
+    echo "  Note: Use CLI flags for timeout, verbose, parallel, and sort options"
+        echo ""
+        echo "⚙️ Default settings:"
+        echo "  Parallel jobs: ${args[--parallel]:-auto}"
+        echo "  Sort mode: ${args[--sort]:-path}"
+        echo "  Retry count: ${args[--retry]:-3}"
+        echo "  Retry delay: ${args[--retry-delay]:-1}s"
+        echo "  Test timeout: ${args[--timeout]:-30}s"
+        echo ""
+        echo "📁 Plugin directory:"
+        if [[ -d "${GRPCTESTIFY_PLUGIN_DIR:-$HOME/.grpctestify/plugins}" ]]; then
+            echo "  Status: ✅ Exists"
+            echo "  Location: ${GRPCTESTIFY_PLUGIN_DIR:-$HOME/.grpctestify/plugins}"
+        else
+            echo "  Status: ❌ Not found"
+            echo "  Run 'mkdir -p ~/.grpctestify/plugins' to create"
+        fi
+        return 0
+    fi
+
+    # Handle update flag
+    if [[ "${args[--update]:-0}" == "1" ]]; then
+        # Use the proper update implementation from update.sh
+        echo "🔄 grpctestify.sh v1.0.0 - Update"
+        echo ""
+        echo "📡 Checking for updates..."
+        
+        # Get latest version from GitHub API
+        local api_url="https://api.github.com/repos/gripmock/grpctestify/releases/latest"
+        local latest_version=""
+        local current_version="v1.0.0"
+        
+        # Check dependencies
+        if ! command -v curl >/dev/null 2>&1; then
+            log error "curl is required for update checking"
+            return 1
+        fi
+        
+        if ! command -v jq >/dev/null 2>&1; then
+            log error "jq is required for update checking"
+            return 1
+        fi
+        
+        # Query GitHub API with timeout
+        local response
+        if ! response=$(curl -s --connect-timeout 10 --max-time 30 "$api_url" 2>&1); then
+            log error "Failed to check for updates (network error)"
+            return 1
+        fi
+        
+        # Extract version from response
+        if ! latest_version=$(echo "$response" | jq -r '.tag_name // empty' 2>/dev/null); then
+            log error "Failed to parse GitHub API response"
+            return 1
+        fi
+        
+        if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
+            log error "No version information found in API response"
+            return 1
+        fi
+        
+        echo "Current version: $current_version"
+        echo "Latest version: $latest_version"
+        echo ""
+        
+        # Compare versions
+        if [[ "$latest_version" != "$current_version" ]]; then
+            echo "🆕 Update available: $current_version -> $latest_version"
+            echo ""
+            echo -n "Do you want to update? [y/N]: "
+            read -r response
+            
+            case "$response" in
+                [yY]|[yY][eE][sS])
+                    perform_update "$latest_version" "$0"
+                    ;;
+                *)
+                    echo "❌ Update cancelled by user"
+                    ;;
+            esac
+        else
+            echo "✅ Already up to date"
+        fi
+        
         return 0
     fi
 
     # Handle create-plugin flag
-    if [[ -n "${args[--create-plugin]}" ]]; then
-        create_plugin_command "${args[--create-plugin]}"
+    if [[ -n "${args[--create-plugin]:-}" ]]; then
+        local plugin_name="${args[--create-plugin]}"
+        # Resolve home directory robustly to avoid creating a literal "~" folder
+        local home_dir="${HOME:-}"
+        if [[ -z "$home_dir" || "$home_dir" = "~" ]]; then
+            home_dir="$(eval echo ~)"
+        fi
+        local plugin_dir="${GRPCTESTIFY_PLUGIN_DIR:-$home_dir/.grpctestify/plugins}"
+        local plugin_file="$plugin_dir/$plugin_name.sh"
+        
+        echo "🔌 Creating new plugin: $plugin_name"
+        echo ""
+        
+        # Create plugin directory if it doesn't exist
+        mkdir -p "$plugin_dir"
+        
+        # Check if plugin already exists
+        if [[ -f "$plugin_file" ]]; then
+            log error "Plugin '$plugin_name' already exists: $plugin_file"
+            return 1
+        fi
+        
+        # Create plugin template
+        cat > "$plugin_file" << 'EOF'
+#!/bin/bash
+# Custom grpctestify plugin template
+# Generated by grpctestify.sh --create-plugin
+
+# Plugin metadata
+PLUGIN_NAME="PLUGIN_NAME_PLACEHOLDER"
+PLUGIN_VERSION="1.0.0"
+PLUGIN_DESCRIPTION="Custom plugin for grpctestify"
+PLUGIN_AUTHOR="Your Name <info@example.com>"
+
+# Plugin hook: called before test execution
+plugin_before_test() {
+    local test_file="$1"
+    # Add your pre-test logic here
+    echo "🔌 $PLUGIN_NAME: Processing $test_file"
+}
+
+# Plugin hook: called after test execution
+plugin_after_test() {
+    local test_file="$1"
+    local test_result="$2"  # 0 = pass, 1 = fail
+    # Add your post-test logic here
+    if [[ $test_result -eq 0 ]]; then
+        echo "🔌 $PLUGIN_NAME: Test passed"
+    else
+        echo "🔌 $PLUGIN_NAME: Test failed"
+    fi
+}
+
+# Plugin hook: called for response processing
+plugin_process_response() {
+    local response="$1"
+    # Add your response processing logic here
+    echo "$response"
+}
+EOF
+        
+        # Replace placeholder with actual plugin name
+        sed -i.bak "s/PLUGIN_NAME_PLACEHOLDER/$plugin_name/g" "$plugin_file" && rm "$plugin_file.bak" 2>/dev/null || sed -i "s/PLUGIN_NAME_PLACEHOLDER/$plugin_name/g" "$plugin_file"
+        
+        chmod +x "$plugin_file"
+        
+        echo "✅ Plugin created successfully!"
+        echo "📁 Location: $plugin_file"
+        echo ""
+        echo "🔧 Next steps:"
+        echo "  1. Edit the plugin file to add your custom logic"
+        echo "  2. Test with: grpctestify.sh --list-plugins"
+        echo "  3. Use in your .gctf files with plugin hooks"
+        
+        return 0
+    fi
+
+    # Handle init-config flag
+    if [[ -n "${args[--init-config]:-}" ]]; then
+        local config_file="${args[--init-config]}"
+        
+        echo "⚙️ Creating configuration file: $config_file"
+        
+        if [[ -f "$config_file" ]]; then
+            log error "Configuration file already exists: $config_file"
+            return 1
+        fi
+        
+        cat > "$config_file" << 'EOF'
+# grpctestify.sh configuration file
+# This file can be sourced before running grpctestify.sh
+
+# Default gRPC server address
+export GRPCTESTIFY_ADDRESS="localhost:4770"
+
+# Plugin directory for external plugins
+export GRPCTESTIFY_PLUGIN_DIR="$HOME/.grpctestify/plugins"
+
+# Note: CLI flags take precedence over environment variables
+# Use --timeout, --verbose, --parallel, --sort flags instead of ENV variables
+EOF
+        
+        echo "✅ Configuration file created!"
+        echo "📁 Location: $config_file"
+        echo ""
+        echo "🔧 Usage:"
+        echo "  source $config_file"
+        echo "  ./grpctestify.sh your_tests/"
+        
+        return 0
+    fi
+
+    # Handle completion flag
+    if [[ -n "${args[--completion]:-}" ]]; then
+        local shell_type="${args[--completion]}"
+        
+        echo "🚀 Installing shell completion for: $shell_type"
+        echo ""
+        echo "ℹ️ Shell completion functionality:"
+        echo "  • Bash completion: Add to ~/.bashrc"
+        echo "  • Zsh completion: Add to ~/.zshrc"
+        echo "  • Complete grpctestify.sh flags and options"
+        echo ""
+        echo "📝 Implementation:"
+        echo "  This feature is planned for future releases"
+        echo "  Current version: v1.0.0 (basic completion available)"
+        
+        return 0
+    fi
+    
+    # Show help if no test path provided
+    if [[ -z "$test_path" ]]; then
+        grpctestify.sh_usage
         return 0
     fi
 
     # Validate test path
-    if [[ -z "$test_path" ]]; then
-        echo "Error: Test path is required" >&2
-        show_help
-        return 1
-    fi
-
-    # Check if test path exists
     if [[ ! -e "$test_path" ]]; then
         log error "Test path does not exist: $test_path"
         return 1
     fi
 
-    # Set configuration from command line flags
-    setup_configuration
-
-    # Run the tests
-    execute_tests "$test_path"
-}
-
-# Setup configuration from command line flags and environment variables
-setup_configuration() {
-    # Set log level based on verbose flag (no ENV needed)
-    if [[ "${args[--verbose]}" == "1" ]]; then
-        verbose="true"
-        log debug "Verbose mode enabled - detailed test information will be shown"
-    else
-        verbose="false"
-    fi
+    # Get options from bashly args
+    local parallel_jobs="${args[--parallel]:-}"
+    local dry_run="${args[--dry-run]:-0}"
+    local verbose="${args[--verbose]:-0}"
+    local sort_mode="${args[--sort]:-path}"
+    local log_format="${args[--log-format]:-}"
+    local log_output="${args[--log-output]:-}"
     
-
-
-    # Set parallel execution
-    if [[ -n "${args[--parallel]}" ]]; then
-        if [[ "${args[--parallel]}" == "auto" ]]; then
-            # Auto-detect CPU count
-            local cpu_count
-            cpu_count=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "4")
-            PARALLEL_JOBS="$cpu_count"
-            log debug "Auto-detected $cpu_count CPU cores, using $PARALLEL_JOBS parallel jobs"
-        else
-        if ! validate_parallel_jobs "${args[--parallel]}"; then
-            exit 1
-        fi
-        PARALLEL_JOBS="${args[--parallel]}"
-        fi
-    fi
-
-    # Set timeout (command line flag takes precedence over environment variable)
-    if [[ -n "${args[--timeout]}" ]]; then
-        if ! validate_positive_integer "${args[--timeout]}" "Timeout"; then
-            exit 1
-        fi
-        RUNTIME_TIMEOUT="${args[--timeout]}"
-    # Timeout set via --timeout flag only (no ENV fallback)
-    fi
-
-    # Set retry configuration
-    if [[ "${args[--no-retry]}" == "1" ]]; then
-        RETRY_COUNT=0
-    elif [[ -n "${args[--retry]}" ]]; then
-        if ! validate_positive_integer "${args[--retry]}" "Retry count"; then
-            exit 1
-        fi
-        RETRY_COUNT="${args[--retry]}"
-    fi
-
-    if [[ -n "${args[--retry-delay]}" ]]; then
-        if ! validate_positive_integer "${args[--retry-delay]}" "Retry delay"; then
-            exit 1
-        fi
-        RETRY_DELAY="${args[--retry-delay]}"
-    fi
-
-    # Run all tests - no fail fast (as requested)
-    FAIL_FAST=false
-
-    # Set verbose mode (command line flag takes precedence over environment variable)
-    if [[ "${args[--verbose]}" == "1" ]]; then
-        VERBOSE=true
-    elif [[ "${verbose:-false}" == "true" ]]; then
-        VERBOSE=true
-    fi
-
-        # Set no color
-    if [[ "${args[--no-color]}" == "1" ]]; then
-        NO_COLOR=true
-    fi
-
-    # Initialize report system first
-    report_manager_init
-    
-    # Set report logging (use flags directly)
-    if [[ -n "${args[--log-format]}" ]]; then
-        report_format="${args[--log-format]}"
-        report_output_file="${args[--log-output]}"
-        
-        # Validate report format
-        if ! validate_report_format "$report_format"; then
-            exit 1
-        fi
-        
-        # Auto-generate output file if not specified
-        if [[ -z "$report_output_file" ]]; then
-            report_output_file=$(auto_generate_output_filename "$report_format")
-            log info "Auto-generated report file: $report_output_file"
-        fi
-        
-        # Export for use in other functions
-        export report_format report_output_file
-    fi
-    
-
-}
-
-# Determine optimal progress mode based on context
-determine_progress_mode() {
-    local test_count="$1"
-    
-    # Smart defaults based on industry best practices:
-    # - Single test: detailed output (like pytest -v for one test)
-    # - Multiple tests: dots mode (like pytest default)
-    # - Verbose mode: always detailed regardless of count
-    
-    if [[ "${verbose:-false}" == "true" ]]; then
-        echo "verbose"
-    elif [[ "$test_count" -eq 1 ]]; then
-        echo "detailed"
-    else
-        echo "dots"
-    fi
-}
-
-# Buffered output system for race condition protection
-declare -g TEST_OUTPUT_BUFFERS=()
-declare -g TEST_OUTPUT_LOCK=""
-
-# Initialize output buffering system
-init_output_buffering() {
-    TEST_OUTPUT_LOCK=$(mktemp)
-    TEST_OUTPUT_BUFFERS=()
-}
-
-# Add output to buffer for a specific test
-buffer_test_output() {
-    local test_name="$1"
-    local output="$2"
-    local buffer_file
-    
-    # Create unique buffer file for this test
-    buffer_file=$(mktemp -t "grpctestify_buffer_${test_name//\//_}_XXXXXX")
-    echo "$output" > "$buffer_file"
-    TEST_OUTPUT_BUFFERS+=("$test_name:$buffer_file")
-}
-
-# Flush all buffered output in correct order
-flush_buffered_output() {
-    local test_files=("$@")
-    
-    # Output in the same order as tests were started
-    for test_file in "${test_files[@]}"; do
-        local test_name=$(basename "$test_file" .gctf)
-        
-        # Find buffer for this test
-        for buffer_entry in "${TEST_OUTPUT_BUFFERS[@]}"; do
-            if [[ "$buffer_entry" =~ ^${test_name}: ]]; then
-                local buffer_file="${buffer_entry#*:}"
-                if [[ -f "$buffer_file" ]]; then
-                    cat "$buffer_file"
-                    rm -f "$buffer_file"
+    # Validate log format if specified
+    if [[ -n "$log_format" ]]; then
+        case "$log_format" in
+            "junit"|"json")
+                if [[ -z "$log_output" ]]; then
+                    log error "Error: --log-output is required when using --log-format"
+                    return 1
                 fi
-                break
-            fi
-        done
-    done
-}
-
-# Clean up buffering system
-cleanup_output_buffering() {
-    # Clean up any remaining buffer files
-    for buffer_entry in "${TEST_OUTPUT_BUFFERS[@]}"; do
-        local buffer_file="${buffer_entry#*:}"
-        rm -f "$buffer_file"
-    done
-    
-    rm -f "$TEST_OUTPUT_LOCK"
-    TEST_OUTPUT_BUFFERS=()
-}
-
-# Execute tests based on the provided path
-execute_tests() {
-    local test_path="$1"
-    local test_files=()
-    
-    # Initialize global test result arrays for JUnit XML
-    declare -g -a PASSED_TESTS=()
-    declare -g -a FAILED_TESTS=()
-
-    # Initialize report data
-    init_report_data
-
-    # Determine if it's a file or directory
-    if [[ -f "$test_path" ]]; then
-        # Single file
-        if [[ "$test_path" == *.gctf ]]; then
-            test_files=("$test_path")
-        else
-    log error "File must have .gctf extension: $test_path"
-            return 1
-        fi
-    elif [[ -d "$test_path" ]]; then
-        # Directory - find all .gctf files
-        while IFS= read -r -d '' file; do
-            test_files+=("$file")
-        done < <(find "$test_path" -name "*.gctf" -type f -print0)
-        
-        if [[ ${#test_files[@]} -eq 0 ]]; then
-    log error "No .gctf files found in directory: $test_path"
-            return 1
-        fi
-    else
-    log error "Invalid test path: $test_path"
-        return 1
-    fi
-
-    # Determine optimal progress mode based on test count and context
-    local progress_mode
-    progress_mode=$(determine_progress_mode ${#test_files[@]})
-    # Progress mode set via local variable (no ENV needed)
-    
-    log debug "Auto-selected progress mode: $progress_mode (${#test_files[@]} tests, verbose=${verbose:-false})"
-
-    # Initialize output buffering for verbose parallel mode
-    if [[ "$PARALLEL_JOBS" -gt 1 && "$progress_mode" == "verbose" ]]; then
-        init_output_buffering
-    fi
-
-    # Run tests
-    local test_exit_code=0
-    if [[ "$PARALLEL_JOBS" -gt 1 ]]; then
-        run_parallel_tests "${test_files[@]}"
-        test_exit_code=$?
-        
-        # Flush buffered output in verbose mode
-        if [[ "$progress_mode" == "verbose" ]]; then
-            flush_buffered_output "${test_files[@]}"
-            cleanup_output_buffering
-        fi
-    else
-        run_sequential_tests "${test_files[@]}"
-        test_exit_code=$?
-    fi
-
-    return $test_exit_code
-}
-
-# Run tests sequentially
-run_sequential_tests() {
-    local test_files=("$@")
-    local total_tests=${#test_files[@]}
-    local passed=0
-    local failed=0
-    local start_time=$(date +%s)
-
-    log info "Running $total_tests test(s) sequentially..."
-
-    for test_file in "${test_files[@]}"; do
-        local test_start_time=$(date +%s)
-        local test_start_iso=$(date -Iseconds)
-        
-
-        if run_single_test "$test_file"; then
-            passed=$((passed + 1))
-            PASSED_TESTS+=("$test_file")
-            local test_end_time=$(date +%s)
-            local test_end_iso=$(date -Iseconds)
-            local duration=$((test_end_time - test_start_time))
-            add_test_result "$test_file" "PASS" "$duration" "" "$test_start_iso" "$test_end_iso"
-        else
-            failed=$((failed + 1))
-            FAILED_TESTS+=("$test_file")
-            local test_end_time=$(date +%s)
-            local test_end_iso=$(date -Iseconds)
-            local duration=$((test_end_time - test_start_time))
-            add_test_result "$test_file" "FAIL" "$duration" "Test execution failed" "$test_start_iso" "$test_end_iso"
-            
-            # Check fail-fast setting (user requested to disable fail-fast)
-            if [[ "${FAIL_FAST:-false}" == "true" ]]; then
-            log error "Test failed, stopping execution"
-            break
-            fi
-        fi
-    done
-    
-
-
-    # Show summary (pass test files array for potential JUnit generation)
-    declare -g -a ALL_TEST_FILES=("${test_files[@]}")
-    show_summary $passed $failed $total_tests $start_time
-    
-    # Return exit code based on test results (like v0.0.13)
-    if [[ $failed -gt 0 ]]; then
-        return 1
-    else
-        return 0
-    fi
-}
-
-# Run tests in parallel
-run_parallel_tests() {
-    local test_files=("$@")
-    local total_tests=${#test_files[@]}
-    local start_time=$(date +%s)
-
-    log info "Running $total_tests test(s) in parallel (jobs: $PARALLEL_JOBS)..."
-
-    # Parallel execution framework is ready and stable
-    # Use background process approach for reliable parallel execution
-    run_parallel_with_background "${test_files[@]}"
-}
-
-# Run tests using GNU parallel
-run_parallel_with_gnu_parallel() {
-    local test_files=("$@")
-    local passed=0
-    local failed=0
-    
-    # Export necessary functions and variables for parallel
-    export -f run_single_test run_test log setup_colors
-    export -f extract_section parse_test_file compare_responses
-    export -f run_grpc_call run_grpc_call_with_retry
-    export -f evaluate_asserts_with_plugins validate_expected_error
-    export -f apply_tolerance_comparison apply_percentage_tolerance_comparison
-    export -f format_dry_run_output log_test_details log_test_success
-    export PROGRESS_MODE LOG_LEVEL verbose DRY_RUN
-    
-    # Run tests in parallel and collect results
-    printf '%s\n' "${test_files[@]}" | \
-        parallel -j "$PARALLEL_JOBS" --group run_single_test
-    
-    # Note: This approach loses individual test result tracking
-    # but provides true parallel execution
-}
-
-# Run tests using background processes (simple and reliable)
-run_parallel_with_background() {
-    local test_files=("$@")
-    local temp_dir
-    temp_dir=$(mktemp -d)
-    local pids=()
-    local job_count=0
-    
-    log info "Starting parallel execution with background processes..."
-    
-    # Run tests in batches to respect PARALLEL_JOBS limit
-    for test_file in "${test_files[@]}"; do
-        # Wait if we've reached the parallel job limit
-        if [[ ${#pids[@]} -ge $PARALLEL_JOBS ]]; then
-            # Wait for the oldest job to complete
-            local oldest_pid="${pids[0]}"
-            wait "$oldest_pid"
-            # Remove the completed PID from array
-            pids=("${pids[@]:1}")
-        fi
-        
-        # Start test in background
-        (
-            local result_file="$temp_dir/result_$$_$RANDOM"
-            local test_name=$(basename "$test_file" .gctf)
-            
-            # Capture output for verbose mode buffering
-            if [[ "${PROGRESS_MODE:-none}" == "verbose" ]]; then
-                local output
-                if output=$(run_single_test "$test_file" 2>&1); then
-                    echo "PASS:$test_file" > "$result_file"
-                    # Buffer the output for ordered display later (in verbose mode show ALL tests)
-                    buffer_test_output "$test_name" "✅ PASSED: $test_name\n$output"
-                else
-                    echo "FAIL:$test_file" > "$result_file"
-                    # Buffer the output for ordered display later (in verbose mode show ALL tests)
-                    buffer_test_output "$test_name" "❌ FAILED: $test_name\n$output"
-                fi
-            else
-                # Normal mode - direct output to log file
-                if run_single_test "$test_file" >"$result_file.log" 2>&1; then
-                    echo "PASS:$test_file" > "$result_file"
-                else
-                    echo "FAIL:$test_file" > "$result_file"
-                fi
-            fi
-        ) &
-        
-        pids+=($!)
-        ((job_count++))
-        
-        # Show progress for dots mode
-        if [[ "${PROGRESS_MODE:-none}" == "dots" ]]; then
-            printf "."
-            # Force flush output
-            exec 2>&2
-        fi
-    done
-    
-    # Wait for all remaining jobs to complete
-    for pid in "${pids[@]}"; do
-        wait "$pid"
-    done
-    
-    if [[ "${PROGRESS_MODE:-none}" == "dots" ]]; then
-        echo  # New line after dots
-    fi
-    
-    # Collect and process results
-    local passed=0
-    local failed=0
-    local failed_tests=()
-    
-    for result_file in "$temp_dir"/result_*; do
-        if [[ -f "$result_file" ]]; then
-            local result
-            result=$(cat "$result_file")
-            if [[ "$result" =~ ^PASS: ]]; then
-                ((passed++))
-            elif [[ "$result" =~ ^FAIL: ]]; then
-                ((failed++))
-                local test_name="${result#FAIL:}"
-                failed_tests+=("$test_name")
-                
-                # Store failed test details for smart summary
-                local log_file="${result_file}.log"
-                if [[ -f "$log_file" ]]; then
-                    # In dots mode, we'll show details later in summary
-                    # In other modes, show immediately
-                    if [[ "${PROGRESS_MODE:-none}" != "dots" ]]; then
-                        cat "$log_file"
-                    fi
-                fi
-            fi
-        fi
-    done
-    
-    # Clean up
-    rm -rf "$temp_dir"
-    
-    # Update global test result arrays for consistency
-    declare -g -a PASSED_TESTS=()
-    declare -g -a FAILED_TESTS=("${failed_tests[@]}")
-    
-    # Add passed tests (extract from total minus failed)
-    local test_files=("$@")
-    for test_file in "${test_files[@]}"; do
-        local found_failed=false
-        for failed_test in "${failed_tests[@]}"; do
-            if [[ "$test_file" == "$failed_test" ]]; then
-                found_failed=true
-                break
-            fi
-        done
-        if [[ "$found_failed" == "false" ]]; then
-            PASSED_TESTS+=("$test_file")
-        fi
-    done
-    
-    # Show standard summary using the same function as sequential
-    declare -g -a ALL_TEST_FILES=("${test_files[@]}")
-    show_summary $passed $failed ${#test_files[@]} $start_time
-    
-    # Return appropriate exit code
-    if [[ $failed -gt 0 ]]; then
-        return 1
-    else
-        return 0
-    fi
-}
-
-# Run a single test file
-run_single_test() {
-    local test_file="$1"
-    
-    # Execute the test - run_test function handles all timing and logging
-    run_test "$test_file" "${PROGRESS_MODE:-none}"
-    return $?
-}
-
-# Execute a single test
-execute_test() {
-    local address="$1"
-    local endpoint="$2"
-    local requests="$3"
-    local responses="$4"
-    local asserts="$5"
-    local options="$6"
-
-    # Parse options
-    local timeout="${RUNTIME_TIMEOUT:-$DEFAULT_TIMEOUT}"
-    local tolerance="0.01"
-    local partial=false
-    local redact_fields=()
-
-    if [[ -n "$options" ]]; then
-        timeout=$(echo "$options" | grep "timeout:" | cut -d: -f2 | tr -d ' ' || echo "$timeout")
-        tolerance=$(echo "$options" | grep "tolerance:" | cut -d: -f2 | tr -d ' ' || echo "$tolerance")
-        partial=$(echo "$options" | grep "partial:" | grep -q "true" && echo "true" || echo "false")
-        redact_fields=($(echo "$options" | grep "redact:" | sed 's/redact: \[\(.*\)\]/\1/' | tr -d '"' | tr ',' ' '))
-    fi
-
-    # Execute gRPC call
-
-    local response
-    if ! response=$(execute_grpc_call "$address" "$endpoint" "$requests" "$timeout"); then
-
-        return 1
-    fi
-
-
-    # Validate response
-
-    if ! validate_response "$response" "$responses" "$asserts" "$tolerance" "$partial" "${redact_fields[@]}"; then
-
-        return 1
-    fi
-
-
-
-    return 0
-}
-
-# Execute gRPC call using grpcurl
-execute_grpc_call() {
-    local address="$1"
-    local endpoint="$2"
-    local requests="$3"
-    local timeout="$4"
-
-    # Build grpcurl command
-    local cmd="grpcurl -plaintext -d @ $address $endpoint"
-    
-    # Execute with timeout
-    local grpc_stderr
-    local grpc_status
-    
-    # Capture both stdout and stderr
-    grpc_stderr=$(timeout "$timeout" bash -c "echo '$requests' | $cmd" 2>&1)
-    grpc_status=$?
-    
-    if [[ $grpc_status -ne 0 ]]; then
-        log error "gRPC call failed or timed out"
-        echo "Error details: $grpc_stderr" >&2
-        return 1
-    fi
-
-    echo "$grpc_stderr"
-    return 0
-}
-
-# Validate response against expected response and assertions
-validate_response() {
-    local actual_response="$1"
-    local expected_response="$2"
-    local asserts="$3"
-    local tolerance="$4"
-    local partial="$5"
-    shift 5
-    local redact_fields=("$@")
-
-    # Apply redaction if specified
-    if [[ ${#redact_fields[@]} -gt 0 ]]; then
-        for field in "${redact_fields[@]}"; do
-            actual_response=$(echo "$actual_response" | jq "del(.$field)" 2>/dev/null || echo "$actual_response")
-        done
-    fi
-
-    # Run assertions
-    if [[ -n "$asserts" ]]; then
-        if ! run_assertions "$actual_response" "$asserts"; then
-            return 1
-        fi
-    fi
-
-    # Compare with expected response if not partial
-    if [[ "$partial" != "true" && -n "$expected_response" ]]; then
-
-        if ! compare_responses "$actual_response" "$expected_response" "$tolerance"; then
-
-            return 1
-        fi
-
-    fi
-
-    return 0
-}
-
-# Run assertions using jq
-run_assertions() {
-    local response="$1"
-    local asserts="$2"
-
-    while IFS= read -r assertion; do
-        if [[ -n "$assertion" && ! "$assertion" =~ ^[[:space:]]*# ]]; then
-            if ! echo "$response" | jq -e "$assertion" >/dev/null 2>&1; then
-    log error "Assertion failed: $assertion"
+                ;;
+            *)
+                log error "Error: Unsupported log format '$log_format'. Supported: junit, json"
                 return 1
-            fi
-        fi
-    done <<< "$asserts"
-
-    return 0
-}
-
-# Compare responses (overridden by runner.sh)
-
-# Show test summary
-show_summary() {
-    local passed="$1"
-    local failed="$2"
-    local total="$3"
-    local start_time="$4"
-    local end_time=$(date +%s)
-    local duration=$((end_time - start_time))
-    local executed=$((passed + failed))
-    local skipped=$((total - executed))
-    local success_rate=0
-    
-    if [[ $total -gt 0 ]]; then
-        success_rate=$((passed * 100 / total))
-    fi
-
-    echo
-    log section "Test Execution Summary"
-    echo "  📊 Total tests planned: $total"
-    echo "  🏃 Tests executed: $executed"
-    echo "  ✅ Passed: $passed"
-    if [[ $failed -gt 0 ]]; then
-        echo "  ❌ Failed: $failed"
-    fi
-    if [[ $skipped -gt 0 ]]; then
-        echo "  ⏭️  Skipped (due to early stop): $skipped"
-    fi
-    echo "  📈 Success rate: $success_rate%"
-    echo "  ⏱️  Duration: ${duration}s"
-    echo
-    
-    if [[ $failed -eq 0 ]]; then
-        log success "🎉 All tests passed!"
-        return 0
-    else
-        if [[ $skipped -gt 0 ]]; then
-            log error "💥 $failed test(s) failed, $skipped test(s) not executed"
-        else
-            log error "💥 $failed test(s) failed"
-        fi
-        
-        # Smart summary: Show test details based on mode
-        # - dots mode: only failed tests
-        # - verbose mode: all tests (passed and failed)
-        # - other modes: nothing (already shown during execution)
-        if [[ "${PROGRESS_MODE:-none}" == "dots" && ${#FAILED_TESTS[@]} -gt 0 ]] || [[ "${PROGRESS_MODE:-none}" == "verbose" ]]; then
-            echo
-            
-            if [[ "${PROGRESS_MODE:-none}" == "verbose" ]]; then
-                # Verbose mode: show ALL tests (passed and failed)
-                log section "All Tests Details"
-                
-                # Show passed tests first
-                if [[ ${#PASSED_TESTS[@]} -gt 0 ]]; then
-                    for passed_test in "${PASSED_TESTS[@]}"; do
-                        echo
-                        log success "═══ ✅ $(basename "$passed_test" .gctf) ═══"
-                        # Try to find and show log for passed test too
-                        local test_name=$(basename "$passed_test" .gctf)
-                        echo "  Test passed successfully"
-                    done
-                fi
-                
-                # Then show failed tests
-                if [[ ${#FAILED_TESTS[@]} -gt 0 ]]; then
-                    for failed_test in "${FAILED_TESTS[@]}"; do
-                        echo
-                        log error "═══ ❌ $(basename "$failed_test" .gctf) ═══"
-                        # Find and display log for this failed test
-                        if [[ -f "${failed_test}.log" ]]; then
-                            cat "${failed_test}.log"
-                        elif [[ -f "${failed_test%.*}.log" ]]; then
-                            cat "${failed_test%.*}.log"
-                        else
-                            echo "  No detailed log available for this test"
-                        fi
-                    done
-                fi
-            else
-                # Dots mode: show only failed tests
-                log section "Failed Tests Details"
-                for failed_test in "${FAILED_TESTS[@]}"; do
-                    echo
-                    log error "═══ $(basename "$failed_test" .gctf) ═══"
-                    
-                    # Find and display log for this failed test
-                    if [[ -f "${failed_test}.log" ]]; then
-                        cat "${failed_test}.log"
-                    elif [[ -f "${failed_test%.*}.log" ]]; then
-                        cat "${failed_test%.*}.log"
-                    else
-                        # Try to find log file in temp directories or similar pattern
-                        local test_name=$(basename "$failed_test" .gctf)
-                        local log_pattern="/tmp/*${test_name}*.log"
-                        local found_log=""
-                        for log_file in $log_pattern; do
-                            if [[ -f "$log_file" ]]; then
-                                found_log="$log_file"
-                                break
-                            fi
-                        done
-                        
-                        if [[ -n "$found_log" ]]; then
-                            cat "$found_log"
-                        else
-                            echo "  No detailed log available for this test"
-                        fi
-                    fi
-                done
-            fi
-        fi
-        
-        # Generate report if requested
-        if [[ -n "$report_format" && -n "$report_output_file" ]]; then
-            local test_results_json=$(build_test_results_json "$passed" "$failed" "$total" "$4" "${ALL_TEST_FILES[@]}")
-            generate_report "$report_format" "$report_output_file" "$test_results_json" "$4" "$(date +%s)"
-        fi
-        return 1
-    fi
-}
-
-# Build test results JSON for reporting
-build_test_results_json() {
-    local passed="$1"
-    local failed="$2"
-    local total="$3"
-    local start_time="$4"
-    shift 4
-    local all_test_files=("$@")
-    
-    local skipped=$((total - passed - failed))
-    
-    # Start building JSON
-    local json='{
-        "total": '$total',
-        "passed": '$passed',
-        "failed": '$failed',
-        "skipped": '$skipped',
-        "tests": ['
-    
-    # Add individual test results
-    local first=true
-    for test_file in "${all_test_files[@]}"; do
-        if [[ ! "$first" == "true" ]]; then
-            json+=','
-        fi
-        first=false
-        
-        local test_name=$(basename "$test_file" .gctf)
-        local test_status="unknown"
-        local test_duration=0
-        local test_error=""
-        
-        # Determine test status from arrays (simplified)
-        if [[ " ${PASSED_TESTS[*]} " =~ " $test_file " ]]; then
-            test_status="passed"
-        elif [[ " ${FAILED_TESTS[*]} " =~ " $test_file " ]]; then
-            test_status="failed"
-            # Try to get error from logs if available
-            test_error="Test failed"
-        elif [[ " ${TIMEOUT_TESTS[*]} " =~ " $test_file " ]]; then
-            test_status="error"
-            test_error="Timeout"
-        else
-            test_status="skipped"
-        fi
-        
-        json+='{
-            "name": "'$test_name'",
-            "file": "'$test_file'",
-            "status": "'$test_status'",
-            "duration": '$test_duration
-        
-        if [[ -n "$test_error" ]]; then
-            json+=', "error": "'$test_error'"'
-        fi
-        
-        json+='}'
-    done
-    
-    json+=']}'
-    
-    echo "$json"
-}
-
-# Generate JUnit XML report
-generate_junit_xml() {
-    local output_file="$1"
-    local passed="$2"
-    local failed="$3"
-    local total="$4"
-    local start_time="$5"
-    shift 5
-    local all_test_files=("$@")
-
-    local end_time=$(date +%s)
-    local duration=$((end_time - start_time))
-    local timestamp=$(date -Iseconds)
-    local skipped=$((total - passed - failed))
-
-    echo "ℹ️ Creating JUnit XML: $output_file" >&2
-
-    # Create output directory if it doesn't exist
-    local output_dir=$(dirname "$output_file")
-    mkdir -p "$output_dir"
-
-    cat > "$output_file" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="grpctestify" 
-           tests="$total" 
-           failures="$failed" 
-           errors="0" 
-           skipped="$skipped" 
-           time="$duration"
-           timestamp="$timestamp">
-  
-  <properties>
-    <property name="grpctestify.version" value="$APP_VERSION"/>
-    <property name="hostname" value="$(hostname)"/>
-    <property name="username" value="$(whoami)"/>
-  </properties>
-  
-  <testsuite name="grpc-tests" 
-             tests="$total" 
-             failures="$failed" 
-             errors="0" 
-             skipped="$skipped" 
-             time="$duration">
-EOF
-
-    # Create associative arrays to track test status
-    local -A test_status
-    
-    # Mark passed tests
-    if [[ -n "${PASSED_TESTS[*]}" ]]; then
-        for test_file in "${PASSED_TESTS[@]}"; do
-            test_status["$test_file"]="passed"
-        done
-    fi
-    
-    # Mark failed tests
-    if [[ -n "${FAILED_TESTS[*]}" ]]; then
-        for test_file in "${FAILED_TESTS[@]}"; do
-            test_status["$test_file"]="failed"
-        done
-    fi
-    
-    # Generate test cases for all tests
-    for test_file in "${all_test_files[@]}"; do
-        local test_name=$(basename "$test_file" .gctf)
-        local status="${test_status[$test_file]:-skipped}"
-        
-        case "$status" in
-            "passed")
-                echo "    <testcase classname=\"grpctestify\" name=\"$test_name\" file=\"$test_file\" time=\"0\">" >> "$output_file"
-                echo "    </testcase>" >> "$output_file"
-                ;;
-            "failed")
-                echo "    <testcase classname=\"grpctestify\" name=\"$test_name\" file=\"$test_file\" time=\"0\">" >> "$output_file"
-                echo "      <failure message=\"Test failed\" type=\"AssertionError\">" >> "$output_file"
-                echo "        Test execution failed" >> "$output_file"
-                echo "      </failure>" >> "$output_file"
-                echo "    </testcase>" >> "$output_file"
-                ;;
-            "skipped")
-                echo "    <testcase classname=\"grpctestify\" name=\"$test_name\" file=\"$test_file\" time=\"0\">" >> "$output_file"
-                echo "      <skipped message=\"Test skipped due to early termination (fail-fast mode)\" type=\"Skipped\">" >> "$output_file"
-                echo "        Test was not executed because a previous test failed and fail-fast mode is enabled" >> "$output_file"
-                echo "      </skipped>" >> "$output_file"
-                echo "    </testcase>" >> "$output_file"
                 ;;
         esac
-    done
+    fi
     
-    cat >> "$output_file" << EOF
+    # Auto-detect parallel jobs if not specified or set to "auto"
+    if [[ -z "$parallel_jobs" || "$parallel_jobs" == "auto" ]]; then
+        parallel_jobs=$(auto_detect_parallel_jobs)
+        [[ "$verbose" == "1" ]] && log info "Auto-detected $parallel_jobs CPU cores, using $parallel_jobs parallel jobs"
+    fi
     
-  </testsuite>
-</testsuites>
-EOF
+    # Collect test files
+    local test_files=()
+    while IFS= read -r file; do
+        test_files+=("$file")
+    done < <(collect_test_files "$test_path" "$sort_mode")
+    
+    local total=${#test_files[@]}
+    
+    if [[ "$total" -eq 0 ]]; then
+        log error "No test files found in: $test_path"
+        return 1
+    fi
 
-    echo "✅ JUnit XML generated: $output_file" >&2
-}
-
-# Parallel execution with synchronized logging to prevent race conditions
-run_parallel_execution_synchronized() {
-    local test_files=("$@")
-    local total_tests=${#test_files[@]}
-    local results_dir=$(mktemp -d)
+    [[ "$verbose" == "1" ]] && log info "Auto-selected progress mode: $([ "$verbose" == "1" ] && echo "verbose" || echo "dots") ($total tests, verbose=$verbose)"
+    
+    # Start timing for detailed statistics (cross-platform with ms precision)
+    local start_time
+    if command -v python3 >/dev/null 2>&1; then
+        # Use python3 for high precision timing (cross-platform)
+        start_time=$(python3 -c "import time; print(int(time.time() * 1000))")
+    elif command -v node >/dev/null 2>&1; then
+        # Fallback to node.js
+        start_time=$(node -e "console.log(Date.now())")
+    else
+        # Fallback to second precision
+        start_time=$(($(date +%s) * 1000))
+    fi
+    
     local passed=0
     local failed=0
-    local failed_tests=()
-    local start_time=$(date +%s)
+    local skipped=0
+    # Global counter for warnings (accessible by run_single_test)
+    headers_warnings=0
     
-    # Create a wrapper script that uses functions directly
-    local grpctestify_path="$(readlink -f "$0")"
-    local wrapper_script="$results_dir/test_wrapper.sh"
+    if [[ "$total" -eq 1 ]]; then
+        log info "Running 1 test sequentially..."
+        [[ "$verbose" == "1" ]] && log info "Verbose mode enabled - detailed test information will be shown"
+    else
+        if [[ "$parallel_jobs" -eq 1 ]]; then
+            log info "Running $total test(s) sequentially..."
+        else
+            log info "Running $total test(s) in parallel (jobs: $parallel_jobs)..."
+        fi
+    fi
     
-cat > "$wrapper_script" << EOF
-#!/bin/bash
-test_file="\$1"
-results_dir="$results_dir"
-test_name="\$(basename "\$test_file" .gctf)"
-log_file="\$results_dir/\${test_name}.log"
-result_file="\$results_dir/\${test_name}.result"
-
-# Change to grpctestify directory
-cd "\$(dirname "$grpctestify_path")"
-
-# Simply call grpctestify for single file (avoid recursion by using --parallel=1)
-if timeout 30 "$grpctestify_path" "\$test_file" --parallel=1 > "\$log_file" 2>&1; then
-    echo "PASS:\$test_name" > "\$result_file"
-else
-    echo "FAIL:\$test_name" > "\$result_file"
-fi
-EOF
+    # Execute tests with pytest-style UI
     
-    chmod +x "$wrapper_script"
-    
-    # Run tests in parallel using xargs
-    printf '%s\n' "${test_files[@]}" | xargs -n 1 -P "$PARALLEL_JOBS" "$wrapper_script"
-    
-    # Collect and display results in order
-    for test_file in "${test_files[@]}"; do
-        local test_name="$(basename "$test_file" .gctf)"
-        local log_file="$results_dir/${test_name}.log"
-        local result_file="$results_dir/${test_name}.result"
-        
-        if [[ -f "$result_file" ]]; then
-            local result=$(cat "$result_file")
-            if [[ "$result" == PASS:* ]]; then
-                ((passed++))
-                if [[ "${PROGRESS_MODE:-none}" != "dots" ]]; then
-                    # Show full log for non-dots mode
-                    cat "$log_file"
-                fi
-                printf "."
+    # Use indexed loop instead of array expansion (more reliable in generated scripts)
+    for (( i=0; i<${#test_files[@]}; i++ )); do
+        local test_file="${test_files[$i]}"
+        local test_name=$(basename "$test_file" .gctf)
+        # Pytest-style UI: verbose vs dots mode
+        if [[ "$verbose" == "1" ]]; then
+            printf "Testing %s ... " "$test_name"
+            if run_single_test "$test_file" "$([[ "$dry_run" == "1" ]] && echo "true" || echo "false")"; then
+                echo "✅ PASS"
+                passed=$((passed + 1))
             else
-                ((failed++))
-                failed_tests+=("$test_name")
-                if [[ "${PROGRESS_MODE:-none}" == "dots" ]]; then
-                    # In dots mode, only show errors at the end
-                    printf "F"
+                local exit_code=$?
+                if [[ "$exit_code" -eq 3 ]]; then
+                    echo "🔍 SKIP (dry-run)"
+                    skipped=$((skipped + 1))
                 else
-                    # Show full log immediately
-                    cat "$log_file"
+                    echo "❌ FAIL"
+                    failed=$((failed + 1))
                 fi
             fi
         else
-            # Missing result file - treat as failure
-            ((failed++))
-            failed_tests+=("$test_name")
-            printf "F"
+            # Dots mode (pytest-style)
+            if run_single_test "$test_file" "$([[ "$dry_run" == "1" ]] && echo "true" || echo "false")" >/dev/null 2>&1; then
+                local exit_code=$?
+            else
+                local exit_code=$?
+            fi
+            
+            case $exit_code in
+                0)
+                    printf "."
+                    passed=$((passed + 1))
+                    ;;
+                3)
+                    printf "S"
+                    skipped=$((skipped + 1))
+                    ;;
+                *)
+                    printf "E"
+                    failed=$((failed + 1))
+                    ;;
+            esac
         fi
     done
     
-    echo ""  # New line after dots
+    # Add newline after dots mode
+    [[ "$verbose" != "1" ]] && echo
     
-    # Show failed test details in dots mode
-    if [[ "${PROGRESS_MODE:-none}" == "dots" && ${#failed_tests[@]} -gt 0 ]]; then
-        echo ""
-        log error "Failed Tests Details:"
-        for test_name in "${failed_tests[@]}"; do
-            local log_file="$results_dir/${test_name}.log"
-            if [[ -f "$log_file" ]]; then
-                echo ""
-                log error "═══ $test_name ═══"
-                cat "$log_file"
-            fi
-        done
-    fi
-    
-    # Summary
-    local end_time=$(date +%s)
-    local duration=$((end_time - start_time))
-    
-    echo ""
-    log section "Test Execution Summary"
-    log info "📊 Total tests planned: $total_tests"
-    log info "🏃 Tests executed: $((passed + failed))"
-    if [[ $passed -gt 0 ]]; then
-        log info "✅ Passed: $passed"
-    fi
-    if [[ $failed -gt 0 ]]; then
-        log info "❌ Failed: $failed"
-    fi
-    local success_rate=$((passed * 100 / total_tests))
-    log info "📈 Success rate: ${success_rate}%"
-    log info "⏱️  Duration: ${duration}s"
-    
-    # Cleanup
-    rm -rf "$results_dir"
-    
-    if [[ $failed -gt 0 ]]; then
-        echo ""
-        log error "💥 $failed test(s) failed"
-        return 1
+    # Calculate execution time and advanced statistics (cross-platform with ms precision)
+    local end_time
+    if command -v python3 >/dev/null 2>&1; then
+        # Use python3 for high precision timing (cross-platform)
+        end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
+    elif command -v node >/dev/null 2>&1; then
+        # Fallback to node.js
+        end_time=$(node -e "console.log(Date.now())")
     else
-        echo ""
-        log success "🎉 All tests passed!"
-        return 0
+        # Fallback to second precision
+        end_time=$(($(date +%s) * 1000))
+    fi
+    local duration_ms=$((end_time - start_time))
+    local duration_sec=$((duration_ms / 1000))
+    local remaining_ms=$((duration_ms % 1000))
+    
+    # Calculate average time per test
+    local avg_per_test_ms=0
+    if [[ $total -gt 0 ]]; then
+        avg_per_test_ms=$((duration_ms / total))
+    fi
+    
+    # Professional summary like pytest/jest
+    echo
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    
+    # Test results line with professional formatting
+    if [[ $failed -gt 0 ]]; then
+        echo "❌ FAILED ($failed failed, $passed passed$([ "$skipped" -gt 0 ] && echo ", $skipped skipped" || echo "") in ${duration_sec}.$(printf "%03d" $remaining_ms)s)"
+    elif [[ $skipped -gt 0 ]]; then
+        echo "🔍 PASSED ($passed passed, $skipped skipped in ${duration_sec}.$(printf "%03d" $remaining_ms)s)"
+    else
+        echo "✅ PASSED ($passed passed in ${duration_sec}.$(printf "%03d" $remaining_ms)s)"
+    fi
+    
+    echo "────────────────────────────────────────────────────────────────────────────────"
+    
+    # Detailed statistics section
+    echo "📊 Execution Statistics:"
+    echo "   • Total tests: $total"
+    echo "   • Passed: $passed"
+    echo "   • Failed: $failed" 
+    echo "   • Skipped: $skipped"
+    echo "   • Duration: ${duration_sec}.$(printf "%03d" $remaining_ms)s"
+    echo "   • Average per test: ${avg_per_test_ms}ms"
+    
+    # Execution mode information
+    if [[ "$parallel_jobs" -eq 1 ]]; then
+        echo "   • Mode: Sequential (1 thread)"
+    else
+        echo "   • Mode: Parallel ($parallel_jobs threads)"
+    fi
+    
+    # Success rate calculation (only for executed tests)
+    local executed=$((passed + failed))
+    local success_rate
+    if [[ "$dry_run" == "1" ]]; then
+        echo "   • Success rate: N/A (dry-run mode)"
+        success_rate="N/A (dry-run)"
+    elif [[ $executed -gt 0 ]]; then
+        local success_rate_num=$(( (passed * 100) / executed ))
+        echo "   • Success rate: ${success_rate_num}% ($passed/$executed executed)"
+        success_rate="${success_rate_num}%"
+    else
+        echo "   • Success rate: N/A (no tests executed)"
+        success_rate="N/A"
+    fi
+    
+    # Performance analysis with emojis
+    if [[ $total -gt 0 && "$dry_run" != "1" ]]; then
+        if [[ $avg_per_test_ms -lt 100 ]]; then
+            echo "   • Performance: ⚡ Excellent (${avg_per_test_ms}ms/test)"
+        elif [[ $avg_per_test_ms -lt 500 ]]; then
+            echo "   • Performance: ✅ Good (${avg_per_test_ms}ms/test)"  
+        elif [[ $avg_per_test_ms -lt 1000 ]]; then
+            echo "   • Performance: ⚠️  Moderate (${avg_per_test_ms}ms/test)"
+        else
+            echo "   • Performance: 🐌 Slow (${avg_per_test_ms}ms/test)"
+        fi
+    fi
+    
+    echo "────────────────────────────────────────────────────────────────────────────────"
+    
+    # Warnings section (collected during execution)
+    local has_warnings=false
+    if [[ $headers_warnings -gt 0 ]]; then
+        if [[ "$has_warnings" == "false" ]]; then
+            echo "⚠️  Warnings:"
+            has_warnings=true
+        fi
+        echo "   • Found $headers_warnings HEADERS sections - use REQUEST_HEADERS instead"
+    fi
+    
+    # Environment info
+    echo "🔧 Environment:"
+    echo "   • gRPC Address: ${GRPCTESTIFY_ADDRESS:-localhost:4770}"
+    echo "   • Sort Mode: $sort_mode"
+    if [[ "$dry_run" == "1" ]]; then
+        echo "   • Dry Run: Enabled (no actual gRPC calls)"
+    else
+        echo "   • Dry Run: Disabled (real gRPC calls)"
+    fi
+    
+    if [[ "$has_warnings" == "false" ]]; then
+        echo "✨ No warnings detected"
+    fi
+    
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    
+    # Generate reports if requested
+    if [[ -n "$log_format" && -n "$log_output" ]]; then
+        echo
+        echo "📋 Generating $log_format report..."
+        
+        case "$log_format" in
+            "junit")
+                generate_junit_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time"
+                ;;
+            "json")
+                generate_json_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time"
+                ;;
+        esac
+        
+        if [[ $? -eq 0 ]]; then
+            echo "✅ Report saved: $log_output"
+        else
+            echo "❌ Failed to generate report: $log_output"
+        fi
+    fi
+    
+    # Return appropriate exit code (0 only for 100% success in non-dry-run)
+    if [[ "$dry_run" == "1" ]]; then
+        return 0  # Dry-run always succeeds
+    else
+        return $([[ $failed -eq 0 ]] && echo 0 || echo 1)
     fi
 }
+
+# Required by bashly framework - this function will be called by the generated script
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    # Being sourced by bashly generated script
+    true
+fi

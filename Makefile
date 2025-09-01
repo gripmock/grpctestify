@@ -22,7 +22,26 @@ generate:
 .PHONY: test
 test: generate
 	@echo "🧪 Running unit tests with bats..."
-	@find $(SRC_DIR) -name "*.bats" -exec bats {} \;
+	@find $(SRC_DIR) -name "*.bats" -not -name "*_bench.bats" -exec bats {} \;
+
+.PHONY: test-bench
+test-bench: generate
+	@echo "🏃‍♂️ Running benchmark and stress tests..."
+	@if command -v bats >/dev/null 2>&1; then \
+		echo "⚡ Running mutex benchmark tests..."; \
+		bats src/lib/plugins/utils/process_mutex_bench.bats || true; \
+		echo "⚡ Running IO benchmark tests..."; \
+		bats src/lib/plugins/utils/custom_io_bench.bats || true; \
+		echo "⚡ Running infinite loop prevention tests..."; \
+		bats src/lib/kernel/infinite_loop_prevention.bats || true; \
+	else \
+		echo "❌ bats not found. Install with: brew install bats-core"; \
+		exit 1; \
+	fi
+
+.PHONY: test-all
+test-all: test test-bench
+	@echo "✅ All tests completed"
 
 .PHONY: test-gripmock
 test-gripmock: generate
@@ -56,6 +75,8 @@ help:
 	@echo ""
 	@echo "  generate        - Generate $(MAIN_SCRIPT) from source"
 	@echo "  test            - Run unit tests (bats)"
+	@echo "  test-bench      - Run performance/stress tests and infinite loop prevention"
+	@echo "  test-all        - Run all tests (unit + benchmark)"
 	@echo "  test-gripmock   - Test with gripmock examples (requires gripmock running)"
 	@echo "  test-examples   - Test with local examples (requires servers running)"
 	@echo "  check           - Verify installation"

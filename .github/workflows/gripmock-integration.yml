@@ -81,65 +81,21 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/gripmock
-          mkdir -p test-results
           
-          # Run grpctestify tests against examples with JUnit output
-          grpctestify examples --log-format junit --log-output test-results/gripmock-integration.xml
-          
-          # Also run without JUnit for compatibility check
+          # Run grpctestify tests (v1.0.0 with smart defaults)
           grpctestify examples
           
           echo "GripMock integration test completed successfully"
 
-      - name: Download JUnit XSD schema
-        if: always()
-        run: |
-          cd /tmp/gripmock
-          curl -o junit.xsd https://raw.githubusercontent.com/junit-team/junit5/main/platform-tests/src/test/resources/jenkins-junit.xsd
-
-      - name: Validate JUnit reports
-        if: always()
-        run: |
-          cd /tmp/gripmock
-          if [ -d "test-results" ] && [ "$(ls -A test-results/*.xml 2>/dev/null)" ]; then
-            echo "Validating JUnit XML reports for GripMock integration..."
-            for report in test-results/*.xml; do
-              if [ -f "$report" ]; then
-                echo "Validating $report..."
-                if xmllint --noout --schema junit.xsd "$report"; then
-                  echo "✅ $report is valid"
-                else
-                  echo "❌ $report is invalid"
-                fi
-              fi
-            done
-          else
-            echo "No JUnit reports found to validate"
-          fi
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: gripmock-integration-results
-          path: |
-            /tmp/gripmock/test-results/*.xml
-          retention-days: 30
-
-      - name: Publish test results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: GripMock Integration Results
-          path: /tmp/gripmock/test-results/*.xml
-          reporter: java-junit
-          fail-on-error: false
-
       - name: Cleanup gripmock server
         if: always()
         run: |
-          cd /tmp/gripmock
+          set -euo pipefail
+          cd /tmp/gripmock || exit 0
           if [ -f gripmock.pid ]; then
-            kill $(cat gripmock.pid) 2>/dev/null || true
+            pid=$(cat gripmock.pid)
+            if kill -0 "$pid" 2>/dev/null; then
+              kill "$pid"
+            fi
             rm -f gripmock.pid
           fi

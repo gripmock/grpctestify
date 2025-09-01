@@ -1,79 +1,88 @@
-# Development
+# Development & CI/CD
 
-This section contains development-related documentation for contributors and maintainers of the gRPC Testify project.
+Resources for developers and continuous integration with gRPC Testify.
 
-## 📋 Development Guides
+## 🔄 CI/CD Integration
 
-### [CI/CD Workflows](./ci-cd.md)
-Complete documentation of GitHub Actions workflows used for continuous integration and deployment, including:
+### GitHub Actions
+```yaml
+name: gRPC Tests
+on: [push, pull_request]
 
-- **Core Workflows**: Main CI/CD pipeline and examples testing
-- **Specialized Workflows**: Security scanning, linting, and quality checks
-- **Release Management**: Automated releases and asset distribution
-- **Configuration**: Platform support, triggers, and dependencies
-- **Troubleshooting**: Common issues and solutions
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gRPC Testify
+        run: |
+          curl -sSL https://raw.githubusercontent.com/gripmock/grpctestify/main/install.sh | bash
+      - name: Run Tests
+        run: |
+          grpctestify tests/ --log-format junit --log-output results.xml
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v1
+        with:
+          name: gRPC Tests
+          path: results.xml
+          reporter: java-junit
+```
 
-## 🚀 Quick Links
+### Docker Integration
+```dockerfile
+FROM golang:1.25-alpine AS builder
+RUN apk add --no-cache bash curl
+RUN curl -sSL https://raw.githubusercontent.com/gripmock/grpctestify/main/install.sh | bash
 
-- **[Contributing Guide](https://github.com/gripmock/grpctestify/blob/main/CONTRIBUTING.md)** - How to contribute to the project
-- **[Code of Conduct](https://github.com/gripmock/grpctestify/blob/main/CODE_OF_CONDUCT.md)** - Community guidelines
-- **[License](https://github.com/gripmock/grpctestify/blob/main/LICENSE)** - Project license information
+FROM alpine:latest
+RUN apk add --no-cache bash jq
+COPY --from=builder /usr/local/bin/grpctestify /usr/local/bin/
+COPY tests/ /tests/
+CMD ["grpctestify", "/tests"]
+```
 
-## 🛠️ Development Setup
+### Environment Variables
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GRPCTESTIFY_ADDRESS` | Default server address | `localhost:4770` |
+| `GRPCTESTIFY_ADDRESS` | Default gRPC server address | `localhost:4770` |
+| `GRPCTESTIFY_PLUGIN_DIR` | Directory for external plugins | `~/.grpctestify/plugins` |
+| `GRPCTESTIFY_PROGRESS` | Progress display mode | `auto` |
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/gripmock/grpctestify.git
-   cd grpctestify
-   ```
+## 🛠️ Contributing
 
-2. **Install dependencies**:
-   ```bash
-   # Install required tools
-   brew install grpcurl jq bats-core
-   
-   # Or using package managers on Linux
-   # apt-get install jq
-   # npm install -g @fullstorydev/grpcurl
-   ```
+### Development Setup
+```bash
+# Clone and setup
+git clone https://github.com/gripmock/grpctestify.git
+cd grpctestify
 
-3. **Run tests**:
-   ```bash
-   make test
-   ```
+# Install dependencies
+gem install bashly
 
-4. **Build documentation**:
-   ```bash
-   npm install
-   npm run docs:dev
-   ```
+# Generate script
+make generate
 
-## 🧪 Testing
+# Run tests
+make test
+```
 
-- **Unit Tests**: BATS tests for individual components
-- **Integration Tests**: Example-based testing with real gRPC servers
-- **End-to-end Tests**: Complete workflow testing via GitHub Actions
+### Code Style
+- Follow shell scripting best practices
+- Use consistent naming conventions
+- Add comments for complex logic
+- Include tests for new features
 
-## 📦 Release Process
+### Release Process
+1. Update version numbers
+2. Update changelog
+3. Create release branch
+4. Run full test suite
+5. Create GitHub release
 
-Releases are automated via GitHub Actions:
+## 📚 Resources
 
-1. Create and push a version tag: `git tag v1.0.1 && git push origin v1.0.1`
-2. GitHub Actions automatically:
-   - Runs all tests
-   - Generates release notes
-   - Creates release assets
-   - Updates documentation
-
-## 🔧 Tools and Dependencies
-
-- **Bash**: Core scripting language
-- **BATS**: Testing framework for Bash scripts
-- **ShellCheck**: Static analysis for shell scripts
-- **grpcurl**: gRPC client for testing
-- **jq**: JSON processor for response validation
-- **VitePress**: Documentation generator
-
----
-
-For questions or support, please [open an issue](https://github.com/gripmock/grpctestify/issues) on GitHub.
+- [GitHub Repository](https://github.com/gripmock/grpctestify)
+- [Issue Tracker](https://github.com/gripmock/grpctestify/issues)
+- [API Reference](../guides/reference/)
+- [Examples](../guides/examples/)

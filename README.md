@@ -18,18 +18,20 @@ Automate gRPC server testing with configuration files. Validate endpoints, reque
 
 ## ✨ Features
 
-- 🌊 **gRPC streaming support**: Unary, client streaming, server streaming, and bidirectional streaming
-- ⚡ **Parallel execution** with `--parallel N` option
-- 📊 **Smart progress indicators** - automatically adapts based on test count and verbose mode
-- 🎯 **Advanced assertions** with jq-based validation
-- 🔧 **Inline options** for response validation (tolerance, partial matching, etc.)
-- 🔄 **Self-updating** with `--update` flag
-- 🛡 **Security** with checksum verification
-- 📂 **Recursive directory processing**
-- 🎨 **Colored output** with emoji support
-- 🔍 **Automatic dependency checks**
-- ⚠️ **Dedicated warning log level**
-- 🛠 **Flexible configuration format**
+- 🌊 **Complete gRPC streaming support**: Unary, client streaming, server streaming, and bidirectional streaming
+- ⚡ **Intelligent parallel execution** with auto-expire mutex system and output synchronization
+- 📊 **Centralized test state management** with detailed per-test analytics and plugin metadata
+- 🎯 **Advanced assertion system** with jq-based validation and custom assertions
+- 🔌 **Powerful plugin architecture** with read/write API access to test state
+- 📈 **Rich reporting formats**: JUnit XML and JSON with plugin data integration
+- 🛡 **Production-grade stability**: 100% linter coverage, comprehensive test suite
+- 🔒 **Robust error handling** with mutex auto-expiration and deadlock prevention
+- 💡 **Custom IO system** using named pipes for zero temporary file approach
+- 🎯 **Unique test identification** with full paths to prevent naming conflicts
+- 🔄 **Self-updating** with `--update` flag and checksum verification
+- 📂 **Smart directory processing** with configurable parallel jobs
+- 🎨 **Professional output formatting** with timestamps and structured logging
+- 🔍 **Comprehensive dependency management** and automatic checks
 
 ## 📋 Requirements
 
@@ -379,12 +381,39 @@ Features:
 - Built-in examples and templates
 - Real-time preview
 
+## 🆕 What's New in v1.0.0
+
+### 🚀 **Production-Ready Architecture**
+- **Zero temporary files**: Custom IO system using named pipes and in-memory buffers
+- **Auto-expire mutex**: Prevents deadlocks with automatic lock expiration (5s)
+- **Centralized state**: Unified test state management with plugin read/write access
+- **Full path identification**: Eliminates test name conflicts across directories
+
+### 📊 **Enhanced Analytics & Reporting**
+- **Per-test metadata**: Detailed information including execution time, directory, relative paths
+- **Plugin enrichment**: Plugins can add custom data to test results and reports
+- **Timeline analysis**: View test execution order and performance patterns
+- **Directory grouping**: Organize test results by directory structure
+
+### 🔌 **Advanced Plugin System**
+- **State API**: Plugins can read and modify centralized test state
+- **IO API**: Synchronized output through mutex-protected interface
+- **Metadata storage**: Per-test and global plugin data persistence
+- **Event hooks**: React to test lifecycle events
+
+### ⚡ **Performance & Reliability**
+- **Smart parallel execution**: Automatic core detection with manual override
+- **Synchronized output**: No mixed output in parallel mode
+- **Improved error handling**: Comprehensive failure tracking and reporting
+- **100% linter coverage**: All 414 ShellCheck warnings resolved
+
 ## 🔒 Security Features
 
 - Automatic checksum verification during updates
 - Secure download process with SHA-256 validation
 - Warning system for potential security issues
 - Safe error handling and validation
+- Process isolation with secure mutex implementation
 
 ## 📚 Examples
 
@@ -406,7 +435,13 @@ Check out the comprehensive examples in `examples/scenarios/`:
 
 ## 📄 License
 
-[MIT License](LICENSE) © 2025 GripMock
+[MIT License](LICENSE) © 2025 Babichev Maxim <info@babichev.net>
+
+## 👨‍💻 Author
+
+**Babichev Maxim**  
+📧 info@babichev.net  
+🐙 GitHub: [@rez1dent3](https://github.com/rez1dent3)
 
 ---
 

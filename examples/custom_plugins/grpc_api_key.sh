@@ -7,7 +7,7 @@
 # Plugin metadata
 PLUGIN_API_KEY_VERSION="1.0.0"
 PLUGIN_API_KEY_DESCRIPTION="API key validation plugin for authentication headers"
-PLUGIN_API_KEY_AUTHOR="gRPC Testify Team <info@babichev.net>"
+PLUGIN_API_KEY_AUTHOR="Your Name <info@example.com>"
 
 # Plugin configuration
 declare -A PLUGIN_API_KEY_CONFIG=(
