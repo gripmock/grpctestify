@@ -396,10 +396,11 @@ EOF
 }
 
 @test "extract_section: file does not exist" {
-    run extract_section "/nonexistent/file.gctf" "ENDPOINT"
+    # Capture both stdout and stderr
+    run extract_section "/nonexistent/file.gctf" "ENDPOINT" 2>&1
     # Function returns 0 due to pipe with sed, but awk outputs error to stderr
     [ "$status" -eq 0 ]
-    # Error message appears in stderr/stdout
+    # Error message appears in combined output (stdout + stderr)
     [[ "$output" =~ "can't open file" ]]
 }
 
