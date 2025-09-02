@@ -184,7 +184,9 @@ setup() {
         esac
     }
     uptime() { echo "invalid output"; }
-    export -f test uptime
+    cut() { echo "invalid"; }
+    sed() { echo "invalid"; }
+    export -f test uptime cut sed
     
     run kernel_load_average
     [ "$status" -eq 0 ]
