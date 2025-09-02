@@ -2,98 +2,20 @@
 localhost:50052
 
 --- ENDPOINT ---
-monitoring.IoTMonitoringService/MonitorDevices
+monitoring.IoTMonitoringService/GetDevice
 
 --- REQUEST ---
 {
-  "device_id": "smart_sensor_001",
-  "command_type": "start_monitoring",
-  "parameters": {
-    "interval": "2s",
-    "metrics": ["temperature", "humidity", "pressure"],
-    "high_precision": "true"
-  },
-  "request_id": "monitor_start_001"
+  "device_id": "device_001"
 }
 
 --- ASSERTS ---
-.device_id == "smart_sensor_001"
-.request_id == "monitor_start_001"
-.message | contains("Monitoring started")
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.temperature > 18.0
-.telemetry.temperature < 35.0
-.telemetry.humidity > 30.0
-.telemetry.humidity < 80.0
-.telemetry.pressure > 950.0
-.telemetry.pressure < 1050.0
-.telemetry.battery_level > 70
-.telemetry.signal_strength > -80
-
---- REQUEST ---
-{
-  "device_id": "smart_sensor_001",
-  "command_type": "set_config",
-  "parameters": {
-    "sampling_rate": "1000ms",
-    "alert_threshold_temp": "30.0",
-    "alert_threshold_humidity": "75.0"
-  },
-  "request_id": "config_update_001"
-}
-
---- ASSERTS ---
-.device_id == "smart_sensor_001"
-.request_id == "config_update_001"
-.message | contains("Configuration updated")
-.status == "DEVICE_STATUS_ONLINE"
-
---- REQUEST ---
-{
-  "device_id": "smart_sensor_002",
-  "command_type": "start_monitoring",
-  "parameters": {
-    "interval": "5s",
-    "metrics": ["temperature", "voltage", "current"]
-  },
-  "request_id": "monitor_start_002"
-}
-
---- ASSERTS ---
-.device_id == "smart_sensor_002"
-.request_id == "monitor_start_002"
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.temperature > 15.0
-.telemetry.voltage > 10.0
-.telemetry.current > 0.1
-
---- REQUEST ---
-{
-  "device_id": "smart_sensor_001",
-  "command_type": "get_status",
-  "parameters": {},
-  "request_id": "status_check_001"
-}
-
---- ASSERTS ---
-.device_id == "smart_sensor_001"
-.request_id == "status_check_001"
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.battery_level >= 70
-.message | contains("Device operational")
-
---- REQUEST ---
-{
-  "device_id": "smart_sensor_001",
-  "command_type": "stop_monitoring",
-  "parameters": {},
-  "request_id": "monitor_stop_001"
-}
-
---- ASSERTS ---
-.device_id == "smart_sensor_001"
-.request_id == "monitor_stop_001"
-.message | contains("Monitoring stopped")
+.device.id == "device_001"
+.device.status == "DEVICE_STATUS_ONLINE"
+.device.location == "Living Room"
+.device.type == "temperature_sensor"
+.device.created_at | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
+.device.updated_at | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
 
 --- OPTIONS ---
 timeout: 45

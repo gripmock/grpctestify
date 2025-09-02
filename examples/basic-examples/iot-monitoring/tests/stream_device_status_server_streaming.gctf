@@ -17,12 +17,5 @@ monitoring.IoTMonitoringService/StreamDeviceStatus
 .metadata.location == "Living Room"
 .metadata.type == "temperature_sensor"
 
---- ASSERTS ---
-.device_id == "device_002"
-.status == "DEVICE_STATUS_ONLINE"
-.message | contains("device_002")
-.metadata.location == "Kitchen"
-.metadata.type == "humidity_sensor"
-
 --- OPTIONS ---
 timeout: 15

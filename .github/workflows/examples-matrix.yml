@@ -12,7 +12,7 @@ jobs:
     name: Test ${{ matrix.example.name }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         example:
           - name: "user-management"

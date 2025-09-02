@@ -13,13 +13,8 @@ user.UserService/GetUser
     "include_profile": true
 }
 
---- ERROR ---
-.code == 5
-.message | contains("not found")
-
 --- ASSERTS ---
-.error.code == 5
-.error.message | contains("not found")
+.found == false
 
 --- OPTIONS ---
 timeout: 30

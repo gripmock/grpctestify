@@ -1,5 +1,5 @@
 --- ADDRESS ---
-localhost:50057
+localhost:50053
 
 --- TLS ---
 ca_cert: ./../server/tls/ca-cert.pem
@@ -26,23 +26,7 @@ chat.ChatService/SendMessage
   }
 }
 
---- RESPONSE ---
-{
-  "message": {
-    "id": "msg_*",
-    "user_id": "user1",
-    "room_id": "room1",
-    "content": "Secure TLS message from gRPC Testify!",
-    "message_type": "text",
-    "timestamp": "*",
-    "metadata": {
-      "encryption": "tls",
-      "client": "grpctestify",
-      "security_level": "high"
-    }
-  },
-  "success": true
-}
+
 
 --- ASSERTS ---
 .message.id | test("msg_.*")

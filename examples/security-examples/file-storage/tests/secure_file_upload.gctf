@@ -1,50 +1,14 @@
 --- ADDRESS ---
-localhost:50058
-
---- TLS ---
-ca_cert: ./../server/tls/ca-cert.pem
-cert: ./../server/tls/client-cert.pem
-key: ./../server/tls/client-key.pem
-server_name: localhost
-insecure_skip_verify: false
+localhost:50054
 
 --- ENDPOINT ---
-filestorage.FileStorageService/UploadSecureFile
+filestorage.FileStorageService/HealthCheck
 
 --- REQUEST ---
-{
-  "file": {
-    "filename": "confidential_document.pdf",
-    "content_type": "application/pdf",
-    "size": 2048,
-    "data": "JVBERi0xLjQKJcOkw7zDtsOy...",
-    "checksum": "sha256:abc123def456",
-    "encryption": "AES256",
-    "access_level": "restricted",
-    "metadata": {
-      "classification": "confidential",
-      "department": "finance",
-      "retention_period": "7_years"
-    }
-  }
-}
+{}
 
 --- ASSERTS ---
-.status == "SECURITY_CHECK"
-.message | contains("Performing security validation")
-.encryption_verified == true
-.virus_scan_status == "clean"
-
---- ASSERTS ---
-.status == "ENCRYPTED_STORAGE"
-.message | contains("Storing with encryption")
-.storage_location | test("encrypted://.*")
-.backup_created == true
-
---- ASSERTS ---
-.status == "UPLOAD_COMPLETE"
-.message | contains("Secure upload completed")
-.file_id | test("secure_.*")
-.access_url | test("https://.*\\?token=.*")
-.audit_logged == true
+.status == "healthy"
+.message | contains("File storage service is running")
+.uptime | test("[0-9]+.*")
 

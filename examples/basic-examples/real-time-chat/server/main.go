@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 
 	pb "github.com/gripmock/grpctestify/examples/basic-examples/real-time-chat/server/chatpb"
 	"google.golang.org/grpc/credentials"
@@ -594,20 +595,20 @@ func main() {
 		}
 
 		// Create TLS listener
-		listener, err = tls.Listen("tcp", ":50057", tlsConfig)
+		listener, err = tls.Listen("tcp", ":50053", tlsConfig)
 		if err != nil {
 			log.Fatalf("Failed to listen with TLS: %v", err)
 		}
 
-		log.Println("🔒 Real-time Chat gRPC Server starting with TLS on :50057")
+		log.Println("🔒 Real-time Chat gRPC Server starting with TLS on :50053")
 	} else {
 		// Create plain TCP listener
-		listener, err = net.Listen("tcp", ":50057")
+		listener, err = net.Listen("tcp", ":50053")
 		if err != nil {
-			log.Fatalf("Failed to listen on port 50057: %v", err)
+			log.Fatalf("Failed to listen on port 50053: %v", err)
 		}
 
-		log.Println("⚠️  Real-time Chat gRPC Server starting without TLS on :50057")
+		log.Println("⚠️  Real-time Chat gRPC Server starting without TLS on :50053")
 		log.Println("   Run 'make tls' in user-management/server to generate TLS certificates")
 	}
 
@@ -627,6 +628,9 @@ func main() {
 	// Register chat service
 	chatServer := NewChatServer()
 	pb.RegisterChatServiceServer(server, chatServer)
+
+	// Register reflection service for grpcurl
+	reflection.Register(server)
 
 	log.Println("📝 Sample data initialized:")
 	log.Println("   - Rooms: General Discussion, Tech Support")

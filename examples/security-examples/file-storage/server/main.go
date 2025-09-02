@@ -207,20 +207,20 @@ func main() {
 		}
 
 		// Create TLS listener
-		lis, err = tls.Listen("tcp", ":50058", tlsConfig)
+		lis, err = tls.Listen("tcp", ":50054", tlsConfig)
 		if err != nil {
 			log.Fatalf("Failed to listen with TLS: %v", err)
 		}
 
-		log.Println("🔒 File Storage Service is running with TLS on port 50058...")
+		log.Println("🔒 File Storage Service is running with TLS on port 50054...")
 	} else {
 		// Create plain TCP listener
-		lis, err = net.Listen("tcp", ":50058")
+		lis, err = net.Listen("tcp", ":50054")
 		if err != nil {
 			log.Fatalf("Failed to listen: %v", err)
 		}
 
-		log.Println("⚠️  File Storage Service is running without TLS on port 50058...")
+		log.Println("⚠️  File Storage Service is running without TLS on port 50054...")
 		log.Println("   Run 'make tls' in user-management/server to generate TLS certificates")
 	}
 

@@ -608,7 +608,7 @@ func (s *AIChatServer) analyzeSentiment(text string) *aichatpb.SentimentAnalysis
 
 func main() {
 	// Create listener
-	lis, err := net.Listen("tcp", ":50054")
+	lis, err := net.Listen("tcp", ":50056")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -621,7 +621,7 @@ func main() {
 	aichatpb.RegisterAIChatServiceServer(s, chatServer)
 	reflection.Register(s)
 
-	fmt.Println("🤖 AI Chat Service is running on port 50054...")
+	fmt.Println("🤖 AI Chat Service is running on port 50056...")
 	fmt.Println("Available methods:")
 	fmt.Println("  - CreateChatSession, UpdateChatSettings, SendMessage")
 	fmt.Println("  - GetChatHistory, AnalyzeSentiment, HealthCheck")

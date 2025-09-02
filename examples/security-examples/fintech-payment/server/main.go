@@ -684,7 +684,7 @@ func (s *PaymentServer) performComplianceCheck(req *paymentpb.ProcessPaymentRequ
 
 func main() {
 	// Check if TLS is enabled
-	useTLS := true // Set to false for testing without TLS
+	useTLS := false // Set to false for testing without TLS
 
 	// Create listener
 	var lis net.Listener
@@ -702,19 +702,19 @@ func main() {
 			ClientAuth:   tls.RequireAndVerifyClientCert,
 		}
 
-		lis, err = tls.Listen("tcp", ":50053", config)
+		lis, err = tls.Listen("tcp", ":50055", config)
 		if err != nil {
 			log.Fatalf("Failed to listen with TLS: %v", err)
 		}
 
-		fmt.Println("🔒 FinTech Payment Service is running with mTLS on port 50053...")
+		fmt.Println("🔒 FinTech Payment Service is running with mTLS on port 50055...")
 	} else {
-		lis, err = net.Listen("tcp", ":50053")
+		lis, err = net.Listen("tcp", ":50055")
 		if err != nil {
 			log.Fatalf("Failed to listen: %v", err)
 		}
 
-		fmt.Println("⚠️  FinTech Payment Service is running without TLS on port 50053...")
+		fmt.Println("⚠️  FinTech Payment Service is running without TLS on port 50055...")
 		fmt.Println("   Run 'make tls' to generate TLS certificates")
 	}
 

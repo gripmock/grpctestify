@@ -268,34 +268,60 @@ func (s *IoTMonitoringServer) StreamDeviceStatus(req *monitoringpb.StreamDeviceS
 		interval = 5 * time.Second
 	}
 
-	for {
-		for _, deviceID := range deviceIDs {
-			s.mutex.RLock()
-			device, exists := s.devices[deviceID]
-			s.mutex.RUnlock()
+	// Send initial status for each device
+	for _, deviceID := range deviceIDs {
+		s.mutex.RLock()
+		device, exists := s.devices[deviceID]
+		s.mutex.RUnlock()
 
-			if !exists {
-				continue
-			}
-
-			update := &monitoringpb.DeviceStatusUpdate{
-				DeviceId:  deviceID,
-				Status:    device.Status,
-				Timestamp: timestamppb.New(time.Now()),
-				Message:   fmt.Sprintf("Device %s is %s", deviceID, device.Status),
-				Metadata: map[string]string{
-					"location": device.Location,
-					"type":     device.Type,
-				},
-			}
-
-			if err := stream.Send(update); err != nil {
-				return err
-			}
+		if !exists {
+			continue
 		}
 
-		time.Sleep(interval)
+		update := &monitoringpb.DeviceStatusUpdate{
+			DeviceId:  deviceID,
+			Status:    device.Status,
+			Timestamp: timestamppb.New(time.Now()),
+			Message:   fmt.Sprintf("Device %s is %s", deviceID, device.Status),
+			Metadata: map[string]string{
+				"location": device.Location,
+				"type":     device.Type,
+			},
+		}
+
+		if err := stream.Send(update); err != nil {
+			return err
+		}
 	}
+
+	// Send one more update after interval
+	time.Sleep(interval)
+	for _, deviceID := range deviceIDs {
+		s.mutex.RLock()
+		device, exists := s.devices[deviceID]
+		s.mutex.RUnlock()
+
+		if !exists {
+			continue
+		}
+
+		update := &monitoringpb.DeviceStatusUpdate{
+			DeviceId:  deviceID,
+			Status:    device.Status,
+			Timestamp: timestamppb.New(time.Now()),
+			Message:   fmt.Sprintf("Device %s is %s", deviceID, device.Status),
+			Metadata: map[string]string{
+				"location": device.Location,
+				"type":     device.Type,
+			},
+		}
+
+		if err := stream.Send(update); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // BulkUpdateDevices processes bulk device configuration updates
@@ -341,6 +367,7 @@ func (s *IoTMonitoringServer) BulkUpdateDevices(stream monitoringpb.IoTMonitorin
 func (s *IoTMonitoringServer) MonitorDevices(stream monitoringpb.IoTMonitoringService_MonitorDevicesServer) error {
 	monitoringID := fmt.Sprintf("monitor_%d", time.Now().Unix())
 	telemetryChan := make(chan *monitoringpb.DeviceTelemetry, 100)
+
 	s.mutex.Lock()
 	s.monitoring[monitoringID] = telemetryChan
 	s.mutex.Unlock()
@@ -350,48 +377,6 @@ func (s *IoTMonitoringServer) MonitorDevices(stream monitoringpb.IoTMonitoringSe
 		delete(s.monitoring, monitoringID)
 		s.mutex.Unlock()
 		close(telemetryChan)
-	}()
-
-	// Start telemetry generation goroutine
-	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				// Generate telemetry for all devices
-				s.mutex.RLock()
-				for deviceID, device := range s.devices {
-					telemetry := &monitoringpb.DeviceTelemetry{
-						DeviceId:  deviceID,
-						Timestamp: timestamppb.New(time.Now()),
-						Status:    device.Status,
-						Message:   fmt.Sprintf("Device %s telemetry update", deviceID),
-						Telemetry: &monitoringpb.TelemetryData{
-							Temperature:    22.5 + float64(time.Now().Unix()%10),
-							Humidity:       45.0 + float64(time.Now().Unix()%15),
-							Pressure:       1013.25 + float64(time.Now().Unix()%5),
-							Voltage:        12.0 + float64(time.Now().Unix()%2),
-							Current:        0.5 + float64(time.Now().Unix()%1)/10,
-							SignalStrength: -50 + int32(time.Now().Unix()%20),
-							BatteryLevel:   85 + int32(time.Now().Unix()%15),
-							CustomMetrics: map[string]float64{
-								"cpu_usage":    15.0 + float64(time.Now().Unix()%10),
-								"memory_usage": 45.0 + float64(time.Now().Unix()%20),
-							},
-						},
-					}
-
-					select {
-					case telemetryChan <- telemetry:
-					default:
-						// Channel full, skip this update
-					}
-				}
-				s.mutex.RUnlock()
-			}
-		}
 	}()
 
 	// Handle incoming commands and send telemetry

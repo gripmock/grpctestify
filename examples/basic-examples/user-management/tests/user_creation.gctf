@@ -9,57 +9,39 @@ user.UserService/CreateUser
 
 --- REQUEST ---
 {
-    "username": "john_doe",
-    "email": "john.doe@example.com",
-    "full_name": "John Doe",
-    "age": 30,
-    "roles": ["user", "premium"],
+    "username": "alice_wonder",
+    "email": "alice.wonder@example.com",
+    "fullName": "Jane Smith",
+    "age": 28,
+    "roles": ["user", "admin"],
     "metadata": {
-        "department": "engineering",
-        "location": "san_francisco",
-        "experience": "5_years"
+        "department": "marketing",
+        "location": "new_york",
+        "experience": "3_years"
     }
-}
-
---- RESPONSE ---
-{
-    "user": {
-        "id": "user_12345",
-        "username": "john_doe",
-        "email": "john.doe@example.com",
-        "full_name": "John Doe",
-        "age": 30,
-        "active": true,
-        "roles": ["user", "premium"],
-        "metadata": {
-            "department": "engineering",
-            "location": "san_francisco",
-            "experience": "5_years"
-        },
-        "created_at": "2024-01-15T10:00:00Z",
-        "updated_at": "2024-01-15T10:00:00Z"
-    },
-    "message": "User created successfully",
-    "success": true
 }
 
 --- ASSERTS ---
 .user.id | type == "string"
-.user.username == "john_doe"
-.user.email == "john.doe@example.com"
-.user.full_name == "John Doe"
-.user.age == 30
+.user.username == "alice_wonder"
+.user.email == "alice.wonder@example.com"
+.user.fullName == "Jane Smith"
+.user.age == 28
 .user.active == true
 .user.roles | length == 2
 .user.roles[0] == "user"
-.user.roles[1] == "premium"
-.user.metadata.department == "engineering"
-.user.metadata.location == "san_francisco"
-.user.metadata.experience == "5_years"
-.user.created_at | type == "string"
-.user.updated_at | type == "string"
+.user.roles[1] == "admin"
+.user.metadata.department == "marketing"
+.user.metadata.location == "new_york"
+.user.metadata.experience == "3_years"
+.user.createdAt | type == "string"
+.user.updatedAt | type == "string"
 .message == "User created successfully"
 .success == true
+
+
+
+
 
 --- OPTIONS ---
 timeout: 30

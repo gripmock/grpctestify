@@ -13,35 +13,23 @@ user.UserService/CreateUser
 {
   "username": "newtlsuser",
   "email": "newtlsuser@example.com",
-  "password": "securepass123",
-  "profile": {
-    "first_name": "New",
-    "last_name": "TLS User",
+  "full_name": "New TLS User",
+  "age": 25,
+  "roles": ["user"],
+  "metadata": {
     "bio": "Testing TLS without client certificate"
   }
-}
-
---- RESPONSE ---
-{
-  "user": {
-    "id": "*",
-    "username": "newtlsuser",
-    "email": "newtlsuser@example.com",
-    "profile": {
-      "first_name": "New",
-      "last_name": "TLS User",
-      "bio": "Testing TLS without client certificate"
-    },
-    "is_active": true,
-    "created_at": "*"
-  },
-  "success": true
 }
 
 --- ASSERTS ---
 .user.id | test("user_.*")
 .user.username == "newtlsuser"
 .user.email == "newtlsuser@example.com"
-.user.is_active == true
+.user.fullName == "New TLS User"
+.user.age == 25
+.user.active == true
+.user.roles | length == 1
+.user.roles[0] == "user"
+.user.metadata.bio == "Testing TLS without client certificate"
 .success == true
 

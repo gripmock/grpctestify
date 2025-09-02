@@ -2,120 +2,20 @@
 localhost:50052
 
 --- ENDPOINT ---
-monitoring.IoTMonitoringService/MonitorDevices
+monitoring.IoTMonitoringService/GetDevice
 
 --- REQUEST ---
 {
-  "device_id": "sensor_fleet_001",
-  "command_type": "start_monitoring",
-  "parameters": {
-    "interval": "3s",
-    "metrics": ["temperature", "humidity"],
-    "batch_mode": "true"
-  },
-  "request_id": "fleet_monitor_001"
+  "device_id": "device_002"
 }
 
 --- ASSERTS ---
-.device_id == "sensor_fleet_001"
-.request_id == "fleet_monitor_001"
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.temperature > 0
-
---- REQUEST ---
-{
-  "device_id": "sensor_fleet_002",
-  "command_type": "start_monitoring",
-  "parameters": {
-    "interval": "3s",
-    "metrics": ["pressure", "voltage"]
-  },
-  "request_id": "fleet_monitor_002"
-}
-
---- ASSERTS ---
-.device_id == "sensor_fleet_002"
-.request_id == "fleet_monitor_002"
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.pressure > 900
-
---- REQUEST ---
-{
-  "device_id": "sensor_fleet_003",
-  "command_type": "start_monitoring",
-  "parameters": {
-    "interval": "3s",
-    "metrics": ["current", "signal_strength"]
-  },
-  "request_id": "fleet_monitor_003"
-}
-
---- ASSERTS ---
-.device_id == "sensor_fleet_003"
-.request_id == "fleet_monitor_003"
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.current > 0
-
---- REQUEST ---
-{
-  "device_id": "sensor_fleet_004",
-  "command_type": "start_monitoring",
-  "parameters": {
-    "interval": "3s",
-    "metrics": ["battery_level"]
-  },
-  "request_id": "fleet_monitor_004"
-}
-
---- ASSERTS ---
-.device_id == "sensor_fleet_004"
-.request_id == "fleet_monitor_004"
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.battery_level > 50
-
---- REQUEST ---
-{
-  "device_id": "sensor_fleet_005",
-  "command_type": "start_monitoring",
-  "parameters": {
-    "interval": "3s",
-    "metrics": ["temperature", "humidity", "pressure"]
-  },
-  "request_id": "fleet_monitor_005"
-}
-
---- ASSERTS ---
-.device_id == "sensor_fleet_005"
-.request_id == "fleet_monitor_005"
-.status == "DEVICE_STATUS_ONLINE"
-.telemetry.temperature > 0
-
---- REQUEST ---
-{
-  "device_id": "sensor_fleet_001",
-  "command_type": "get_status",
-  "parameters": {},
-  "request_id": "fleet_status_001"
-}
-
---- ASSERTS ---
-.device_id == "sensor_fleet_001"
-.request_id == "fleet_status_001"
-.status == "DEVICE_STATUS_ONLINE"
-
---- REQUEST ---
-{
-  "device_id": "sensor_fleet_002",
-  "command_type": "stop_monitoring",
-  "parameters": {},
-  "request_id": "fleet_stop_002"
-}
-
---- ASSERTS ---
-.device_id == "sensor_fleet_002"
-.request_id == "fleet_stop_002"
-.message | contains("stopped")
+.device.id == "device_002"
+.device.status == "DEVICE_STATUS_ONLINE"
+.device.location == "Kitchen"
+.device.type == "humidity_sensor"
+.device.created_at | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
+.device.updated_at | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
 
 --- OPTIONS ---
-timeout: 60
-stream_count: 7
+timeout: 30

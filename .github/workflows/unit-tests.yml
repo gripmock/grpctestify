@@ -12,7 +12,7 @@ jobs:
     name: BATS Unit Tests (Fail Fast)
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true  # FAIL FAST: Stop immediately on first failure
+      fail-fast: false  # Allow tests to fail without stopping workflow
     
     steps:
       - uses: actions/checkout@v4

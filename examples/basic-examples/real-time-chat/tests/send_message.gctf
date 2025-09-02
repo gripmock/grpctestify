@@ -1,5 +1,5 @@
 --- ADDRESS ---
-localhost:50057
+localhost:50053
 
 --- ENDPOINT ---
 chat.ChatService/SendMessage
@@ -18,25 +18,14 @@ chat.ChatService/SendMessage
   }
 }
 
---- RESPONSE ---
-{
-  "message": {
-    "id": "msg_*",
-    "user_id": "user1",
-    "room_id": "room1",
-    "content": "Hello from gRPC Testify!",
-    "message_type": "text",
-    "timestamp": "*",
-    "metadata": {
-      "client": "grpctestify",
-      "version": "1.0.0"
-    }
-  },
-  "success": true
-}
-
 --- ASSERTS ---
 .message.id | test("msg_.*")
 .message.timestamp | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
 .success == true
+.message.content == "Hello from gRPC Testify!"
+.message.messageType == "text"
+.message.roomId == "room1"
+.message.userId == "user1"
+.message.metadata.client == "grpctestify"
+.message.metadata.version == "1.0.0"
 

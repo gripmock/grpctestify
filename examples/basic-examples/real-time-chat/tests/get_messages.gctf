@@ -1,5 +1,5 @@
 --- ADDRESS ---
-localhost:50057
+localhost:50053
 
 --- ENDPOINT ---
 chat.ChatService/GetMessages
@@ -11,23 +11,8 @@ chat.ChatService/GetMessages
   "offset": 0
 }
 
---- RESPONSE ---
-{
-  "messages": [
-    {
-      "id": "*",
-      "user_id": "*",
-      "room_id": "room1",
-      "content": "*",
-      "message_type": "text",
-      "timestamp": "*"
-    }
-  ],
-  "total": "*"
-}
-
 --- ASSERTS ---
 .messages | length >= 1
-.messages[0].room_id == "room1"
+.messages[0].roomId == "room1"
 .total >= 1
 

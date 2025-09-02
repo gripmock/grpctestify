@@ -24,7 +24,7 @@ user.UserService/GetUserProfile
 @email(.user.backup_email, "strict") == true
 @url(.user.avatar_url, "https") == true
 @url(.user.website) == true
-@timestamp(.user.created_at, "iso8601") == true
+@timestamp(.user.createdAt, "iso8601") == true
 @timestamp(.user.last_login, "rfc3339") == true
 @ip(.user.last_login_ip, "v4") == true
 

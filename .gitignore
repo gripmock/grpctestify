@@ -66,5 +66,9 @@ examples/**/server/server
 examples/**/server/*-server
 examples/**/server/*-service
 
+# Process ID files
+*.pid
+examples/**/server/*.pid
+
 # Bashly generated output
 grpctestify.sh

@@ -21,6 +21,65 @@ log() {
     esac
 }
 
+# Timeout function for preventing hanging tests
+kernel_timeout() {
+    local timeout_seconds="$1"
+    shift
+    
+    # Validate timeout parameter
+    if ! [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || [[ "$timeout_seconds" -eq 0 ]]; then
+        log error "kernel_timeout: invalid timeout value: $timeout_seconds"
+        return 1
+    fi
+    
+    # Method 1: Use system timeout if available
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$timeout_seconds" "$@"
+        return $?
+    fi
+    
+    # Method 2: Use gtimeout on macOS (if installed)
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$timeout_seconds" "$@"
+        return $?
+    fi
+    
+    # Method 3: Pure shell implementation
+    local cmd_pid timeout_pid exit_code
+    
+    # Start command in background
+    "$@" &
+    cmd_pid=$!
+    
+    # Start timeout killer in background
+    (
+        sleep "$timeout_seconds"
+        if kill -0 "$cmd_pid" 2>/dev/null; then
+            # Send TERM first, then KILL if needed
+            kill -TERM "$cmd_pid" 2>/dev/null
+            sleep 1
+            if kill -0 "$cmd_pid" 2>/dev/null; then
+                kill -KILL "$cmd_pid" 2>/dev/null
+            fi
+        fi
+    ) &
+    timeout_pid=$!
+    
+    # Wait for command completion
+    if wait "$cmd_pid" 2>/dev/null; then
+        exit_code=$?
+        # Kill timeout process
+        kill "$timeout_pid" 2>/dev/null
+        wait "$timeout_pid" 2>/dev/null
+        return $exit_code
+    else
+        # Command was killed by timeout
+        kill "$timeout_pid" 2>/dev/null
+        wait "$timeout_pid" 2>/dev/null
+        return 124  # Standard timeout exit code
+    fi
+}
+
 # Smart comment removal (from v0.0.13)
 process_line() {
     local line="$1"
@@ -173,22 +232,30 @@ run_single_test() {
         return 3  # SKIPPED for dry-run
     fi
     
-    # Make gRPC call
+    # Make gRPC call with per-test timeout
     local grpc_output
+    local timeout_seconds="${timeout_option:-30}"  # Default 30 seconds per test
+    
     if [[ -n "$request" ]]; then
         if [[ ${#header_args[@]} -gt 0 ]]; then
-            grpc_output=$(echo "$request" | grpcurl -plaintext "${header_args[@]}" -d @ "$address" "$endpoint" 2>&1)
+            grpc_output=$(kernel_timeout "$timeout_seconds" bash -c "echo '$request' | grpcurl -plaintext '${header_args[*]}' -d @ '$address' '$endpoint'" 2>&1)
         else
-            grpc_output=$(echo "$request" | grpcurl -plaintext -d @ "$address" "$endpoint" 2>&1)
+            grpc_output=$(kernel_timeout "$timeout_seconds" bash -c "echo '$request' | grpcurl -plaintext -d @ '$address' '$endpoint'" 2>&1)
         fi
     else
         if [[ ${#header_args[@]} -gt 0 ]]; then
-            grpc_output=$(grpcurl -plaintext "${header_args[@]}" "$address" "$endpoint" 2>&1)
+            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext "${header_args[@]}" "$address" "$endpoint" 2>&1)
         else
-            grpc_output=$(grpcurl -plaintext "$address" "$endpoint" 2>&1)
+            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext "$address" "$endpoint" 2>&1)
         fi
     fi
     local grpc_exit_code=$?
+    
+    # Handle timeout specifically
+    if [[ $grpc_exit_code -eq 124 ]]; then
+        log error "gRPC call timed out after ${timeout_seconds}s in $test_file"
+        return 1  # FAIL
+    fi
     
     # Check result
     if [[ $grpc_exit_code -eq 0 ]]; then
