@@ -302,7 +302,7 @@ grpctestify/
 │   ├── fixtures/                # Proto files and stubs
 │   ├── servers/                 # Test server implementations
 │   └── benchmarks/              # Performance benchmarks
-├── scripts/                     # Build utilities
+
 └── index.html                   # Web-based .gctf generator
 ```
 

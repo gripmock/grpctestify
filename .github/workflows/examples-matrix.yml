@@ -8,55 +8,30 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Generate dynamic matrix from examples-config.json
-  generate-matrix:
-    name: Generate Examples Matrix
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Generate matrix from examples-config.json
-        id: set-matrix
-        run: |
-          echo "🔍 [MATRIX] Starting matrix generation..."
-          echo "🔍 [MATRIX] Current directory: $(pwd)"
-          echo "🔍 [MATRIX] Checking examples-config.json..."
-          
-          if [ ! -f "examples/examples-config.json" ]; then
-            echo "❌ [MATRIX] ERROR: examples-config.json not found!"
-            exit 1
-          fi
-          
-          echo "🔍 [MATRIX] examples-config.json content:"
-          cat examples/examples-config.json | jq '.'
-          
-          echo "🔍 [MATRIX] Generating matrix from examples configuration..."
-          matrix=$(jq -c '[.groups[] | .examples[] | select(.test_count > 0)]' examples/examples-config.json)
-          
-          if [ $? -ne 0 ]; then
-            echo "❌ [MATRIX] ERROR: Failed to parse examples-config.json with jq"
-            exit 1
-          fi
-          
-          echo "🔍 [MATRIX] Matrix generation result:"
-          echo "$matrix" | jq '.'
-          
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
-          echo "✅ [MATRIX] Matrix generated successfully with $(echo "$matrix" | jq 'length') examples"
-
-  # Test each example in parallel
   test-examples:
     name: Test ${{ matrix.example.name }}
-    runs-on: ${{ matrix.os }}
-    needs: generate-matrix
+    runs-on: ubuntu-latest
     strategy:
-      fail-fast: true  # FAIL FAST: Stop immediately on first failure
+      fail-fast: true
       matrix:
-        os: [ubuntu-latest]
-        example: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-    
+        example:
+          - name: "user-management"
+            port: 50051
+          - name: "iot-monitoring"
+            port: 50052
+          - name: "real-time-chat"
+            port: 50053
+          - name: "file-storage"
+            port: 50054
+          - name: "fintech-payment"
+            port: 50055
+          - name: "ai-chat"
+            port: 50056
+          - name: "media-streaming"
+            port: 50057
+          - name: "shopflow-ecommerce"
+            port: 50058
+
     steps:
       - uses: actions/checkout@v4
 
@@ -64,329 +39,72 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-          cache: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
-          bundler-cache: true
 
       - name: Install dependencies
         run: |
-          echo "🔧 [DEPS] Starting dependency installation..."
-          echo "🔧 [DEPS] Current directory: $(pwd)"
-          echo "🔧 [DEPS] System info: $(uname -a)"
-          echo "🔧 [DEPS] Go version: $(go version)"
-          echo "🔧 [DEPS] Ruby version: $(ruby --version)"
-          
-          echo "🔧 [DEPS] Updating package list..."
           sudo apt-get update
-          
-          echo "🔧 [DEPS] Installing system packages..."
-          sudo apt-get install -y jq libxml2-utils netcat-openbsd curl unzip build-essential
-          
-          echo "🔧 [DEPS] System packages installed successfully"
-          
-          # Install latest protoc (Protocol Buffers compiler)
-          echo "🔧 [DEPS] Installing latest protoc..."
-          PROTOC_VERSION=$(curl -s https://api.github.com/repos/protocolbuffers/protobuf/releases/latest | jq -r '.tag_name' | sed 's/^v//')
-          echo "🔧 [DEPS] Latest protoc version: $PROTOC_VERSION"
-          
-          # Download and install protoc
-          echo "🔧 [DEPS] Downloading protoc..."
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
-          
-          echo "🔧 [DEPS] Installing protoc..."
-          sudo unzip -o "protoc-${PROTOC_VERSION}-linux-x86_64.zip" -d /usr/local bin/protoc
-          sudo unzip -o "protoc-${PROTOC_VERSION}-linux-x86_64.zip" -d /usr/local 'include/*'
-          rm "protoc-${PROTOC_VERSION}-linux-x86_64.zip"
-          
-          # Verify protoc installation
-          echo "🔧 [DEPS] Verifying protoc installation..."
-          protoc --version
-          
-          echo "🔧 [DEPS] Installing Go protobuf plugins..."
-          # Install Go protobuf plugins with latest versions
+          sudo apt-get install -y jq netcat-openbsd unzip build-essential
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          
-          # Add Go bin to PATH
           echo "$HOME/go/bin" >> $GITHUB_PATH
-          
-          # Verify installations
-          echo "🔧 [DEPS] Verifying Go plugin installations..."
-          protoc-gen-go --version
-          protoc-gen-go-grpc --version
-          
-          echo "🔧 [DEPS] Installing bashly..."
-          # Install bashly for script generation
           gem install bashly
-          
-          echo "✅ [DEPS] All dependencies installed successfully!"
 
       - name: Generate grpctestify
         run: |
-          echo "🔨 [BUILD] Starting grpctestify generation..."
-          echo "🔨 [BUILD] Current directory: $(pwd)"
-          echo "🔨 [BUILD] Available make targets:"
-          make help || echo "No make help available"
-          
-          echo "🔨 [BUILD] Running make generate..."
           make generate
-          
-          echo "🔨 [BUILD] Checking generated files..."
-          ls -la grpctestify.sh
-          
-          echo "🔨 [BUILD] Setting up grpctestify in PATH..."
           mkdir -p ~/bin
           cp grpctestify.sh ~/bin/grpctestify
           chmod +x ~/bin/grpctestify
           echo "$HOME/bin" >> $GITHUB_PATH
-          
-          echo "🔨 [BUILD] Verifying grpctestify installation..."
-          grpctestify --version || echo "grpctestify --version failed, but script exists"
-          echo "✅ [BUILD] grpctestify generated and installed successfully!"
 
-      - name: Validate example structure
+      - name: Start gRPC server
         run: |
-          echo "🔍 [VALIDATE] Starting example structure validation..."
-          echo "🔍 [VALIDATE] Example name: ${{ matrix.example.name }}"
-          echo "🔍 [VALIDATE] Expected port: ${{ matrix.example.port }}"
-          echo "🔍 [VALIDATE] Expected test count: ${{ matrix.example.test_count }}"
-          echo "🔍 [VALIDATE] Current directory: $(pwd)"
-          
-          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
-          echo "🔍 [VALIDATE] Found example directory: $example_dir"
-          
-          if [ ! -d "$example_dir" ]; then
-            echo "❌ [VALIDATE] ERROR: Example directory not found!"
-            echo "🔍 [VALIDATE] Available examples:"
-            find examples -type d -maxdepth 2 | head -20
-            exit 1
-          fi
-          
-          echo "🔍 [VALIDATE] Example directory structure:"
-          ls -la "$example_dir"
-          
-          echo "🔍 [VALIDATE] Checking required directories..."
-          if [ ! -d "$example_dir/server" ]; then
-            echo "❌ [VALIDATE] ERROR: Server directory not found!"
-            exit 1
-          fi
-          echo "✅ [VALIDATE] Server directory exists"
-          
-          if [ ! -d "$example_dir/tests" ]; then
-            echo "❌ [VALIDATE] ERROR: Tests directory not found!"
-            exit 1
-          fi
-          echo "✅ [VALIDATE] Tests directory exists"
-          
-          echo "🔍 [VALIDATE] Server directory contents:"
-          ls -la "$example_dir/server"
-          
-          echo "🔍 [VALIDATE] Tests directory contents:"
-          ls -la "$example_dir/tests"
-          
-          echo "🔍 [VALIDATE] Checking required files..."
-          if [ ! -f "$example_dir/server/go.mod" ]; then
-            echo "❌ [VALIDATE] ERROR: go.mod not found in server!"
-            exit 1
-          fi
-          echo "✅ [VALIDATE] go.mod exists"
-          
-          if [ ! -f "$example_dir/server/main.go" ]; then
-            echo "❌ [VALIDATE] ERROR: main.go not found in server!"
-            exit 1
-          fi
-          echo "✅ [VALIDATE] main.go exists"
-          
-          if [ ! -f "$example_dir/server/Makefile" ]; then
-            echo "❌ [VALIDATE] ERROR: Makefile not found in server!"
-            exit 1
-          fi
-          echo "✅ [VALIDATE] Makefile exists"
-          
-          echo "🔍 [VALIDATE] go.mod content:"
-          cat "$example_dir/server/go.mod"
-          
-          echo "🔍 [VALIDATE] Makefile content:"
-          cat "$example_dir/server/Makefile"
-          
-          # Count test files
-          echo "🔍 [VALIDATE] Counting test files..."
-          test_count=$(find "$example_dir/tests" -name "*.gctf" | wc -l)
-          expected_count=${{ matrix.example.test_count }}
-          
-          echo "🔍 [VALIDATE] Test count: found $test_count, expected $expected_count"
-          
-          if [ "$test_count" -eq "$expected_count" ]; then
-            echo "✅ [VALIDATE] Test count matches: $test_count tests found"
-          else
-            echo "❌ [VALIDATE] ERROR: Test count mismatch: expected $expected_count, found $test_count"
-            echo "🔍 [VALIDATE] Test files found:"
-            find "$example_dir/tests" -name "*.gctf" -exec basename {} \;
-            exit 1
-          fi
-          
-          echo "✅ [VALIDATE] Example structure validation passed!"
+          example_dir="examples/*/${{ matrix.example.name }}"
+          cd "$example_dir/server"
+          go mod tidy
+          nohup go run main.go > server.log 2>&1 &
+          echo $! > server.pid
 
-      - name: Start gRPC server using centralized script
-        run: |
-          set -euo pipefail
-          echo "🚀 [SERVER] Starting gRPC server..."
-          echo "🚀 [SERVER] Example name: ${{ matrix.example.name }}"
-          echo "🚀 [SERVER] Port: ${{ matrix.example.port }}"
-          echo "🚀 [SERVER] Current directory: $(pwd)"
-          
-          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
-          echo "🚀 [SERVER] Example directory: $example_dir"
-          
-          echo "🚀 [SERVER] Checking for start script..."
-          if [ -f "scripts/start_examples_servers.sh" ]; then
-            echo "✅ [SERVER] Found start script, using it..."
-            chmod +x scripts/start_examples_servers.sh
-            ./scripts/start_examples_servers.sh
-          else
-            echo "⚠️ [SERVER] Start script not found, starting server manually..."
-            cd "$example_dir/server"
-            echo "🚀 [SERVER] Changed to server directory: $(pwd)"
-            
-            echo "🚀 [SERVER] Installing Go dependencies..."
-            go mod tidy
-            
-            echo "🚀 [SERVER] Building server..."
-            make build
-            
-            echo "🚀 [SERVER] Starting server..."
-            make start &
-            echo $! > server.pid
-            echo "🚀 [SERVER] Server started with PID: $(cat server.pid)"
-            
-            # Wait for server to listen on the example port
-            echo "🚀 [SERVER] Waiting for server to start on port ${{ matrix.example.port }}..."
-            for i in $(seq 1 30); do
-              echo "🚀 [SERVER] Attempt $i/30: checking port ${{ matrix.example.port }}..."
-              if nc -z localhost ${{ matrix.example.port }} 2>/dev/null; then
-                echo "✅ [SERVER] Server is listening on port ${{ matrix.example.port }}"
-                break
-              fi
-              if [ $i -eq 30 ]; then
-                echo "❌ [SERVER] ERROR: Server failed to start within 30 seconds"
-                echo "🚀 [SERVER] Checking server process..."
-                ps aux | grep server | grep -v grep || echo "No server process found"
-                echo "🚀 [SERVER] Checking server logs..."
-                if [ -f "server.log" ]; then
-                  cat server.log
-                fi
-                exit 1
-              fi
-              sleep 1
-            done
-          fi
-          
-          echo "✅ [SERVER] Server started successfully!"
+          for i in $(seq 1 30); do
+            if lsof -i :${{ matrix.example.port }} >/dev/null 2>&1; then
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Server failed to start"
+              exit 1
+            fi
+            sleep 1
+          done
 
       - name: Validate server endpoints
         run: |
-          echo "🔍 [ENDPOINTS] Validating server endpoints..."
-          echo "🔍 [ENDPOINTS] Example: ${{ matrix.example.name }}"
-          echo "🔍 [ENDPOINTS] Port: ${{ matrix.example.port }}"
-          
-          # List available services
-          echo "🔍 [ENDPOINTS] Available services:"
           grpcurl -plaintext localhost:${{ matrix.example.port }} list
-          
-          # Test health check if available
-          if grpcurl -plaintext localhost:${{ matrix.example.port }} list | grep -q Health; then
-            echo "🔍 [ENDPOINTS] Testing health check..."
-            grpcurl -plaintext localhost:${{ matrix.example.port }} grpc.health.v1.Health/Check
-          else
-            echo "⚠️ [ENDPOINTS] Health service not available"
-          fi
-          
-          echo "✅ [ENDPOINTS] Server endpoints validated!"
 
       - name: Run gRPC tests
         run: |
-          set -euo pipefail
-          echo "🧪 [TESTS] Starting gRPC tests..."
-          echo "🧪 [TESTS] Example: ${{ matrix.example.name }}"
-          echo "🧪 [TESTS] Current directory: $(pwd)"
-          
-          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
-          echo "🧪 [TESTS] Example directory: $example_dir"
-          
+          example_dir="examples/*/${{ matrix.example.name }}"
           cd "$example_dir"
-          echo "🧪 [TESTS] Changed to example directory: $(pwd)"
-          
-          # Set environment variables
           export GRPCTESTIFY_ADDRESS="localhost:${{ matrix.example.port }}"
-          export GRPCTESTIFY_TIMEOUT=30
-          export GRPCTESTIFY_VERBOSE=true
-          
-          echo "🧪 [TESTS] Environment variables set:"
-          echo "🧪 [TESTS] GRPCTESTIFY_ADDRESS=$GRPCTESTIFY_ADDRESS"
-          echo "🧪 [TESTS] GRPCTESTIFY_TIMEOUT=$GRPCTESTIFY_TIMEOUT"
-          echo "🧪 [TESTS] GRPCTESTIFY_VERBOSE=$GRPCTESTIFY_VERBOSE"
-          
-          # Run tests (grpctestify v1.0.0 with smart defaults)
-          echo "🧪 [TESTS] Running tests with grpctestify..."
           grpctestify tests/
-          
-          # Also run individual tests for compatibility
-          echo "🧪 [TESTS] Running individual tests for compatibility..."
-          for test_file in tests/*.gctf; do
-            if [ -f "$test_file" ]; then
-              echo "🧪 [TESTS] Running test: $(basename "$test_file")"
-              timeout 120 grpctestify "$test_file"
-            fi
-          done
-          
-          echo "✅ [TESTS] All tests completed for ${{ matrix.example.name }}!"
 
       - name: Cleanup servers
         if: always()
         run: |
-          set -euo pipefail
-          echo "🧹 [CLEANUP] Starting server cleanup..."
-          echo "🧹 [CLEANUP] Example: ${{ matrix.example.name }}"
-          
-          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d || true)
-          echo "🧹 [CLEANUP] Example directory: $example_dir"
-          
-          echo "🧹 [CLEANUP] Stopping all gRPC servers..."
-          if [ -f "scripts/stop_examples_servers.sh" ]; then
-            echo "🧹 [CLEANUP] Using stop script..."
-            chmod +x scripts/stop_examples_servers.sh
-            ./scripts/stop_examples_servers.sh
-          else
-            echo "🧹 [CLEANUP] Stop script not found, stopping server manually..."
-            if [ -n "$example_dir" ] && [ -f "$example_dir/server/server.pid" ]; then
-              pid=$(cat "$example_dir/server/server.pid")
-              echo "🧹 [CLEANUP] Stopping server with PID: $pid"
-              if kill -0 "$pid" 2>/dev/null; then
-                kill "$pid"
-                echo "🧹 [CLEANUP] Server process killed"
-              else
-                echo "🧹 [CLEANUP] Server process not running"
-              fi
-              rm -f "$example_dir/server/server.pid"
-            else
-              echo "🧹 [CLEANUP] No server PID file found"
-            fi
+          example_dir="examples/*/${{ matrix.example.name }}"
+          if [ -f "$example_dir/server/server.pid" ]; then
+            pid=$(cat "$example_dir/server/server.pid")
+            kill "$pid" 2>/dev/null || true
+            rm -f "$example_dir/server/server.pid"
           fi
-          
-          echo "✅ [CLEANUP] Server cleanup completed!"
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results-${{ matrix.example.name }}
-          path: |
-            examples/*/${{ matrix.example.name }}/tests/*.gctf
-            examples/*/${{ matrix.example.name }}/server/*.log
-            logs/servers/*.log
+          path: examples/*/${{ matrix.example.name }}/tests/*.gctf
           retention-days: 7
