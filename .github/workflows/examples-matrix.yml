@@ -63,7 +63,8 @@ jobs:
 
       - name: Start gRPC server
         run: |
-          example_dir="examples/*/${{ matrix.example.name }}"
+          example_dir=$(find examples -name "${{ matrix.example.name }}" \
+            -type d)
           cd "$example_dir/server"
           go mod tidy
           nohup go run main.go > server.log 2>&1 &
@@ -86,7 +87,8 @@ jobs:
 
       - name: Run gRPC tests
         run: |
-          example_dir="examples/*/${{ matrix.example.name }}"
+          example_dir=$(find examples -name "${{ matrix.example.name }}" \
+            -type d)
           cd "$example_dir"
           export GRPCTESTIFY_ADDRESS="localhost:${{ matrix.example.port }}"
           grpctestify tests/
@@ -94,7 +96,8 @@ jobs:
       - name: Cleanup servers
         if: always()
         run: |
-          example_dir="examples/*/${{ matrix.example.name }}"
+          example_dir=$(find examples -name "${{ matrix.example.name }}" \
+            -type d)
           if [ -f "$example_dir/server/server.pid" ]; then
             pid=$(cat "$example_dir/server/server.pid")
             kill "$pid" 2>/dev/null || true
