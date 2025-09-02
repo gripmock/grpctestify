@@ -111,7 +111,7 @@ start_server() {
     
     # Build server
     log "🔨 Building $server_name..."
-    if ! (cd "$server_dir/server" && make build >/dev/null 2>&1); then
+    if ! (cd "$server_dir" && make build >/dev/null 2>&1); then
         error "Failed to build $server_name"
         return 1
     fi
@@ -119,7 +119,7 @@ start_server() {
     # Start server in background
     log "▶️  Starting $server_name on port $port..."
     (
-        cd "$server_dir/server"
+        cd "$server_dir"
         ./server 2>&1 | tee "$log_file"
     ) &
     
