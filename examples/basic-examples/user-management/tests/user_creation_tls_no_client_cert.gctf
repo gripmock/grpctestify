@@ -1,0 +1,35 @@
+--- ADDRESS ---
+localhost:50051
+
+--- TLS ---
+ca_cert: ./../server/tls/ca-cert.pem
+server_name: localhost
+insecure_skip_verify: false
+
+--- ENDPOINT ---
+user.UserService/CreateUser
+
+--- REQUEST ---
+{
+  "username": "newtlsuser",
+  "email": "newtlsuser@example.com",
+  "full_name": "New TLS User",
+  "age": 25,
+  "roles": ["user"],
+  "metadata": {
+    "bio": "Testing TLS without client certificate"
+  }
+}
+
+--- ASSERTS ---
+.user.id | test("user_.*")
+.user.username == "newtlsuser"
+.user.email == "newtlsuser@example.com"
+.user.fullName == "New TLS User"
+.user.age == 25
+.user.active == true
+.user.roles | length == 1
+.user.roles[0] == "user"
+.user.metadata.bio == "Testing TLS without client certificate"
+.success == true
+

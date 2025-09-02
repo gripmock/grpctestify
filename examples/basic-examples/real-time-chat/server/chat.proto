@@ -1,0 +1,297 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "./chatpb";
+
+// ChatMessage represents a message in the chat system
+message ChatMessage {
+    string id = 1;
+    string user_id = 2;
+    string room_id = 3;
+    string content = 4;
+    string message_type = 5; // text, image, file, system
+    string timestamp = 6;
+    map<string, string> metadata = 7;
+    repeated string mentions = 8;
+    string reply_to = 9; // ID of message being replied to
+}
+
+// User represents a user in the chat system
+message User {
+    string id = 1;
+    string username = 2;
+    string display_name = 3;
+    string avatar_url = 4;
+    bool online = 5;
+    string last_seen = 6;
+    map<string, string> status = 7; // custom status, mood, etc.
+}
+
+// ChatRoom represents a chat room
+message ChatRoom {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    string created_by = 4;
+    string created_at = 5;
+    repeated string members = 6;
+    map<string, string> settings = 7;
+    bool is_private = 8;
+    int32 max_members = 9;
+}
+
+// ChatAction represents an action in the chat
+message ChatAction {
+    string user_id = 1;
+    string room_id = 2;
+    string action_type = 3; // join, leave, send, typing, stop_typing
+    ChatMessage message = 4;
+    map<string, string> metadata = 5;
+}
+
+// ChatResponse represents a response from the chat service
+message ChatResponse {
+    string user_id = 1;
+    string room_id = 2;
+    string action_type = 3; // joined, left, message_received, user_joined, user_left, typing, stopped_typing
+    ChatMessage message = 4;
+    User user = 5;
+    string timestamp = 6;
+    map<string, string> metadata = 7;
+}
+
+// FileUpload represents a file being uploaded
+message FileUpload {
+    string file_id = 1;
+    string filename = 2;
+    string content_type = 3;
+    int64 size = 4;
+    bytes data = 5;
+    string room_id = 6;
+    string user_id = 7;
+    map<string, string> metadata = 8;
+}
+
+// FileUploadResponse represents the response to a file upload
+message FileUploadResponse {
+    string file_id = 1;
+    string filename = 2;
+    string url = 3;
+    int64 size = 4;
+    bool success = 5;
+    string error_message = 6;
+    string timestamp = 7;
+}
+
+// ChatService provides real-time chat functionality
+service ChatService {
+    // Bidirectional streaming for real-time chat
+    rpc Chat(stream ChatAction) returns (stream ChatResponse);
+    
+    // Room management
+    rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
+    rpc JoinRoom(JoinRoomRequest) returns (JoinRoomResponse);
+    rpc LeaveRoom(LeaveRoomRequest) returns (LeaveRoomResponse);
+    rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+    
+    // User management
+    rpc GetUser(GetUserRequest) returns (GetUserResponse);
+    rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+    rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+    
+    // File sharing
+    rpc ShareFile(stream FileUpload) returns (FileUploadResponse);
+    rpc GetFile(GetFileRequest) returns (GetFileResponse);
+    
+    // Message history
+    rpc GetMessageHistory(GetMessageHistoryRequest) returns (stream ChatMessage);
+    rpc SearchMessages(SearchMessagesRequest) returns (stream ChatMessage);
+    
+    // Additional unary RPCs
+    rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+    rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
+    rpc GetRooms(GetRoomsRequest) returns (GetRoomsResponse);
+    rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+    rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+    rpc UpdateUserStatus(UpdateUserStatusRequest) returns (UpdateUserStatusResponse);
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Room management messages
+message CreateRoomRequest {
+    string name = 1;
+    string description = 2;
+    bool is_private = 3;
+    int32 max_members = 4;
+    string created_by = 5;
+}
+
+message CreateRoomResponse {
+    ChatRoom room = 1;
+    bool success = 2;
+    string error_message = 3;
+}
+
+message JoinRoomRequest {
+    string room_id = 1;
+    string user_id = 2;
+}
+
+message JoinRoomResponse {
+    bool success = 1;
+    string error_message = 2;
+    ChatRoom room = 3;
+}
+
+message LeaveRoomRequest {
+    string room_id = 1;
+    string user_id = 2;
+}
+
+message LeaveRoomResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+message ListRoomsRequest {
+    string user_id = 1;
+    bool include_private = 2;
+}
+
+message ListRoomsResponse {
+    repeated ChatRoom rooms = 1;
+    int32 total_count = 2;
+}
+
+// User management messages
+message GetUserRequest {
+    string user_id = 1;
+}
+
+message GetUserResponse {
+    User user = 1;
+    bool found = 2;
+}
+
+message UpdateUserRequest {
+    string user_id = 1;
+    string username = 2;
+    string display_name = 3;
+    string avatar_url = 4;
+    map<string, string> status = 5;
+}
+
+message UpdateUserResponse {
+    User user = 1;
+    bool success = 2;
+    string error_message = 3;
+}
+
+message ListUsersRequest {
+    string room_id = 1;
+    bool online_only = 2;
+}
+
+message ListUsersResponse {
+    repeated User users = 1;
+    int32 total_count = 2;
+}
+
+// File management messages
+message GetFileRequest {
+    string file_id = 1;
+}
+
+message GetFileResponse {
+    string file_id = 1;
+    string filename = 2;
+    string content_type = 3;
+    int64 size = 4;
+    bytes data = 5;
+    bool found = 6;
+}
+
+// Message history messages
+message GetMessageHistoryRequest {
+    string room_id = 1;
+    int32 limit = 2;
+    string before_message_id = 3;
+}
+
+message SearchMessagesRequest {
+    string room_id = 1;
+    string query = 2;
+    int32 limit = 3;
+    string user_id = 4;
+}
+
+// Additional message types for unary RPCs
+message SendMessageRequest {
+    ChatMessage message = 1;
+}
+
+message SendMessageResponse {
+    ChatMessage message = 1;
+    bool success = 2;
+    string error_message = 3;
+}
+
+message GetMessagesRequest {
+    string room_id = 1;
+    int32 limit = 2;
+    int32 offset = 3;
+}
+
+message GetMessagesResponse {
+    repeated ChatMessage messages = 1;
+    int32 total = 2;
+}
+
+message GetRoomsRequest {
+    string user_id = 1;
+}
+
+message GetRoomsResponse {
+    repeated ChatRoom rooms = 1;
+}
+
+message GetUsersRequest {
+    string room_id = 1;
+}
+
+message GetUsersResponse {
+    repeated User users = 1;
+}
+
+message GetUserProfileRequest {
+    string user_id = 1;
+}
+
+message GetUserProfileResponse {
+    User user = 1;
+    bool found = 2;
+}
+
+message UpdateUserStatusRequest {
+    string user_id = 1;
+    bool online = 2;
+    map<string, string> status = 3;
+}
+
+message UpdateUserStatusResponse {
+    User user = 1;
+    bool success = 2;
+    string error_message = 3;
+}
+
+message HealthCheckRequest {
+    string service = 1;
+}
+
+message HealthCheckResponse {
+    string status = 1;
+    string timestamp = 2;
+    map<string, string> details = 3;
+}
+

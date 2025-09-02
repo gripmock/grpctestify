@@ -1,0 +1,18 @@
+--- ADDRESS ---
+localhost:50053
+
+--- ENDPOINT ---
+chat.ChatService/GetMessages
+
+--- REQUEST ---
+{
+  "room_id": "room1",
+  "limit": 10,
+  "offset": 0
+}
+
+--- ASSERTS ---
+.messages | length >= 1
+.messages[0].roomId == "room1"
+.total >= 1
+

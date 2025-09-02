@@ -1,0 +1,32 @@
+# User Profile Test
+# Tests user profile management with nested objects
+
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+user.UserService/GetUserProfile
+
+--- REQUEST ---
+{
+    "user_id": "user_12345"
+}
+
+--- ASSERTS ---
+.profile.userId == "user_12345"
+.profile.bio | length > 0
+.profile.address.city == "San Francisco"
+.profile.address.state == "CA"
+.profile.address.country == "USA"
+.profile.address.postalCode == "94105"
+.profile.interests | length >= 2
+.profile.interests[0] == "technology"
+.profile.interests[1] == "programming"
+.profile.preferences.theme == "dark"
+.profile.preferences.language == "en"
+.found == true
+
+--- OPTIONS ---
+timeout: 30
+partial: true
+

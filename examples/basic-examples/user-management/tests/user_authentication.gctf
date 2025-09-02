@@ -1,0 +1,34 @@
+# User Authentication Test
+# Tests user authentication with token validation
+
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+user.UserService/AuthenticateUser
+
+--- REQUEST ---
+{
+    "username": "john_doe"
+}
+
+--- ASSERTS ---
+.success == true
+.token | type == "string"
+.token | length > 0
+.user.id == "user_12345"
+.user.username == "john_doe"
+.user.email | test("@")
+.user.age | type == "number"
+.user.active == true
+.user.roles | length >= 1
+.user.metadata.department == "engineering"
+.expires_at | type == "string"
+.permissions | length >= 2
+.permissions | contains("read")
+.permissions | contains("write")
+
+--- OPTIONS ---
+timeout: 30
+redact: ["password", "token"]
+

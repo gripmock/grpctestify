@@ -1,0 +1,37 @@
+--- ADDRESS ---
+localhost:50054
+
+--- ENDPOINT ---
+aichat.AIChatService/ChatConversation
+
+--- REQUEST ---
+{
+  "session_id": "session_001",
+  "user_id": "user_001",
+  "message": "What's the weather like today?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "location": "San Francisco",
+    "time": "morning"
+  },
+  "request_id": "req_001",
+  "timestamp": "2024-01-01T09:00:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_001"
+.request_id == "req_001"
+.response | length > 0
+.response_type == "RESPONSE_TYPE_TEXT"
+.sentiment.overall_sentiment == "neutral"
+.metrics.response_time_ms > 0
+.metrics.tokens_used > 0
+.metrics.tokens_generated > 0
+.metrics.cost_usd > 0
+.metrics.model_used == "gpt-4"
+.is_final == true
+.chunk_number == 1
+.total_chunks == 1
+
+--- OPTIONS ---
+timeout: 30

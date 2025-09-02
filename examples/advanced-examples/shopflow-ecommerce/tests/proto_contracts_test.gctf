@@ -1,0 +1,24 @@
+--- ADDRESS ---
+localhost:50056
+
+--- PROTO ---
+mode: reflection
+files: []
+import_paths: []
+descriptor: ""
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/GetProduct
+
+--- REQUEST ---
+{
+    "product_id": "prod_001"
+}
+
+--- ASSERTS ---
+.found == true
+.product.id == "prod_001"
+.product.name == "Wireless Bluetooth Headphones"
+
+--- OPTIONS ---
+timeout: 10

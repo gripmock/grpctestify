@@ -1,0 +1,35 @@
+--- ADDRESS ---
+localhost:50054
+
+--- ENDPOINT ---
+aichat.AIChatService/AnalyzeSentiment
+
+--- REQUEST ---
+{
+  "text": "This is absolutely amazing! I love this product and it's working perfectly. Thank you so much!",
+  "language": "en",
+  "options": {
+    "include_entities": true,
+    "include_confidence": true,
+    "language_hint": "en",
+    "entity_types": ["adjective", "noun", "verb"]
+  }
+}
+
+--- ASSERTS ---
+.sentiment.overall_sentiment == "positive"
+.sentiment.positive_score > 0.7
+.sentiment.negative_score < 0.1
+.sentiment.neutral_score < 0.3
+.sentiment.language == "en"
+.confidence.overall_confidence > 0.8
+.confidence.positive_confidence > 0.7
+.confidence.negative_confidence < 0.2
+.confidence.neutral_confidence < 0.3
+.entities | length > 0
+.entities[0].text == "great"
+.entities[0].sentiment == "positive"
+.entities[0].score > 0.7
+
+--- OPTIONS ---
+timeout: 10

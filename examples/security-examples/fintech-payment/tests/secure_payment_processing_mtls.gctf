@@ -1,0 +1,54 @@
+--- ADDRESS ---
+localhost:50053
+
+--- TLS ---
+ca_cert: ./../server/tls/ca-cert.pem
+cert: ./../server/tls/client-cert.pem
+key: ./../server/tls/client-key.pem
+server_name: localhost
+insecure_skip_verify: false
+
+--- ENDPOINT ---
+payment.PaymentService/ProcessPayment
+
+--- REQUEST ---
+{
+  "account_id": "acc_002",
+  "merchant_id": "merchant_002",
+  "amount": 500.00,
+  "currency": "USD",
+  "payment_method": "card",
+  "risk_level": "medium",
+  "card_details": {
+    "card_number": "5555555555554444",
+    "cardholder_name": "Jane Smith",
+    "expiry_month": "08",
+    "expiry_year": "2026",
+    "cvv": "456",
+    "card_type": "mastercard",
+    "issuer": "Bank of America",
+    "is_primary": true
+  },
+  "metadata": {
+    "merchant_category": "business_services",
+    "transaction_type": "subscription",
+    "location": "online",
+    "security_level": "mtls_authenticated"
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.transaction_id | test("txn_.*")
+.status == "approved"
+.message == "Payment processed successfully"
+.amount_charged == 500.00
+.currency == "USD"
+.risk_assessment.risk_level == "medium"
+.risk_assessment.risk_score >= 0.3
+.risk_assessment.risk_score <= 0.7
+.compliance_check.compliance_status == "compliant"
+.compliance_check.violations | length == 0
+
+--- OPTIONS ---
+timeout: 15

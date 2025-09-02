@@ -1,0 +1,113 @@
+name: Examples Matrix Testing
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master, v1-dev]
+  workflow_dispatch:
+
+jobs:
+  test-examples:
+    name: Test ${{ matrix.example.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - name: "user-management"
+            port: 50051
+          - name: "iot-monitoring"
+            port: 50052
+          - name: "real-time-chat"
+            port: 50053
+          - name: "file-storage"
+            port: 50054
+          - name: "fintech-payment"
+            port: 50055
+          - name: "ai-chat"
+            port: 50056
+          - name: "media-streaming"
+            port: 50057
+          - name: "shopflow-ecommerce"
+            port: 50058
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq netcat-openbsd unzip build-essential
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+          gem install bashly
+
+      - name: Generate grpctestify
+        run: |
+          make generate
+          mkdir -p ~/bin
+          cp grpctestify.sh ~/bin/grpctestify
+          chmod +x ~/bin/grpctestify
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Start gRPC server
+        run: |
+          example_dir=$(find examples -name "${{ matrix.example.name }}" \
+            -type d)
+          cd "$example_dir/server"
+          go mod tidy
+          nohup go run main.go > server.log 2>&1 &
+          echo $! > server.pid
+
+          for i in $(seq 1 30); do
+            if lsof -i :${{ matrix.example.port }} >/dev/null 2>&1; then
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Server failed to start"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Validate server endpoints
+        run: |
+          grpcurl -plaintext localhost:${{ matrix.example.port }} list
+
+      - name: Run gRPC tests
+        run: |
+          example_dir=$(find examples -name "${{ matrix.example.name }}" \
+            -type d)
+          cd "$example_dir"
+          export GRPCTESTIFY_ADDRESS="localhost:${{ matrix.example.port }}"
+          grpctestify tests/
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          example_dir=$(find examples -name "${{ matrix.example.name }}" \
+            -type d)
+          if [ -f "$example_dir/server/server.pid" ]; then
+            pid=$(cat "$example_dir/server/server.pid")
+            kill "$pid" 2>/dev/null || true
+            rm -f "$example_dir/server/server.pid"
+          fi
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.example.name }}
+          path: examples/*/${{ matrix.example.name }}/tests/*.gctf
+          retention-days: 7

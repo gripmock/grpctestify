@@ -1,0 +1,68 @@
+--- ADDRESS ---
+localhost:50053
+
+--- TLS ---
+ca_cert: ./../server/tls/ca-cert.pem
+cert: ./../server/tls/client-cert.pem
+key: ./../server/tls/client-key.pem
+server_name: localhost
+insecure_skip_verify: false
+
+--- ENDPOINT ---
+payment.PaymentService/ProcessPayment
+
+--- REQUEST ---
+{
+  "account_id": "acc_vip_001",
+  "merchant_id": "merchant_premium_001",
+  "amount": 25000.00,
+  "currency": "USD",
+  "payment_method": "secure_transfer",
+  "risk_level": "high",
+  "security_features": {
+    "two_factor_auth": true,
+    "biometric_verification": true,
+    "device_fingerprinting": true,
+    "ip_geolocation_check": true,
+    "velocity_monitoring": true
+  },
+  "card_details": {
+    "card_number": "4111111111111111",
+    "cardholder_name": "Premium Customer",
+    "expiry_month": "12",
+    "expiry_year": "2028",
+    "cvv": "789",
+    "card_type": "visa_black",
+    "issuer": "Premium Bank",
+    "is_primary": true,
+    "card_tier": "premium"
+  },
+  "metadata": {
+    "transaction_tier": "premium",
+    "security_level": "maximum",
+    "encryption_level": "aes_256",
+    "audit_trail": "comprehensive"
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.transaction_id | test("txn_.*")
+.status == "approved"
+.message == "High-value transaction processed with enhanced security"
+.amount_charged == 25000.00
+.currency == "USD"
+.security_validation.two_factor_verified == true
+.security_validation.biometric_verified == true
+.security_validation.device_trusted == true
+.security_validation.ip_location_verified == true
+.risk_assessment.risk_level == "high"
+.risk_assessment.risk_score >= 0.6
+.risk_assessment.risk_score <= 0.8
+.security_features.encryption_applied == true
+.security_features.fraud_monitoring == "active"
+.compliance_check.high_value_reporting == true
+.audit_trail.security_events | length >= 5
+
+--- OPTIONS ---
+timeout: 25

@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package filestorage;
+
+option go_package = "github.com/gripmock/grpctestify/examples/file-storage/server";
+
+// File chunk for streaming upload
+message FileChunk {
+    string file_id = 1;
+    string filename = 2;
+    int32 chunk_index = 3;
+    int32 total_chunks = 4;
+    bytes data = 5;
+    string checksum = 6;
+    map<string, string> metadata = 7;
+}
+
+// Upload response
+message UploadResponse {
+    string file_id = 1;
+    string status = 2; // CHUNK_RECEIVED, FILE_COMPLETE, ERROR
+    string message = 3;
+    int64 bytes_received = 4;
+    int64 total_size = 5;
+    string url = 6;
+    bool checksum_verified = 7;
+}
+
+// Secure file upload request
+message SecureFile {
+    string filename = 1;
+    string content_type = 2;
+    int64 size = 3;
+    bytes data = 4;
+    string checksum = 5;
+    string encryption = 6;
+    string access_level = 7;
+    map<string, string> metadata = 8;
+}
+
+// Secure upload response
+message SecureUploadResponse {
+    string status = 1; // SECURITY_CHECK, ENCRYPTED_STORAGE, UPLOAD_COMPLETE, ERROR
+    string message = 2;
+    bool encryption_verified = 3;
+    string virus_scan_status = 4;
+    string storage_location = 5;
+    bool backup_created = 6;
+    string file_id = 7;
+    string access_url = 8;
+    bool audit_logged = 9;
+}
+
+// File storage service
+service FileStorageService {
+    // Upload files with chunking (Client Streaming)
+    rpc UploadFiles(stream FileChunk) returns (stream UploadResponse);
+    
+    // Upload secure file with encryption (Unary)
+    rpc UploadSecureFile(SecureFile) returns (stream SecureUploadResponse);
+    
+    // Health check
+    rpc HealthCheck(google.protobuf.Empty) returns (HealthCheckResponse);
+}
+
+// Health check response
+message HealthCheckResponse {
+    string status = 1;
+    string message = 2;
+    string uptime = 3;
+}
+
+import "google/protobuf/empty.proto";

@@ -1,0 +1,136 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  bats-tests:
+    name: BATS Unit Tests (Fail Fast)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # Allow tests to fail without stopping workflow
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      
+      - name: Install bats-core
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats jq bc
+          
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y libxml2-utils
+          
+          # Install grpcurl for BATS tests
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          
+          # Install bashly for script generation
+          gem install bashly
+          
+      - name: Generate grpctestify script
+        run: |
+          make generate
+          
+          mkdir -p ~/bin
+          cp grpctestify.sh ~/bin/grpctestify
+          chmod +x ~/bin/grpctestify
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Run BATS unit tests (FAIL FAST)
+        run: |
+          set -euo pipefail  # Fail immediately on any error
+          
+          echo "🧪 Running all BATS unit tests with FAIL FAST strategy..."
+          echo "⚡ First failed test will stop entire workflow!"
+          
+          # Find all bats files and run them sequentially
+          # Use timeout to prevent hanging tests
+          failed_tests=0
+          total_tests=0
+          
+          # Get list of all bats files
+          bats_files=$(find src/ -name "*.bats" | sort)
+          
+          if [ -z "$bats_files" ]; then
+            echo "❌ ERROR: No BATS test files found!"
+            exit 1
+          fi
+          
+          echo "📋 Found BATS test files:"
+          echo "$bats_files"
+          echo
+          
+          # Run each bats file, fail immediately on first failure
+          for bats_file in $bats_files; do
+            total_tests=$((total_tests + 1))
+            echo "🔍 Testing: $bats_file"
+            
+            # Run with timeout and strict error handling
+            if ! timeout 120 bats "$bats_file"; then
+              echo
+              echo "❌ FAIL FAST: Test failed in $bats_file"
+              echo "🛑 Stopping workflow immediately!"
+              echo "📊 Progress: $failed_tests failures in $total_tests tests"
+              exit 1
+            fi
+            
+            echo "✅ PASSED: $bats_file"
+            echo
+          done
+          
+          echo "🎉 SUCCESS: All $total_tests BATS test files passed!"
+          echo "✅ No failures detected - workflow continues"
+
+      - name: Test Coverage Report (only if all tests pass)
+        run: |
+          echo "📊 Calculating test coverage..."
+          
+          total_files=$(find src/lib -name "*.sh" | wc -l)
+          tested_files=0
+          untested_files=""
+          
+          for sh_file in $(find src/lib -name "*.sh" | sort); do
+            bats_file="${sh_file%.sh}.bats"
+            if [ -f "$bats_file" ]; then
+              tested_files=$((tested_files + 1))
+            else
+              untested_files="$untested_files\n  - $sh_file"
+            fi
+          done
+          
+          if [ $total_files -gt 0 ]; then
+            coverage=$((tested_files * 100 / total_files))
+          else
+            coverage=0
+          fi
+          
+          echo "📈 Test Coverage: $coverage% ($tested_files/$total_files files have tests)"
+          
+          if [ -n "$untested_files" ]; then
+            echo "📋 Files without BATS tests:"
+            echo -e "$untested_files"
+          fi
+          
+          # Set minimum coverage threshold
+          if [ $coverage -lt 70 ]; then
+            echo "⚠️  WARNING: Test coverage below 70% threshold"
+          else
+            echo "✅ Test coverage meets 70% threshold"
+          fi

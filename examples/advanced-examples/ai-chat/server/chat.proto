@@ -1,0 +1,311 @@
+syntax = "proto3";
+
+package aichat;
+
+option go_package = "github.com/gripmock/grpctestify/examples/advanced-examples/ai-chat/server/aichatpb";
+
+import "google/protobuf/timestamp.proto";
+
+// AI Chat Service with natural language processing and streaming responses
+service AIChatService {
+  // Unary RPCs
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
+  rpc CreateChatSession(CreateChatSessionRequest) returns (CreateChatSessionResponse);
+  rpc UpdateChatSettings(UpdateChatSettingsRequest) returns (UpdateChatSettingsResponse);
+  rpc AnalyzeSentiment(AnalyzeSentimentRequest) returns (AnalyzeSentimentResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // Server Streaming - Real-time AI responses
+  rpc StreamChat(StreamChatRequest) returns (stream ChatMessage);
+  
+  // Client Streaming - Bulk message processing
+  rpc BulkProcessMessages(stream BulkMessageRequest) returns (BulkProcessResponse);
+  
+  // Bidirectional Streaming - Real-time conversation
+  rpc ChatConversation(stream UserMessage) returns (stream AIResponse);
+}
+
+// Chat session management
+message CreateChatSessionRequest {
+  string user_id = 1;
+  string session_name = 2;
+  ChatSettings settings = 3;
+  map<string, string> metadata = 4;
+}
+
+message CreateChatSessionResponse {
+  bool success = 1;
+  string session_id = 2;
+  string message = 3;
+  ChatSession session = 4;
+}
+
+message UpdateChatSettingsRequest {
+  string session_id = 1;
+  ChatSettings settings = 2;
+}
+
+message UpdateChatSettingsResponse {
+  bool success = 1;
+  string message = 2;
+  ChatSession session = 3;
+}
+
+// Message handling
+message SendMessageRequest {
+  string session_id = 1;
+  string user_id = 2;
+  string message = 3;
+  MessageType message_type = 4;
+  map<string, string> context = 5;
+  string language = 6;
+}
+
+message SendMessageResponse {
+  bool success = 1;
+  string message_id = 2;
+  string ai_response = 3;
+  SentimentAnalysis sentiment = 4;
+  ProcessingMetrics metrics = 5;
+  google.protobuf.Timestamp processed_at = 6;
+}
+
+// Chat history
+message GetChatHistoryRequest {
+  string session_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  google.protobuf.Timestamp start_time = 4;
+  google.protobuf.Timestamp end_time = 5;
+}
+
+message GetChatHistoryResponse {
+  repeated ChatMessage messages = 1;
+  int32 total_count = 2;
+  bool has_more = 3;
+}
+
+// Sentiment analysis
+message AnalyzeSentimentRequest {
+  string text = 1;
+  string language = 2;
+  SentimentAnalysisOptions options = 3;
+}
+
+message AnalyzeSentimentResponse {
+  SentimentAnalysis sentiment = 1;
+  ConfidenceScores confidence = 2;
+  repeated SentimentEntity entities = 3;
+  google.protobuf.Timestamp analyzed_at = 4;
+}
+
+// Health check
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  string status = 1;
+  string version = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  map<string, string> metadata = 4;
+  ServiceMetrics metrics = 5;
+}
+
+// Server streaming - Real-time chat
+message StreamChatRequest {
+  string session_id = 1;
+  string user_id = 2;
+  string initial_message = 3;
+  ChatSettings settings = 4;
+  bool enable_streaming = 5;
+}
+
+message ChatMessage {
+  string message_id = 1;
+  string session_id = 2;
+  string user_id = 3;
+  string content = 4;
+  MessageType message_type = 5;
+  MessageRole role = 6;
+  SentimentAnalysis sentiment = 7;
+  ProcessingMetrics metrics = 8;
+  google.protobuf.Timestamp timestamp = 9;
+  map<string, string> metadata = 10;
+  bool is_streaming = 11;
+  int32 stream_chunk = 12;
+  int32 total_chunks = 13;
+}
+
+// Client streaming - Bulk processing
+message BulkMessageRequest {
+  string batch_id = 1;
+  string session_id = 2;
+  string user_id = 3;
+  string message = 4;
+  MessageType message_type = 5;
+  map<string, string> context = 6;
+}
+
+message BulkProcessResponse {
+  string batch_id = 1;
+  int32 total_processed = 2;
+  int32 successful = 3;
+  int32 failed = 4;
+  repeated string errors = 5;
+  repeated string successful_messages = 6;
+  ProcessingSummary summary = 7;
+}
+
+// Bidirectional streaming - Real-time conversation
+message UserMessage {
+  string session_id = 1;
+  string user_id = 2;
+  string message = 3;
+  MessageType message_type = 4;
+  map<string, string> context = 5;
+  string request_id = 6;
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+message AIResponse {
+  string session_id = 1;
+  string request_id = 2;
+  string response = 3;
+  ResponseType response_type = 4;
+  SentimentAnalysis sentiment = 5;
+  ProcessingMetrics metrics = 6;
+  google.protobuf.Timestamp timestamp = 7;
+  map<string, string> metadata = 8;
+  bool is_final = 9;
+  int32 chunk_number = 10;
+  int32 total_chunks = 11;
+}
+
+// Data structures
+message ChatSession {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  ChatSettings settings = 4;
+  SessionStatus status = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  google.protobuf.Timestamp last_activity = 8;
+  map<string, string> metadata = 9;
+  int32 message_count = 10;
+}
+
+message ChatSettings {
+  string model = 1; // "gpt-4", "claude-3", "llama-2"
+  double temperature = 2;
+  int32 max_tokens = 3;
+  double top_p = 4;
+  double frequency_penalty = 5;
+  double presence_penalty = 6;
+  string language = 7;
+  bool enable_streaming = 8;
+  bool enable_sentiment_analysis = 9;
+  repeated string system_prompts = 10;
+  map<string, string> custom_settings = 11;
+}
+
+message SentimentAnalysis {
+  string overall_sentiment = 1; // "positive", "negative", "neutral", "mixed"
+  double positive_score = 2;
+  double negative_score = 3;
+  double neutral_score = 4;
+  double mixed_score = 5;
+  repeated SentimentEntity entities = 6;
+  string language = 7;
+  google.protobuf.Timestamp analyzed_at = 8;
+}
+
+message SentimentEntity {
+  string text = 1;
+  string sentiment = 2;
+  double score = 3;
+  string entity_type = 4;
+  int32 start_offset = 5;
+  int32 end_offset = 6;
+}
+
+message SentimentAnalysisOptions {
+  bool include_entities = 1;
+  bool include_confidence = 2;
+  string language_hint = 3;
+  repeated string entity_types = 4;
+}
+
+message ConfidenceScores {
+  double overall_confidence = 1;
+  double positive_confidence = 2;
+  double negative_confidence = 3;
+  double neutral_confidence = 4;
+}
+
+message ProcessingMetrics {
+  double response_time_ms = 1;
+  int32 tokens_used = 2;
+  int32 tokens_generated = 3;
+  double cost_usd = 4;
+  string model_used = 5;
+  map<string, double> custom_metrics = 6;
+}
+
+message ProcessingSummary {
+  double average_response_time = 1;
+  int32 total_tokens_used = 2;
+  double total_cost_usd = 3;
+  map<string, int32> model_usage = 4;
+  SentimentDistribution sentiment_distribution = 5;
+}
+
+message SentimentDistribution {
+  int32 positive_count = 1;
+  int32 negative_count = 2;
+  int32 neutral_count = 3;
+  int32 mixed_count = 4;
+}
+
+message ServiceMetrics {
+  int32 active_sessions = 1;
+  int32 total_messages_processed = 2;
+  double average_response_time = 3;
+  double uptime_percentage = 4;
+  map<string, int32> model_usage = 5;
+}
+
+// Enums
+enum MessageType {
+  MESSAGE_TYPE_UNKNOWN = 0;
+  MESSAGE_TYPE_TEXT = 1;
+  MESSAGE_TYPE_IMAGE = 2;
+  MESSAGE_TYPE_AUDIO = 3;
+  MESSAGE_TYPE_FILE = 4;
+  MESSAGE_TYPE_COMMAND = 5;
+}
+
+enum MessageRole {
+  MESSAGE_ROLE_UNKNOWN = 0;
+  MESSAGE_ROLE_USER = 1;
+  MESSAGE_ROLE_ASSISTANT = 2;
+  MESSAGE_ROLE_SYSTEM = 3;
+}
+
+enum SessionStatus {
+  SESSION_STATUS_UNKNOWN = 0;
+  SESSION_STATUS_ACTIVE = 1;
+  SESSION_STATUS_PAUSED = 2;
+  SESSION_STATUS_ARCHIVED = 3;
+  SESSION_STATUS_DELETED = 4;
+}
+
+enum ResponseType {
+  RESPONSE_TYPE_UNKNOWN = 0;
+  RESPONSE_TYPE_TEXT = 1;
+  RESPONSE_TYPE_STREAMING = 2;
+  RESPONSE_TYPE_ERROR = 3;
+  RESPONSE_TYPE_SYSTEM = 4;
+}

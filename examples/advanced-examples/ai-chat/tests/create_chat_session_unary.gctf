@@ -1,0 +1,52 @@
+--- ADDRESS ---
+localhost:50054
+
+--- ENDPOINT ---
+aichat.AIChatService/CreateChatSession
+
+--- REQUEST ---
+{
+  "user_id": "user_004",
+  "session_name": "Creative Writing Assistant",
+  "settings": {
+    "model": "gpt-4",
+    "temperature": 0.8,
+    "max_tokens": 1500,
+    "top_p": 0.9,
+    "frequency_penalty": 0.1,
+    "presence_penalty": 0.1,
+    "language": "en",
+    "enable_streaming": true,
+    "enable_sentiment_analysis": true,
+    "system_prompts": ["You are a creative writing assistant.", "Help users develop their writing skills."],
+    "custom_settings": {
+      "style": "creative",
+      "genre": "fiction"
+    }
+  },
+  "metadata": {
+    "category": "creative_writing",
+    "user_level": "intermediate",
+    "preferred_genre": "science_fiction"
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.session_id | test("session_.*")
+.session.user_id == "user_004"
+.session.name == "Creative Writing Assistant"
+.session.settings.model == "gpt-4"
+.session.settings.temperature == 0.8
+.session.settings.max_tokens == 1500
+.session.settings.enable_streaming == true
+.session.settings.enable_sentiment_analysis == true
+.session.settings.system_prompts | length == 2
+.session.settings.custom_settings.style == "creative"
+.session.status == "SESSION_STATUS_ACTIVE"
+.session.metadata.category == "creative_writing"
+.session.metadata.user_level == "intermediate"
+.session.metadata.preferred_genre == "science_fiction"
+
+--- OPTIONS ---
+timeout: 10

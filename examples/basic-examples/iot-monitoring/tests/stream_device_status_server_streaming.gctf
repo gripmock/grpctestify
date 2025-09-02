@@ -1,0 +1,21 @@
+--- ADDRESS ---
+localhost:50052
+
+--- ENDPOINT ---
+monitoring.IoTMonitoringService/StreamDeviceStatus
+
+--- REQUEST ---
+{
+  "device_ids": ["device_001", "device_002"],
+  "update_interval_seconds": 3
+}
+
+--- ASSERTS ---
+.device_id == "device_001"
+.status == "DEVICE_STATUS_ONLINE"
+.message | contains("device_001")
+.metadata.location == "Living Room"
+.metadata.type == "temperature_sensor"
+
+--- OPTIONS ---
+timeout: 15

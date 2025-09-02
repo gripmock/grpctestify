@@ -1,0 +1,120 @@
+--- ADDRESS ---
+localhost:50054
+
+--- ENDPOINT ---
+aichat.AIChatService/ChatConversation
+
+--- REQUEST ---
+{
+  "session_id": "session_nlp_001",
+  "user_id": "user_researcher_001",
+  "message": "Can you explain quantum computing in simple terms and provide examples?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "topic": "quantum_computing",
+    "complexity_level": "beginner",
+    "response_style": "educational",
+    "include_examples": true
+  },
+  "nlp_features": {
+    "intent_recognition": true,
+    "entity_extraction": true,
+    "sentiment_analysis": true,
+    "topic_classification": true,
+    "complexity_analysis": true
+  },
+  "request_id": "nlp_req_001",
+  "timestamp": "2024-01-01T10:00:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_nlp_001"
+.request_id == "nlp_req_001"
+.response | length > 200
+.response | contains("quantum")
+.response | contains("example")
+.response_type == "RESPONSE_TYPE_TEXT"
+.nlp_analysis.intent == "explanation_request"
+.nlp_analysis.entities | length >= 1
+.nlp_analysis.entities[0].type == "TOPIC"
+.nlp_analysis.entities[0].value == "quantum_computing"
+.nlp_analysis.topics | contains("technology")
+.nlp_analysis.complexity_score >= 0.3
+.nlp_analysis.complexity_score <= 0.7
+.sentiment.overall_sentiment == "neutral"
+.sentiment.confidence > 0.8
+.metrics.response_time_ms > 0
+.metrics.tokens_used >= 20
+.metrics.tokens_generated >= 100
+.is_final == true
+
+--- REQUEST ---
+{
+  "session_id": "session_nlp_001",
+  "user_id": "user_researcher_001",
+  "message": "That's fascinating! Can you give me a practical application in cryptography?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "topic": "quantum_cryptography",
+    "previous_context": "quantum_computing_explanation",
+    "follow_up": true,
+    "complexity_level": "intermediate"
+  },
+  "nlp_features": {
+    "context_awareness": true,
+    "conversation_continuity": true,
+    "topic_progression": true
+  },
+  "request_id": "nlp_req_002",
+  "timestamp": "2024-01-01T10:02:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_nlp_001"
+.request_id == "nlp_req_002"
+.response | length > 150
+.response | contains("cryptography")
+.response | contains("quantum")
+.nlp_analysis.intent == "follow_up_question"
+.nlp_analysis.context_continuity == true
+.nlp_analysis.topic_progression == "quantum_computing -> quantum_cryptography"
+.sentiment.overall_sentiment == "positive"
+.conversation_context.previous_messages_count == 1
+.conversation_context.topic_coherence > 0.8
+
+--- REQUEST ---
+{
+  "session_id": "session_nlp_001",
+  "user_id": "user_researcher_001",
+  "message": "I'm confused about the implementation. Can you break it down step by step?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "emotion": "confused",
+    "request_type": "clarification",
+    "preferred_format": "step_by_step"
+  },
+  "nlp_features": {
+    "emotion_detection": true,
+    "clarification_handling": true,
+    "adaptive_response": true
+  },
+  "request_id": "nlp_req_003",
+  "timestamp": "2024-01-01T10:05:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_nlp_001"
+.request_id == "nlp_req_003"
+.response | contains("step")
+.response | contains("1.")
+.response | contains("2.")
+.nlp_analysis.intent == "clarification_request"
+.nlp_analysis.emotion_detected == "confusion"
+.nlp_analysis.response_adaptation == "simplified_explanation"
+.sentiment.overall_sentiment == "neutral"
+.response_adaptation.format == "step_by_step"
+.response_adaptation.complexity_adjusted == true
+
+--- OPTIONS ---
+timeout: 45
+stream_count: 3

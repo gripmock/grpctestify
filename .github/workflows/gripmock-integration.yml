@@ -1,0 +1,101 @@
+name: GripMock Integration Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  gripmock-integration:
+    name: Test grpctestify against GripMock
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout grpctestify
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          grpcurl --version
+
+      - name: Install bashly and generate grpctestify
+        run: |
+          set -euo pipefail
+          gem install bashly
+          make generate
+          mkdir -p $HOME/bin
+          cp grpctestify.sh $HOME/bin/grpctestify
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Verify grpctestify installation
+        run: |
+          set -euo pipefail
+          grpctestify --version
+
+      - name: Clone GripMock repository to tmp
+        run: |
+          set -euo pipefail
+          cd /tmp
+          git clone https://github.com/bavix/gripmock.git
+          cd gripmock
+
+      - name: Find and checkout latest tag
+        run: |
+          set -euo pipefail
+          cd /tmp/gripmock
+          latest_tag=$(git describe --tags --abbrev=0)
+          echo "Latest tag: $latest_tag"
+          git checkout $latest_tag
+
+      - name: Start GripMock server with examples
+        run: |
+          set -euo pipefail
+          cd /tmp/gripmock
+          go run main.go examples -s examples &
+          echo $! > gripmock.pid
+          
+          # Wait for server to start and verify it's ready
+          go run main.go check
+          
+          echo "GripMock server started with PID $(cat gripmock.pid)"
+
+      - name: Test grpctestify with GripMock examples
+        run: |
+          set -euo pipefail
+          cd /tmp/gripmock
+          
+          # Run grpctestify tests (v1.0.0 with smart defaults)
+          grpctestify examples
+          
+          echo "GripMock integration test completed successfully"
+
+      - name: Cleanup gripmock server
+        if: always()
+        run: |
+          set -euo pipefail
+          cd /tmp/gripmock || exit 0
+          if [ -f gripmock.pid ]; then
+            pid=$(cat gripmock.pid)
+            if kill -0 "$pid" 2>/dev/null; then
+              kill "$pid"
+            fi
+            rm -f gripmock.pid
+          fi

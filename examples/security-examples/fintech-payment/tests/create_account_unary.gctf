@@ -1,0 +1,36 @@
+--- ADDRESS ---
+localhost:50053
+
+--- ENDPOINT ---
+payment.PaymentService/CreateAccount
+
+--- REQUEST ---
+{
+  "customer_id": "cust_004",
+  "account_type": "checking",
+  "currency": "USD",
+  "compliance_level": "enhanced",
+  "metadata": {
+    "kyc_status": "pending",
+    "risk_level": "medium",
+    "country": "US",
+    "occupation": "software_engineer"
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.account.id | test("acc_.*")
+.account.customer_id == "cust_004"
+.account.account_type == "checking"
+.account.currency == "USD"
+.account.balance == 0.0
+.account.status == "ACCOUNT_STATUS_PENDING_VERIFICATION"
+.account.compliance_level == "enhanced"
+.account.metadata.kyc_status == "pending"
+.account.metadata.risk_level == "medium"
+.account.metadata.country == "US"
+.account.metadata.occupation == "software_engineer"
+
+--- OPTIONS ---
+timeout: 10

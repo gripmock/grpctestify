@@ -1,0 +1,31 @@
+--- ADDRESS ---
+localhost:50053
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
+
+--- REQUEST ---
+{
+  "message": {
+    "user_id": "user1",
+    "room_id": "room1", 
+    "content": "Hello from gRPC Testify!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify",
+      "version": "1.0.0"
+    }
+  }
+}
+
+--- ASSERTS ---
+.message.id | test("msg_.*")
+.message.timestamp | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
+.success == true
+.message.content == "Hello from gRPC Testify!"
+.message.messageType == "text"
+.message.roomId == "room1"
+.message.userId == "user1"
+.message.metadata.client == "grpctestify"
+.message.metadata.version == "1.0.0"
+

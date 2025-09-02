@@ -1,0 +1,14 @@
+--- ADDRESS ---
+localhost:50054
+
+--- ENDPOINT ---
+filestorage.FileStorageService/HealthCheck
+
+--- REQUEST ---
+{}
+
+--- ASSERTS ---
+.status == "healthy"
+.message | contains("File storage service is running")
+.uptime | test("[0-9]+.*")
+

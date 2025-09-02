@@ -1,0 +1,35 @@
+--- ADDRESS ---
+localhost:50056
+
+--- TLS ---
+ca_cert: ./../server/tls/ca-cert.pem
+cert: ./../server/tls/client-cert.pem
+key: ./../server/tls/client-key.pem
+server_name: localhost
+insecure_skip_verify: false
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/ProcessPayment
+
+--- REQUEST ---
+{
+    "order_id": "secure_order_001",
+    "amount": 2499.99,
+    "currency": "USD",
+    "payment_method": "secure_credit_card",
+    "card_token": "secure_tok_1234567890",
+    "customer_id": "secure_customer_12345"
+}
+
+--- ASSERTS ---
+.success == true
+.transaction_id | type == "string"
+.transaction_id | test("^txn_")
+.amount_charged == 2499.99
+.currency == "USD"
+.processed_at | type == "string"
+.message | test("successfully")
+
+--- OPTIONS ---
+timeout: 30
+redact: ["processed_at"]

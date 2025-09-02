@@ -1,0 +1,126 @@
+--- ADDRESS ---
+localhost:50054
+
+--- ENDPOINT ---
+aichat.AIChatService/ChatConversation
+
+--- REQUEST ---
+{
+  "session_id": "session_context_001",
+  "user_id": "user_researcher_001",
+  "message": "I'm working on a research project about renewable energy. Can you help me understand solar panel efficiency?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "user_profile": "researcher",
+    "expertise_level": "intermediate",
+    "project_type": "academic_research",
+    "domain": "renewable_energy"
+  },
+  "conversation_memory": {
+    "remember_context": true,
+    "track_expertise": true,
+    "adapt_responses": true
+  },
+  "request_id": "context_req_001",
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_context_001"
+.request_id == "context_req_001"
+.response | length > 150
+.response | contains("solar panel")
+.response | contains("efficiency")
+.nlp_analysis.intent == "research_assistance"
+.nlp_analysis.domain == "renewable_energy"
+.nlp_analysis.expertise_assessment == "intermediate"
+.context_awareness.user_profile_applied == true
+.context_awareness.domain_expertise == "renewable_energy"
+.response_adaptation.technical_level == "intermediate"
+.conversation_context.project_context == "academic_research"
+
+--- REQUEST ---
+{
+  "session_id": "session_context_001",
+  "user_id": "user_researcher_001",
+  "message": "What about the environmental impact compared to fossil fuels?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "reference_previous": true,
+    "comparison_request": true,
+    "environmental_focus": true
+  },
+  "request_id": "context_req_002",
+  "timestamp": "2024-01-01T12:03:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_context_001"
+.request_id == "context_req_002"
+.response | length > 100
+.response | contains("environmental")
+.response | contains("fossil fuels")
+.nlp_analysis.intent == "comparison_request"
+.nlp_analysis.reference_context == "solar_panels"
+.context_awareness.conversation_continuity == true
+.context_awareness.topic_evolution == "efficiency -> environmental_impact"
+.conversation_context.comparative_analysis == true
+
+--- REQUEST ---
+{
+  "session_id": "session_context_001",
+  "user_id": "user_researcher_001",
+  "message": "Can you provide specific data and citations for my paper?",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "academic_requirement": true,
+    "citation_needed": true,
+    "data_request": true,
+    "output_format": "academic"
+  },
+  "request_id": "context_req_003",
+  "timestamp": "2024-01-01T12:06:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_context_001"
+.request_id == "context_req_003"
+.response | length > 200
+.response | contains("data")
+.response | contains("%") OR .response | contains("study")
+.nlp_analysis.intent == "academic_data_request"
+.nlp_analysis.format_requirement == "academic"
+.context_awareness.academic_context == true
+.response_adaptation.citation_style == "academic"
+.response_adaptation.data_inclusion == true
+.conversation_context.research_assistance_level == "advanced"
+
+--- REQUEST ---
+{
+  "session_id": "session_context_001",
+  "user_id": "user_researcher_001",
+  "message": "Thank you! This is very helpful for my research.",
+  "message_type": "MESSAGE_TYPE_TEXT",
+  "context": {
+    "gratitude_expression": true,
+    "session_conclusion": true
+  },
+  "request_id": "context_req_004",
+  "timestamp": "2024-01-01T12:08:00Z"
+}
+
+--- ASSERTS ---
+.session_id == "session_context_001"
+.request_id == "context_req_004"
+.response | length > 50
+.nlp_analysis.intent == "gratitude_acknowledgment"
+.nlp_analysis.session_closure == true
+.sentiment.overall_sentiment == "positive"
+.conversation_summary.total_interactions == 4
+.conversation_summary.primary_topic == "renewable_energy"
+.conversation_summary.assistance_quality == "high"
+.conversation_summary.research_value == "significant"
+
+--- OPTIONS ---
+timeout: 60
+stream_count: 4

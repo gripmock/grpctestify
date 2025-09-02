@@ -1,0 +1,49 @@
+--- ADDRESS ---
+localhost:50056
+
+--- ENDPOINT ---
+shopflow.ShopFlowService/StreamInventoryAlerts
+
+--- REQUEST ---
+{
+    "low_stock_threshold": 10
+}
+
+--- RESPONSE ---
+[
+    {
+        "product_id": "prod_001",
+        "product_name": "Wireless Bluetooth Headphones",
+        "current_stock": 5,
+        "threshold": 10,
+        "alert_type": "low_stock",
+        "alert_time": "2024-01-01T00:00:00Z"
+    },
+    {
+        "product_id": "prod_002",
+        "product_name": "Smart Fitness Watch",
+        "current_stock": 0,
+        "threshold": 10,
+        "alert_type": "out_of_stock",
+        "alert_time": "2024-01-01T00:00:00Z"
+    }
+]
+
+--- ASSERTS ---
+[0].product_id == "prod_001"
+[0].product_name == "Wireless Bluetooth Headphones"
+[0].current_stock == 5
+[0].threshold == 10
+[0].alert_type == "low_stock"
+[0].alert_time | type == "string"
+[1].product_id == "prod_002"
+[1].product_name == "Smart Fitness Watch"
+[1].current_stock == 0
+[1].threshold == 10
+[1].alert_type == "out_of_stock"
+[1].alert_time | type == "string"
+length == 2
+
+--- OPTIONS ---
+timeout: 30
+redact: ["alert_time"]

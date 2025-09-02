@@ -1,0 +1,274 @@
+syntax = "proto3";
+
+package media;
+
+option go_package = "github.com/gripmock/grpctestify/examples/media-streaming/server/mediapb";
+
+import "google/protobuf/timestamp.proto";
+
+// Media Streaming Service with file upload/download and metadata handling
+service MediaStreamingService {
+  // Unary RPCs
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse);
+  rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse);
+  rpc GetFileMetadata(GetFileMetadataRequest) returns (GetFileMetadataResponse);
+  rpc UpdateFileMetadata(UpdateFileMetadataRequest) returns (UpdateFileMetadataResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // Server Streaming - File streaming and chunked downloads
+  rpc StreamFile(StreamFileRequest) returns (stream FileChunk);
+  
+  // Client Streaming - Large file uploads
+  rpc UploadLargeFile(stream FileChunk) returns (UploadFileResponse);
+  
+  // Bidirectional Streaming - Real-time file processing
+  rpc ProcessFile(stream ProcessingRequest) returns (stream ProcessingResponse);
+}
+
+// File upload
+message UploadFileRequest {
+  string filename = 1;
+  bytes data = 2;
+  string content_type = 3;
+  int64 file_size = 4;
+  map<string, string> metadata = 5;
+  string user_id = 6;
+  string category = 7;
+  bool is_public = 8;
+}
+
+message UploadFileResponse {
+  bool success = 1;
+  string file_id = 2;
+  string message = 3;
+  FileMetadata metadata = 4;
+  ProcessingStatus processing_status = 5;
+  google.protobuf.Timestamp uploaded_at = 6;
+}
+
+// File download
+message DownloadFileRequest {
+  string file_id = 1;
+  string user_id = 2;
+  bool include_metadata = 3;
+  int32 chunk_size = 4;
+}
+
+message DownloadFileResponse {
+  bool success = 1;
+  string file_id = 2;
+  bytes data = 3;
+  FileMetadata metadata = 4;
+  string content_type = 5;
+  int64 file_size = 6;
+  string message = 7;
+}
+
+// File metadata
+message GetFileMetadataRequest {
+  string file_id = 1;
+  string user_id = 2;
+}
+
+message GetFileMetadataResponse {
+  bool found = 1;
+  FileMetadata metadata = 2;
+  ProcessingStatus processing_status = 3;
+}
+
+message UpdateFileMetadataRequest {
+  string file_id = 1;
+  string user_id = 2;
+  map<string, string> metadata = 3;
+  string category = 4;
+  bool is_public = 5;
+}
+
+message UpdateFileMetadataResponse {
+  bool success = 1;
+  string message = 2;
+  FileMetadata metadata = 3;
+}
+
+// File deletion
+message DeleteFileRequest {
+  string file_id = 1;
+  string user_id = 2;
+  bool permanent = 3;
+}
+
+message DeleteFileResponse {
+  bool success = 1;
+  string message = 2;
+  string file_id = 3;
+}
+
+// File listing
+message ListFilesRequest {
+  string user_id = 1;
+  string category = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+  string sort_by = 5;
+  string sort_order = 6;
+  bool include_public = 7;
+}
+
+message ListFilesResponse {
+  repeated FileMetadata files = 1;
+  int32 total_count = 2;
+  bool has_more = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// Health check
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  string status = 1;
+  string version = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  map<string, string> metadata = 4;
+  StorageMetrics storage_metrics = 5;
+}
+
+// Server streaming - File streaming
+message StreamFileRequest {
+  string file_id = 1;
+  string user_id = 2;
+  int32 chunk_size = 3;
+  bool include_metadata = 4;
+  int64 start_offset = 5;
+  int64 end_offset = 6;
+}
+
+message FileChunk {
+  string file_id = 1;
+  int32 chunk_number = 2;
+  int32 total_chunks = 3;
+  bytes data = 4;
+  int64 offset = 5;
+  int32 chunk_size = 6;
+  bool is_last_chunk = 7;
+  FileMetadata metadata = 8;
+  google.protobuf.Timestamp timestamp = 9;
+  map<string, string> chunk_metadata = 10;
+}
+
+// Client streaming - Large file upload
+message UploadLargeFileRequest {
+  string filename = 1;
+  string content_type = 2;
+  int64 total_size = 3;
+  map<string, string> metadata = 4;
+  string user_id = 5;
+}
+
+// Bidirectional streaming - File processing
+message ProcessingRequest {
+  string request_id = 1;
+  string file_id = 2;
+  string user_id = 3;
+  ProcessingOperation operation = 4;
+  map<string, string> parameters = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+message ProcessingResponse {
+  string request_id = 1;
+  string file_id = 2;
+  ProcessingOperation operation = 3;
+  ProcessingStatus status = 4;
+  double progress = 5;
+  string message = 6;
+  ProcessingResult result = 7;
+  google.protobuf.Timestamp timestamp = 8;
+  map<string, string> metadata = 9;
+}
+
+// Data structures
+message FileMetadata {
+  string id = 1;
+  string filename = 2;
+  string content_type = 3;
+  int64 file_size = 4;
+  string user_id = 5;
+  string category = 6;
+  bool is_public = 7;
+  FileStatus status = 8;
+  ProcessingStatus processing_status = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  google.protobuf.Timestamp last_accessed = 12;
+  map<string, string> metadata = 13;
+  repeated string tags = 14;
+  string checksum = 15;
+  string storage_path = 16;
+  int32 download_count = 17;
+  double average_rating = 18;
+}
+
+message ProcessingStatus {
+  string status = 1; // "pending", "processing", "completed", "failed"
+  double progress = 2;
+  string message = 3;
+  repeated ProcessingStep steps = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+  map<string, string> metadata = 7;
+}
+
+message ProcessingStep {
+  string name = 1;
+  string status = 2;
+  double progress = 3;
+  string message = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+}
+
+message ProcessingResult {
+  string result_type = 1;
+  string result_data = 2;
+  map<string, string> metadata = 3;
+  repeated string generated_files = 4;
+  string error_message = 5;
+}
+
+message StorageMetrics {
+  int64 total_storage_bytes = 1;
+  int64 used_storage_bytes = 2;
+  int64 available_storage_bytes = 3;
+  int32 total_files = 4;
+  int32 active_files = 5;
+  double storage_utilization_percent = 6;
+  map<string, int64> storage_by_category = 7;
+  map<string, int32> files_by_category = 8;
+}
+
+// Enums
+enum FileStatus {
+  FILE_STATUS_UNKNOWN = 0;
+  FILE_STATUS_UPLOADING = 1;
+  FILE_STATUS_ACTIVE = 2;
+  FILE_STATUS_PROCESSING = 3;
+  FILE_STATUS_ARCHIVED = 4;
+  FILE_STATUS_DELETED = 5;
+  FILE_STATUS_ERROR = 6;
+}
+
+enum ProcessingOperation {
+  PROCESSING_OPERATION_UNKNOWN = 0;
+  PROCESSING_OPERATION_THUMBNAIL = 1;
+  PROCESSING_OPERATION_TRANSCODE = 2;
+  PROCESSING_OPERATION_COMPRESS = 3;
+  PROCESSING_OPERATION_EXTRACT_METADATA = 4;
+  PROCESSING_OPERATION_VIRUS_SCAN = 5;
+  PROCESSING_OPERATION_OPTIMIZE = 6;
+  PROCESSING_OPERATION_CONVERT_FORMAT = 7;
+}

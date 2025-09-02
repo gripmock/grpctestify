@@ -1,0 +1,40 @@
+#!/usr/bin/env bats
+
+# help.bats - Tests for help.sh module
+
+setup() {
+    # Load configuration to get APP_NAME and APP_VERSION
+    source "${BATS_TEST_DIRNAME}/../kernel/config.sh"
+    
+    # Load the help module
+    source "${BATS_TEST_DIRNAME}/help.sh"
+}
+
+@test "show_help function shows help information" {
+    # Test help display
+    run show_help
+    [ $status -eq 0 ]
+    [[ "$output" =~ "grpctestify" ]]
+}
+
+@test "show_version function shows version information" {
+    # Test version display
+    run show_version
+    [ $status -eq 0 ]
+    [[ "$output" =~ "grpctestify" ]]
+    [[ "$output" =~ "v1.0.0" ]]
+}
+
+@test "show_update_help function shows update help" {
+    # Test update help display
+    run show_update_help
+    [ $status -eq 0 ]
+    [[ "$output" =~ "update" ]]
+}
+
+@test "show_completion_help function shows completion help" {
+    # Test completion help display
+    run show_completion_help
+    [ $status -eq 0 ]
+    [[ "$output" =~ "completion" ]]
+}

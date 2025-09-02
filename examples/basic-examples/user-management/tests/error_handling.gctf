@@ -1,0 +1,21 @@
+# Error Handling Test
+# Tests error scenarios and edge cases
+
+--- ADDRESS ---
+localhost:50051
+
+--- ENDPOINT ---
+user.UserService/GetUser
+
+--- REQUEST ---
+{
+    "user_id": "non_existent_user",
+    "include_profile": true
+}
+
+--- ASSERTS ---
+.found == false
+
+--- OPTIONS ---
+timeout: 30
+
