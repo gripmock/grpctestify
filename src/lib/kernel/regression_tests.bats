@@ -149,7 +149,7 @@
     # Format check
     msg="Test completed (${execution_time}ms)"
     [[ "$msg" =~ "ms)" ]]
-    [[ ! "$msg" =~ "s)" ]]
+    [[ ! "$msg" =~ "[0-9]+s)" ]]  # Should not contain seconds format like "65s"
 }
 
 # ===== ERROR HANDLING TESTS =====

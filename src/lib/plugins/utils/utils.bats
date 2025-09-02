@@ -2,12 +2,15 @@
 
 # utils.bats - Tests for utils.sh module
 
-# Load test helper
-source "tests/helpers/test_helper.bash""
-
-# Mock log function for testing
-log() {
-    echo "$@" >&2
+setup() {
+    # Load the module under test
+    source "${BATS_TEST_DIRNAME}/utils.sh"
+    
+    # Mock log function for testing
+    log() {
+        echo "$@" >&2
+    }
+    export -f log
 }
 
 @test "process_line removes comments correctly" {
@@ -99,17 +102,35 @@ log() {
 @test "expand_tilde handles tilde expansion" {
     run expand_tilde "~/test"
     [ $status -eq 0 ]
-    # Should expand ~ to home directory
-    [[ "$output" =~ ^/ ]]
+    # Should expand tilde to home directory
+    [[ "$output" =~ "$HOME" ]]
 }
 
-@test "ensure_directory creates directory" {
-    local test_dir="${BATS_TMPDIR}/ensure_test"
+@test "expand_tilde handles path without tilde" {
+    run expand_tilde "/absolute/path"
+    [ $status -eq 0 ]
+    [[ "$output" == "/absolute/path" ]]
+}
+
+@test "ensure_directory creates directory if needed" {
+    local test_dir="${BATS_TMPDIR}/test_utils_dir"
     
     run ensure_directory "$test_dir"
     [ $status -eq 0 ]
     [ -d "$test_dir" ]
     
-    # Clean up
+    # Cleanup
+    rmdir "$test_dir"
+}
+
+@test "ensure_directory handles existing directory" {
+    local test_dir="${BATS_TMPDIR}/existing_dir"
+    mkdir -p "$test_dir"
+    
+    run ensure_directory "$test_dir"
+    [ $status -eq 0 ]
+    [ -d "$test_dir" ]
+    
+    # Cleanup
     rmdir "$test_dir"
 }

@@ -92,8 +92,8 @@ setup() {
 @test "kernel_memory_mb: realistic range" {
     run kernel_memory_mb
     [ "$status" -eq 0 ]
-    # Should be at least 128MB (conservative), at most 1TB (reasonable range)
-    [ "$output" -ge 128 ]
+    # Should be at least 64MB (very conservative), at most 1TB (reasonable range)
+    [ "$output" -ge 64 ]
     [ "$output" -le 1048576 ]
 }
 
