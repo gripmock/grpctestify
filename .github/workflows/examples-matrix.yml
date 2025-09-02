@@ -116,53 +116,25 @@ jobs:
           
           echo "Example structure validation passed"
 
-      - name: Update dependencies and build gRPC server
-        run: |
-          set -euo pipefail
-          example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
-          echo "Building gRPC server for ${{ matrix.example.name }}"
-          
-          cd "$example_dir/server"
-          
-          # Update dependencies to latest versions
-          echo "Updating dependencies..."
-          go mod tidy
-          go get -u google.golang.org/grpc@latest
-          go get -u google.golang.org/protobuf@latest
-          go mod tidy
-          
-          # Regenerate protobuf files with latest plugins
-          echo "Regenerating protobuf files..."
-          make proto
-          
-          # Build server
-          make build
-
       - name: Start gRPC server using centralized script
         run: |
           set -euo pipefail
           example_dir=$(find examples -name "${{ matrix.example.name }}" -type d)
-          
-          echo "Starting all gRPC servers using centralized script..."
-          if [ -f "scripts/start_examples_servers.sh" ]; then
-            chmod +x scripts/start_examples_servers.sh
-            ./scripts/start_examples_servers.sh
-          else
-            echo "Warning: scripts/start_examples_servers.sh not found, starting server manually"
-            cd "$example_dir/server"
-            make start &
-            echo $! > server.pid
-            # Wait for server to listen on the example port
-            for i in $(seq 1 30); do
-              if nc -z localhost ${{ matrix.example.port }} 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-          fi
+
+          echo "Warning: scripts/start_examples_servers.sh not found, starting server manually"
+          cd "$example_dir/server"
+          make build
+          make start &
+          echo $! > server.pid
+          # Wait for server to listen on the example port
+          for i in $(seq 1 30); do
+            if nc -z localhost ${{ matrix.example.port }} 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
           
           echo "Servers started successfully"
-
       - name: Validate server endpoints
         run: |
           echo "Validating server endpoints for ${{ matrix.example.name }}"
