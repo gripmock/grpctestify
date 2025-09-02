@@ -2,10 +2,10 @@
 
 # grpc_default_test.sh - Default_test plugin for gRPC Testify
 # Plugin Type: assertion
-# API Version: 
+# API Version: 1.0.0
 
 # Plugin metadata
-PLUGIN_DEFAULT_TEST_VERSION=""
+PLUGIN_DEFAULT_TEST_VERSION="1.0.0"
 PLUGIN_DEFAULT_TEST_DESCRIPTION="Description of default_test plugin"
 PLUGIN_DEFAULT_TEST_AUTHOR="Your Name <info@example.com>"
 
