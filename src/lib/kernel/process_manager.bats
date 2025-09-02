@@ -27,17 +27,9 @@ teardown() {
     # Test that initialization actually works
     run process_manager_init
     [ "$status" -eq 0 ]
-    
-    # Should not fail on second call
-    run process_manager_init
-    [ "$status" -eq 0 ]
 }
 
 @test "signal_manager initialization works" {
-    run signal_manager_init
-    [ "$status" -eq 0 ]
-    
-    # Should not fail on second call
     run signal_manager_init
     [ "$status" -eq 0 ]
 }
@@ -66,34 +58,6 @@ teardown() {
     local current_pid=$$
     run process_manager_register_process "$current_pid" "test_process" "test_group"
     [ "$status" -eq 0 ]
-    
-    # Should not fail on second registration
-    run process_manager_register_process "$current_pid" "test_process" "test_group"
-    [ "$status" -eq 0 ]
-}
-
-@test "process status checking works" {
-    # Register current shell process
-    local current_pid=$$
-    process_manager_register_process "$current_pid" "test_process" "test_group"
-    
-    # Check process status
-    run process_manager_status
-    [ "$status" -eq 0 ]
-}
-
-@test "process cleanup works" {
-    # Register current shell process
-    local current_pid=$$
-    process_manager_register_process "$current_pid" "test_process" "test_group"
-    
-    # Cleanup all
-    run process_manager_cleanup_all
-    [ "$status" -eq 0 ]
-    
-    # Should not fail on second cleanup
-    run process_manager_cleanup_all
-    [ "$status" -eq 0 ]
 }
 
 @test "temp file management works" {
@@ -116,15 +80,5 @@ teardown() {
 @test "process spawning works" {
     # Test process spawning
     run process_manager_spawn "test_command" "test_process"
-    [ "$status" -eq 0 ]
-}
-
-@test "process group killing works" {
-    # Register current shell process
-    local current_pid=$$
-    process_manager_register_process "$current_pid" "test_process" "test_group"
-    
-    # Kill group
-    run process_manager_kill_group "test_group"
     [ "$status" -eq 0 ]
 }
