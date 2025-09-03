@@ -49,6 +49,20 @@ file_parser_init() {
     return 0
 }
 
+# In-memory cache for parsed test files (key: path@mtime -> json)
+declare -g -A FILE_PARSER_CACHE=()
+
+# Get file modification time (portable: macOS/Linux)
+file_parser_get_mtime() {
+    local path="$1"
+    if command -v stat >/dev/null 2>&1; then
+        # macOS
+        stat -f %m "$path" 2>/dev/null || stat -c %Y "$path" 2>/dev/null || echo 0
+    else
+        echo 0
+    fi
+}
+
 # Main file parser handler
 file_parser_handler() {
     local command="$1"
@@ -156,6 +170,16 @@ parse_test_file() {
     local test_file="$1"
     local parse_options="$2"
     
+    # Fast-path: return cached result if file not changed
+    local mtime
+    mtime="$(file_parser_get_mtime "$test_file")"
+    local cache_key
+    cache_key="${test_file}@${mtime}"
+    if [[ -n "${FILE_PARSER_CACHE[$cache_key]:-}" ]]; then
+        echo "${FILE_PARSER_CACHE[$cache_key]}"
+        return 0
+    fi
+    
     # Extract all sections using the robust AWK parser
     local address
     address="$(extract_section "$test_file" "ADDRESS")"
@@ -204,7 +228,8 @@ parse_test_file() {
     fi
     
     # Build comprehensive parsed data structure
-    jq -n \
+    local parsed
+    parsed=$(jq -n \
         --arg address "$address" \
         --arg endpoint "$endpoint" \
         --arg request "$request" \
@@ -248,7 +273,11 @@ parse_test_file() {
                 has_proto: ($proto | length > 0),
                 has_tls: ($tls | length > 0)
             }
-        }'
+        }')
+    
+    # Store in cache and output
+    FILE_PARSER_CACHE["$cache_key"]="$parsed"
+    echo "$parsed"
 }
 
 # Extract section from test file using enhanced AWK parser

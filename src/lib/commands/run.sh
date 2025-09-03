@@ -746,7 +746,7 @@ perform_update() {
     echo "🔄 Downloading grpctestify.sh $latest_version..."
     
     local download_url="https://github.com/gripmock/grpctestify/releases/download/${latest_version}/grpctestify.sh"
-    local temp_file=$(mktemp)
+    local temp_file="/tmp/grpctestify_update_$$.sh"
     
     # Download latest version
     if ! curl -L --connect-timeout 10 --max-time 300 -o "$temp_file" "$download_url" 2>&1; then

@@ -96,9 +96,8 @@ routine_spawn() {
     process_manager_register_temp_file "$result_file" "routine_manager"
     
     # Start the command in background with proper resource management
-    # Create a safe wrapper script to avoid command injection
-    local wrapper_script=$(mktemp "/tmp/grpctestify_wrapper_${routine_id}_XXXXXX.sh")
-    process_manager_register_temp_file "$wrapper_script" "routine_manager"
+    # Create a safe wrapper script in memory instead of temporary file
+    local wrapper_script="/tmp/grpctestify_wrapper_${routine_id}.sh"
     
     # Write the wrapper script safely (no more injection!)
     cat > "$wrapper_script" << 'WRAPPER_EOF'
@@ -107,6 +106,7 @@ routine_spawn() {
 routine_worker_wrapper "$@"
 WRAPPER_EOF
     chmod +x "$wrapper_script"
+    process_manager_register_temp_file "$wrapper_script" "routine_manager"
     
     local routine_pid
     routine_pid=$(process_manager_spawn "\"$wrapper_script\" '$command' '$routine_id' '$heartbeat_file' '$result_file'" \

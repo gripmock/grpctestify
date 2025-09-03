@@ -113,7 +113,7 @@ safe_printf() {
 }
 
 #######################################
-# POSIX-compatible mktemp fallback
+# POSIX-compatible temporary file creation
 # Arguments:
 #   1: template (optional)
 # Returns:
@@ -122,13 +122,9 @@ safe_printf() {
 portable_mktemp() {
     local template="${1:-tmp.XXXXXX}"
     
-    if command_exists mktemp; then
-        mktemp "/tmp/$template"
-    else
-        # Fallback for systems without mktemp
-        local temp_file="/tmp/${template}.$$"
-        touch "$temp_file" && echo "$temp_file"
-    fi
+    # Always use simple approach without external mktemp
+    local temp_file="/tmp/${template}.$$"
+    touch "$temp_file" && echo "$temp_file"
 }
 
 #######################################

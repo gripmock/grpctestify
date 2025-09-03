@@ -21,7 +21,20 @@ run_test() {
     
     # Use full path for unique identification and short name for display
     local test_full_path
-    test_full_path="$(readlink -f "$test_file" 2>/dev/null || realpath "$test_file" 2>/dev/null || echo "$(pwd)/$test_file")"
+    case "$test_file" in
+        /*)
+            test_full_path="$test_file"
+            ;;
+        *)
+            # Portable absolute path resolution without external readlink/realpath
+            local base_dir
+            base_dir=$(pwd)
+            # Remove any leading ./ from relative path
+            local clean_path="$test_file"
+            clean_path="${clean_path#./}"
+            test_full_path="$base_dir/$clean_path"
+            ;;
+    esac
     local test_name="$(basename "$test_file" .gctf)"
     
     # Only show test header in non-dots mode
@@ -134,11 +147,6 @@ run_test() {
     else
         # Success response - validate against expectations
         if [[ -n "$response" && "$response" != "null" ]]; then
-            # TEMPORARY DEBUG
-            echo "DEBUG ORCHESTRATOR:" >&2
-            echo "Response: [$response]" >&2
-            echo "gRPC Output: [$grpc_output]" >&2
-            
             # DELEGATED: JSON comparison to json_comparator.sh
             if ! compare_json_detailed "$grpc_output" "$response" "exact" "$test_name"; then
                 store_test_failure "$test_name" "Response mismatch" "$grpc_output" "$response"

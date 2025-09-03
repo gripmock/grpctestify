@@ -6,14 +6,11 @@
 # Global state for resource pool
 declare -g -A RESOURCE_POOLS=()          # pool_name -> max_resources
 declare -g -A POOL_ACQUIRED=()           # pool_name -> current_acquired_count
-declare -g -A POOL_DESCRIPTORS=()        # pool_name -> file_descriptor
-declare -g -A POOL_TEMP_FILES=()         # pool_name -> temporary_file_path
-declare -g -i RESOURCE_POOL_COUNTER=0    # Auto-incrementing pool ID counter
+declare -g -A POOL_TOKENS=()             # pool_name_token -> status (available/acquired)
 declare -g RESOURCE_POOL_INITIALIZED=false  # Initialization guard
 
 # Configuration
 RESOURCE_POOL_TIMEOUT="${RESOURCE_POOL_TIMEOUT:-30}"        # seconds
-RESOURCE_POOL_CLEANUP_INTERVAL="${RESOURCE_POOL_CLEANUP_INTERVAL:-5}"  # seconds
 
 # Initialize resource pool system
 resource_pool_init() {
@@ -24,12 +21,6 @@ resource_pool_init() {
     fi
     
     tlog debug "Initializing resource pool system..."
-    
-    # Ensure required commands are available
-    if ! command -v mktemp >/dev/null 2>&1; then
-    tlog error "Resource pool requires 'mktemp' command"
-        return 1
-    fi
     
     # Setup cleanup on exit
     # REMOVED: trap 'resource_pool_cleanup_all' EXIT
@@ -43,56 +34,31 @@ resource_pool_init() {
 # Create a new resource pool
 pool_create() {
     local pool_name="$1"
-    local max_resources="${2:-1}"
+    local max_resources="${2:-10}"
     
     if [[ -z "$pool_name" ]]; then
-    tlog error "pool_create: pool_name required"
+        tlog error "pool_create: pool_name required"
         return 1
     fi
     
-    if [[ $max_resources -lt 1 ]]; then
-    tlog error "pool_create: max_resources must be >= 1"
-        return 1
-    fi
-    
-        # Check if pool already exists
-    if [[ -n "${RESOURCE_POOLS[$pool_name]:-}" ]]; then
-	tlog debug "pool_create: pool '$pool_name' already exists"
+    if [[ ${RESOURCE_POOLS[$pool_name]:-0} -gt 0 ]]; then
+        tlog debug "pool_create: pool '$pool_name' already exists"
         return 0
     fi
     
     tlog debug "Creating resource pool '$pool_name' with $max_resources resources"
     
-    # Create temporary file for semaphore
-    local temp_file
-    temp_file=$(mktemp "/tmp/grpctestify_pool_${pool_name}_XXXXXX")
-    if [[ ! -f "$temp_file" ]]; then
-    tlog error "Failed to create temporary file for pool '$pool_name'"
-        return 1
-    fi
-    
-    # Open file descriptor for the pool
-    local fd
-    fd=$(get_available_fd)
-    if [[ $fd -eq -1 ]]; then
-    tlog error "No available file descriptors for pool '$pool_name'"
-        rm -f "$temp_file"
-        return 1
-    fi
-    
-    # Initialize semaphore with max_resources tokens in the file
+    # Create in-memory token array instead of temporary file
     local i
     for ((i = 0; i < max_resources; i++)); do
-        echo "token_$i" >> "$temp_file"
+        POOL_TOKENS["${pool_name}_$i"]="available"
     done
     
     # Register pool
     RESOURCE_POOLS["$pool_name"]=$max_resources
     POOL_ACQUIRED["$pool_name"]=0
-    POOL_DESCRIPTORS["$pool_name"]=$fd
-    POOL_TEMP_FILES["$pool_name"]="$temp_file"
     
-    tlog debug "Resource pool '$pool_name' created successfully (FD: $fd)"
+    tlog debug "Resource pool '$pool_name' created successfully (in-memory)"
     return 0
 }
 
@@ -102,42 +68,36 @@ pool_acquire() {
     local timeout="${2:-$RESOURCE_POOL_TIMEOUT}"
     
     if [[ -z "$pool_name" ]]; then
-    tlog error "pool_acquire: pool_name required"
+        tlog error "pool_acquire: pool_name required"
         return 1
     fi
     
     # Check if pool exists
-    local temp_file="${POOL_TEMP_FILES[$pool_name]:-}"
-    if [[ -z "$temp_file" ]]; then
-    tlog error "pool_acquire: pool '$pool_name' does not exist"
+    if [[ ${RESOURCE_POOLS[$pool_name]:-0} -eq 0 ]]; then
+        tlog error "pool_acquire: pool '$pool_name' does not exist"
         return 1
     fi
     
     tlog debug "Acquiring resource from pool '$pool_name' (timeout: ${timeout}s)"
     
-    # Try to read a token from the semaphore with timeout
-    local token=""
+    # Try to acquire a token with timeout
     local start_time=$(date +%s)
     local waited=0
     
     while [[ $waited -lt $timeout ]]; do
-        # Use flock for atomic read operation
-        if [[ -f "$temp_file" ]]; then
-            # Try to read first line and remove it atomically
-            local first_line
-            first_line=$(head -n 1 "$temp_file" 2>/dev/null)
-            if [[ -n "$first_line" ]]; then
-                # Remove first line from file
-                if tail -n +2 "$temp_file" > "${temp_file}.tmp" 2>/dev/null; then
-                    mv "${temp_file}.tmp" "$temp_file"
-                    # Successfully acquired a token
-                    POOL_ACQUIRED["$pool_name"]=$((POOL_ACQUIRED["$pool_name"] + 1))
-    tlog debug "Acquired resource from pool '$pool_name' (token: $first_line, acquired: ${POOL_ACQUIRED[$pool_name]})"
-                    echo "$first_line"
-                    return 0
-                fi
+        # Find available token
+        local i
+        for ((i = 0; i < ${RESOURCE_POOLS[$pool_name]}; i++)); do
+            local token_key="${pool_name}_$i"
+            if [[ "${POOL_TOKENS[$token_key]}" == "available" ]]; then
+                # Mark token as acquired
+                POOL_TOKENS["$token_key"]="acquired"
+                POOL_ACQUIRED["$pool_name"]=$((POOL_ACQUIRED["$pool_name"] + 1))
+                tlog debug "Acquired resource from pool '$pool_name' (token: $i, acquired: ${POOL_ACQUIRED[$pool_name]})"
+                echo "token_$i"
+                return 0
             fi
-        fi
+        done
         
         # Update waited time
         local current_time=$(date +%s)
@@ -157,33 +117,44 @@ pool_release() {
     local token="${2:-token_default}"
     
     if [[ -z "$pool_name" ]]; then
-    tlog error "pool_release: pool_name required"
+        tlog error "pool_release: pool_name required"
         return 1
     fi
     
     # Check if pool exists
-    local temp_file="${POOL_TEMP_FILES[$pool_name]:-}"
-    if [[ -z "$temp_file" ]]; then
-    tlog error "pool_release: pool '$pool_name' does not exist"
+    if [[ ${RESOURCE_POOLS[$pool_name]:-0} -eq 0 ]]; then
+        tlog error "pool_release: pool '$pool_name' does not exist"
         return 1
     fi
     
-    # Check if any resources are acquired
-    local acquired="${POOL_ACQUIRED[$pool_name]:-0}"
-    if [[ $acquired -eq 0 ]]; then
-    tlog warning "pool_release: no resources acquired for pool '$pool_name'"
+    # Extract token number from token string (e.g., "token_5" -> "5")
+    local token_num
+    if [[ "$token" =~ ^token_([0-9]+)$ ]]; then
+        token_num="${BASH_REMATCH[1]}"
+    else
+        tlog error "pool_release: invalid token format '$token'"
         return 1
     fi
     
-    tlog debug "Releasing resource to pool '$pool_name' (token: $token)"
+    # Check if token is valid for this pool
+    if [[ $token_num -ge ${RESOURCE_POOLS[$pool_name]} ]]; then
+        tlog error "pool_release: token $token_num is invalid for pool '$pool_name'"
+        return 1
+    fi
     
-    # Write token back to semaphore file
-    echo "$token" >> "$temp_file"
+    local token_key="${pool_name}_$token_num"
     
-    # Update acquired count
-    POOL_ACQUIRED["$pool_name"]=$((acquired - 1))
+    # Check if token was actually acquired
+    if [[ "${POOL_TOKENS[$token_key]}" != "acquired" ]]; then
+        tlog warning "pool_release: token $token was not acquired from pool '$pool_name'"
+        return 1
+    fi
     
-    tlog debug "Released resource to pool '$pool_name' (acquired: ${POOL_ACQUIRED[$pool_name]})"
+    # Mark token as available again
+    POOL_TOKENS["$token_key"]="available"
+    POOL_ACQUIRED["$pool_name"]=$((POOL_ACQUIRED["$pool_name"] - 1))
+    
+    tlog debug "Released resource to pool '$pool_name' (token: $token, acquired: ${POOL_ACQUIRED[$pool_name]})"
     return 0
 }
 
@@ -220,8 +191,6 @@ pool_status() {
     
     local max_resources="${RESOURCE_POOLS[$pool_name]:-}"
     local acquired="${POOL_ACQUIRED[$pool_name]:-0}"
-    local fd="${POOL_DESCRIPTORS[$pool_name]:-}"
-    local temp_file="${POOL_TEMP_FILES[$pool_name]:-}"
     
     if [[ -z "$max_resources" ]]; then
         echo "Pool '$pool_name' not found"
@@ -237,13 +206,12 @@ pool_status() {
         "detailed")
             echo "Pool Name: $pool_name"
             echo "  Max Resources: $max_resources"
-            echo "  Acquired: $acquired"
             echo "  Available: $available"
-            echo "  File Descriptor: $fd"
-            echo "  Temp File: $temp_file"
+            echo "  Acquired: $acquired"
+            echo "  Type: In-memory semaphore"
             ;;
         "json")
-            echo "{\"pool_name\":\"$pool_name\",\"max_resources\":$max_resources,\"acquired\":$acquired,\"available\":$available,\"fd\":$fd,\"temp_file\":\"$temp_file\"}"
+            echo "{\"pool_name\":\"$pool_name\",\"max_resources\":$max_resources,\"acquired\":$acquired,\"available\":$available,\"type\":\"in-memory\"}"
             ;;
     esac
 }
@@ -299,40 +267,29 @@ pool_delete() {
     fi
     
     # Check if pool exists
-    local fd="${POOL_DESCRIPTORS[$pool_name]:-}"
-    if [[ -z "$fd" ]]; then
-    tlog warning "pool_delete: pool '$pool_name' does not exist"
+    if [[ ${RESOURCE_POOLS[$pool_name]:-0} -eq 0 ]]; then
+        tlog warning "pool_delete: pool '$pool_name' does not exist"
         return 1
     fi
     
     # Check if resources are still acquired
     local acquired="${POOL_ACQUIRED[$pool_name]:-0}"
     if [[ $acquired -gt 0 && "$force" != "true" ]]; then
-    tlog error "pool_delete: pool '$pool_name' has $acquired acquired resources (use force=true to override)"
+        tlog error "pool_delete: pool '$pool_name' has $acquired acquired resources (use force=true to override)"
         return 1
     fi
     
     tlog debug "Deleting resource pool '$pool_name' (force: $force)"
     
-    # Close file descriptor - SECURE: Properly close without leaks
-    if [[ "$fd" =~ ^[0-9]+$ ]]; then
-        # SECURITY: Safe file descriptor closing
-        eval "exec ${fd}<&-" 2>/dev/null || true
-        eval "exec ${fd}>&-" 2>/dev/null || true
-        tlog debug "Closed pool file descriptor $fd for '$pool_name'"
-    else
-        tlog warning "Invalid file descriptor for pool '$pool_name': $fd"
-    fi
-    
-    # Remove temporary file
-    local temp_file="${POOL_TEMP_FILES[$pool_name]:-}"
-    [[ -n "$temp_file" ]] && rm -f "$temp_file"
+    # Clean up tokens for this pool
+    local i
+    for ((i = 0; i < ${RESOURCE_POOLS[$pool_name]}; i++)); do
+        unset POOL_TOKENS["${pool_name}_$i"]
+    done
     
     # Remove from tracking
     unset RESOURCE_POOLS["$pool_name"]
     unset POOL_ACQUIRED["$pool_name"]
-    unset POOL_DESCRIPTORS["$pool_name"]
-    unset POOL_TEMP_FILES["$pool_name"]
     
     tlog debug "Resource pool '$pool_name' deleted successfully"
     return 0
@@ -354,21 +311,7 @@ pool_stats() {
     echo "Total Pools: $total_pools, Total Resources: $total_resources, Total Acquired: $total_acquired, Total Available: $total_available"
 }
 
-# Get next available file descriptor
-get_available_fd() {
-    # For simplicity, use a counter-based approach
-    RESOURCE_POOL_COUNTER=$((RESOURCE_POOL_COUNTER + 1))
-    local fd=$((10 + RESOURCE_POOL_COUNTER))
-    
-    # Check if we're within reasonable limits
-    if [[ $fd -gt 200 ]]; then
-        echo "-1"
-        return 1
-    fi
-    
-    echo "$fd"
-    return 0
-}
+
 
 # Cleanup all resource pools
 resource_pool_cleanup_all() {
@@ -479,4 +422,4 @@ pool_release_batch() {
 # Export functions
 export -f resource_pool_init pool_create pool_acquire pool_release pool_available
 export -f pool_status pool_list pool_delete pool_stats pool_exists pool_wait_available
-export -f pool_acquire_batch pool_release_batch get_available_fd resource_pool_cleanup_all
+export -f pool_acquire_batch pool_release_batch resource_pool_cleanup_all

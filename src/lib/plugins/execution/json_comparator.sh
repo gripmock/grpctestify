@@ -214,4 +214,157 @@ export -f extract_json_field
 export -f validate_json_schema
 export -f format_json
 
+# Apply tolerance comparison for numeric values
+apply_tolerance_comparison() {
+    local expected="$1"
+    local actual="$2"
+    local tolerance_spec="$3"
+    
+    if [[ "$tolerance_spec" =~ ^tolerance\[(.+)\]=(.+)$ ]]; then
+        local path="${BASH_REMATCH[1]}"
+        local tolerance_value="${BASH_REMATCH[2]}"
+        local expected_val
+        expected_val=$(echo "$expected" | jq -r "$path // empty" 2>/dev/null)
+        local actual_val
+        actual_val=$(echo "$actual" | jq -r "$path // empty" 2>/dev/null)
+        if [[ "$expected_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] && [[ "$actual_val" =~ ^-?[0-9]+\.?[0-9]*$ ]]; then
+            local diff
+            diff=$(echo "$expected_val - $actual_val" | bc -l 2>/dev/null || echo "0")
+            local abs_diff
+            abs_diff=$(echo "if ($diff < 0) -1*$diff else $diff" | bc -l 2>/dev/null || echo "0")
+            if (( $(echo "$abs_diff <= $tolerance_value" | bc -l) )); then
+                return 0
+            else
+                return 1
+            fi
+        else
+            return 0
+        fi
+    else
+        return 1
+    fi
+}
+
+# Apply percentage tolerance comparison for numeric values
+apply_percentage_tolerance_comparison() {
+    local expected="$1"
+    local actual="$2"
+    local tol_percent_spec="$3"
+    
+    if [[ "$tol_percent_spec" =~ ^tol_percent\[(.+)\]=(.+)$ ]]; then
+        local path="${BASH_REMATCH[1]}"
+        local tolerance_percent="${BASH_REMATCH[2]}"
+        local expected_val
+        expected_val=$(echo "$expected" | jq -r "$path // empty" 2>/dev/null)
+        local actual_val
+        actual_val=$(echo "$actual" | jq -r "$path // empty" 2>/dev/null)
+        if [[ "$expected_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] && [[ "$actual_val" =~ ^-?[0-9]+\.?[0-9]*$ ]]; then
+            local diff
+            diff=$(echo "$expected_val - $actual_val" | bc -l 2>/dev/null || echo "0")
+            local abs_diff
+            abs_diff=$(echo "if ($diff < 0) -1*$diff else $diff" | bc -l 2>/dev/null || echo "0")
+            local percent_diff
+            percent_diff=$(echo "scale=6; $abs_diff * 100 / $expected_val" | bc -l 2>/dev/null || echo "0")
+            if (( $(echo "$percent_diff <= $tolerance_percent" | bc -l) )); then
+                return 0
+            else
+                return 1
+            fi
+        else
+            return 0
+        fi
+    else
+        return 1
+    fi
+}
+
+# Compare responses with options (type, tolerance, redact, unordered arrays)
+compare_responses() {
+    local expected="$1"
+    local actual="$2"
+    local options="$3"
+    local type="exact"
+    local count="==1"
+    local tolerance=""
+    local tol_percent=""
+    local redact=""
+    local unordered_arrays="false"
+    local unordered_arrays_paths=""
+    local with_asserts="false"
+    if [[ -n "$options" ]]; then
+        while IFS='=' read -r key value; do
+            case "$key" in
+                "type") type="$value" ;;
+                "count") count="$value" ;;
+                "tolerance"*) tolerance="$key=$value" ;;
+                "tol_percent"*) tol_percent="$key=$value" ;;
+                "redact") redact="$value" ;;
+                "unordered_arrays") unordered_arrays="$value" ;;
+                "unordered_arrays_paths") unordered_arrays_paths="$value" ;;
+                "with_asserts") with_asserts="$value" ;;
+            esac
+        done <<< "$options"
+    fi
+    if [[ -n "$redact" ]]; then
+        local redact_paths
+        redact_paths="$(echo "$redact" | tr ',' ' ')"
+        for path in $redact_paths; do
+            expected="$(echo "$expected" | jq "del($path)")"
+            actual="$(echo "$actual" | jq "del($path)")"
+        done
+    fi
+    if [[ -n "$tolerance" ]]; then
+        if ! apply_tolerance_comparison "$expected" "$actual" "$tolerance"; then
+            return 1
+        fi
+    fi
+    if [[ -n "$tol_percent" ]]; then
+        if ! apply_percentage_tolerance_comparison "$expected" "$actual" "$tol_percent"; then
+            return 1
+        fi
+    fi
+    if [[ "$unordered_arrays" == "true" ]]; then
+        expected="$(echo "$expected" | jq -S .)"
+        actual="$(echo "$actual" | jq -S .)"
+    fi
+    if [[ -n "$unordered_arrays_paths" ]]; then
+        local paths
+        paths="$(echo "$unordered_arrays_paths" | tr ',' ' ')"
+        for path in $paths; do
+            expected="$(echo "$expected" | jq "$path |= sort")"
+            actual="$(echo "$actual" | jq "$path |= sort")"
+        done
+    fi
+    case "$type" in
+        "exact")
+            if command -v jq >/dev/null 2>&1; then
+                if echo "$actual" | jq . >/dev/null 2>&1 && echo "$expected" | jq . >/dev/null 2>&1; then
+                    local normalized_actual normalized_expected
+                    normalized_actual="$(echo "$actual" | jq -S -c .)"
+                    normalized_expected="$(echo "$expected" | jq -S -c .)"
+                    [[ "$normalized_actual" == "$normalized_expected" ]]
+                    return $?
+                fi
+            fi
+            [[ "$expected" == "$actual" ]]
+            return $?
+            ;;
+        "partial")
+            if echo "$actual" | jq -e --argjson expected "$expected" 'contains($expected)' >/dev/null 2>&1; then
+                return 0
+            else
+                return 1
+            fi
+            ;;
+        *)
+            tlog error "Unknown comparison type: $type"
+            return 1
+            ;;
+    esac
+}
+
+export -f compare_responses
+export -f apply_tolerance_comparison
+export -f apply_percentage_tolerance_comparison
+
 

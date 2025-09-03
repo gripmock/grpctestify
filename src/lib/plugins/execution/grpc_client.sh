@@ -148,20 +148,11 @@ run_grpc_call() {
         fi
     fi
     
-    # Execute with request data using temporary file
+    # Execute with request data using stdin piping (no temp files)
     if [[ -n "$request" ]]; then
-        # Create temporary file for request data
-        local request_tmp=$(mktemp)
-        # Use jq -c to compact JSON
-        echo "$request" | jq -c . > "$request_tmp"
-        
-        # Execute grpcurl with file input
-        "${cmd[@]}" < "$request_tmp" 2>&1
-        local exit_code=$?
-        
-        # Clean up temporary file
-        rm -f "$request_tmp"
-        return $exit_code
+        # Use jq -c to compact JSON and pipe directly to grpcurl
+        printf '%s' "$request" | jq -c . | "${cmd[@]}" 2>&1
+        return $?
     else
         "${cmd[@]}" 2>&1
     fi

@@ -14,8 +14,9 @@ setup() {
         echo "TEST LOG [$1]: $2" >&2
     }
     
-    # Create temp directory for test files
-    TEST_DIR=$(mktemp -d)
+    # Create a temporary directory for testing
+    TEST_DIR="/tmp/grpctestify_parser_test_$$"
+    mkdir -p "$TEST_DIR"
     
     # Mock plugin functions for isolated testing
     plugin_register() { return 0; }

@@ -30,7 +30,7 @@ readonly PLUGIN_DIRECTORIES=(
     "src/lib/plugins/ui"         # UI plugins
     "src/lib/plugins/utils"      # Utility plugins
     "src/lib/plugins/execution"  # Execution plugins
-    "src/lib/plugins/reports"    # Report plugins
+    # "src/lib/plugins/reports"    # Removed: non-existent directory
     "src/lib/plugins/development" # Development plugins
     "src/lib/plugins/validation" # Validation plugins
     "src/lib/plugins/performance" # Performance plugins

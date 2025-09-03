@@ -319,27 +319,18 @@ execute_grpc_call() {
         format_grpc_debug_output "$request" "$all_headers" "${cmd[@]}"
     fi
     
-    # Execute grpcurl command
+    # Execute grpcurl command using stdin piping (no temp files)
     if [[ -n "$request" ]]; then
-        # Create temporary file for request data
-        local request_tmp
-        request_tmp=$(mktemp)
-        
-        # Compact JSON using jq
-        if echo "$request" | jq -c . > "$request_tmp" 2>/dev/null; then
-            # Execute with file input
-            "${cmd[@]}" < "$request_tmp" 2>&1
-            local exit_code=$?
+        # Try to compact JSON using jq, fallback to raw if jq fails
+        if echo "$request" | jq -c . >/dev/null 2>&1; then
+            # JSON request - pipe compacted JSON
+            echo "$request" | jq -c . | "${cmd[@]}" 2>&1
+            return $?
         else
-            # Fallback for non-JSON requests
-            echo "$request" > "$request_tmp"
-            "${cmd[@]}" < "$request_tmp" 2>&1
-            local exit_code=$?
+            # Non-JSON request - pipe raw content
+            printf '%s' "$request" | "${cmd[@]}" 2>&1
+            return $?
         fi
-        
-        # Clean up temporary file
-        rm -f "$request_tmp"
-        return $exit_code
     else
         "${cmd[@]}" 2>&1
     fi
