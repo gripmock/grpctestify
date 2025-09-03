@@ -205,30 +205,50 @@ run_single_test() {
         done <<< "$request_headers"
     fi
     
-    # Dry-run mode check
+    # Dry-run mode check (rich diagnostic output)
     if [[ "$dry_run" == "true" ]]; then
-        local cmd_preview
+        echo "DRY-RUN ▶ Reproducible command:"
         if [[ -n "$request" ]]; then
             if [[ ${#header_args[@]} -gt 0 ]]; then
-                cmd_preview="echo '$request' | grpcurl -plaintext ${header_args[*]} -d @ '$address' '$endpoint'"
+                printf "echo '%s' | grpcurl -plaintext" "$request"
+                for h in "${header_args[@]}"; do printf " %q" "$h"; done
+                printf " -d @ %q %q\n" "$address" "$endpoint"
             else
-                cmd_preview="echo '$request' | grpcurl -plaintext -d @ '$address' '$endpoint'"
+                printf "echo '%s' | grpcurl -plaintext -d @ %q %q\n" "$request" "$address" "$endpoint"
             fi
         else
-            if [[ ${#header_args[@]} -gt 0 ]]; then
-                cmd_preview="grpcurl -plaintext ${header_args[*]} '$address' '$endpoint'"
-            else
-                cmd_preview="grpcurl -plaintext '$address' '$endpoint'"
-            fi
+            printf "grpcurl -plaintext"
+            for h in "${header_args[@]}"; do printf " %q" "$h"; done
+            printf " %q %q\n" "$address" "$endpoint"
         fi
-        
-        log info "DRY RUN - Command: $cmd_preview"
+
+        if [[ -n "$request" ]]; then
+            echo "DRY-RUN ▶ Request:"
+            echo "$request"
+        fi
+
+        echo "DRY-RUN ▶ Effective OPTIONS:"
+        echo "  timeout: ${timeout_option:-30}"
+        echo "  partial: ${partial_option}"
+        echo "  redact: ${redact_option}"
+        echo "  tolerance: ${tolerance_option}"
+
         if [[ -n "$expected_response" ]]; then
-            log info "Expected Response: $expected_response"
+            echo "DRY-RUN ▶ Expected RESPONSE:"
+            echo "$expected_response"
         fi
         if [[ -n "$expected_error" ]]; then
-            log info "Expected Error: $expected_error"
+            echo "DRY-RUN ▶ Expected ERROR:"
+            echo "$expected_error"
         fi
+
+        # Streaming hint
+        local request_blocks
+        request_blocks=$(awk '/--- REQUEST ---/{c++} END{print c+0}' "$test_file")
+        if [[ $request_blocks -gt 1 ]]; then
+            echo "DRY-RUN ▶ Hint: multiple REQUEST blocks detected (streaming). Current runner may not support streaming RPCs; try manual grpcurl patterns."
+        fi
+
         return 3  # SKIPPED for dry-run
     fi
     
@@ -237,19 +257,29 @@ run_single_test() {
     local timeout_seconds="${timeout_option:-30}"  # Default 30 seconds per test
     
     if [[ -n "$request" ]]; then
+        local grpc_start_ms=$(($(date +%s%N)/1000000))
         if [[ ${#header_args[@]} -gt 0 ]]; then
-            grpc_output=$(kernel_timeout "$timeout_seconds" bash -c "echo '$request' | grpcurl -plaintext '${header_args[*]}' -d @ '$address' '$endpoint'" 2>&1)
+            grpc_output=$(echo "$request" | kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error "${header_args[@]}" -d @ "$address" "$endpoint" 2>&1)
         else
-            grpc_output=$(kernel_timeout "$timeout_seconds" bash -c "echo '$request' | grpcurl -plaintext -d @ '$address' '$endpoint'" 2>&1)
+            grpc_output=$(echo "$request" | kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error -d @ "$address" "$endpoint" 2>&1)
         fi
+        local grpc_end_ms=$(($(date +%s%N)/1000000))
+        local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
     else
+        local grpc_start_ms=$(($(date +%s%N)/1000000))
         if [[ ${#header_args[@]} -gt 0 ]]; then
-            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext "${header_args[@]}" "$address" "$endpoint" 2>&1)
+            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error "${header_args[@]}" "$address" "$endpoint" 2>&1)
         else
-            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext "$address" "$endpoint" 2>&1)
+            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error "$address" "$endpoint" 2>&1)
         fi
+        local grpc_end_ms=$(($(date +%s%N)/1000000))
+        local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
     fi
     local grpc_exit_code=$?
+    # record grpc duration if not timeout
+    if [[ $grpc_exit_code -ne 124 ]]; then
+        GRPCTESTIFY_GRPC_DURATIONS+=("${grpc_duration_ms}")
+    fi
     
     # Handle timeout specifically
     if [[ $grpc_exit_code -eq 124 ]]; then
@@ -257,8 +287,19 @@ run_single_test() {
         return 1  # FAIL
     fi
     
+    # Detect error even if grpcurl exits 0 but returns JSON with code/message
+    local detected_error_code
+    detected_error_code=$(echo "$grpc_output" | jq -r '.code // empty' 2>/dev/null || true)
+    if [[ -z "$detected_error_code" ]]; then
+        detected_error_code=$(echo "$grpc_output" | sed -n 's/.*code = \([0-9][0-9]*\).*/\1/p' | head -n1)
+    fi
+    local is_error=0
+    if [[ $grpc_exit_code -ne 0 || -n "$detected_error_code" ]]; then
+        is_error=1
+    fi
+
     # Check result
-    if [[ $grpc_exit_code -eq 0 ]]; then
+    if [[ $is_error -eq 0 ]]; then
         # Success case - check response
         if [[ -n "$expected_error" ]]; then
             log error "Expected error but got success in $test_file"
@@ -321,26 +362,79 @@ run_single_test() {
     else
         # Error case - check if error was expected
         if [[ -n "$expected_error" ]]; then
-            # Try to extract message from expected error JSON
-            local expected_message
-            expected_message=$(echo "$expected_error" | jq -r '.message // empty' 2>/dev/null)
-            
-            # If we have a message in JSON, look for it in the output
-            if [[ -n "$expected_message" && "$expected_message" != "null" ]]; then
-                if [[ "$grpc_output" == *"$expected_message"* ]]; then
-                    return 0  # PASS (expected error message found)
+            # Expected error fields (if JSON)
+            local expected_code expected_message
+            expected_code=$(echo "$expected_error" | jq -r '.code // empty' 2>/dev/null || true)
+            expected_message=$(echo "$expected_error" | jq -r '.message // empty' 2>/dev/null || true)
+
+            # Actual error fields (grpcurl -format-error output may be JSON or text)
+            local actual_code actual_message
+            actual_code=$(echo "$grpc_output" | jq -r '.code // empty' 2>/dev/null || true)
+            actual_message=$(echo "$grpc_output" | jq -r '.message // empty' 2>/dev/null || true)
+            # Fallback: parse textual pattern "code = N desc = ..."
+            if [[ -z "$actual_code" ]]; then
+                actual_code=$(echo "$grpc_output" | sed -n 's/.*code = \([0-9][0-9]*\).*/\1/p' | head -n1)
+            fi
+            if [[ -z "$actual_message" ]]; then
+                actual_message=$(echo "$grpc_output" | sed -n 's/.*desc = \(.*\)$/\1/p' | head -n1)
+            fi
+
+            # Normalize nulls
+            [[ "$expected_code" == "null" ]] && expected_code=""
+            [[ "$expected_message" == "null" ]] && expected_message=""
+            [[ "$actual_code" == "null" ]] && actual_code=""
+            [[ "$actual_message" == "null" ]] && actual_message=""
+
+            local mismatch=false
+
+            # Compare code if provided
+            if [[ -n "$expected_code" ]]; then
+                if [[ -z "$actual_code" || "$actual_code" != "$expected_code" ]]; then
+                    mismatch=true
                 fi
             fi
-            
-            # Fallback: check if the entire expected error text is contained in output
-            if [[ "$grpc_output" == *"$expected_error"* ]]; then
-                return 0  # PASS (expected error)
+
+            # Normalize messages (collapse whitespace)
+            local norm_expected_message norm_actual_message
+            norm_expected_message=$(echo "$expected_message" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -e 's/^ *//' -e 's/ *$//')
+            norm_actual_message=$(echo "$actual_message" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -e 's/^ *//' -e 's/ *$//')
+
+            # Compare message (substring match on normalized text) if provided
+            if [[ -n "$expected_message" ]]; then
+                if [[ -n "$norm_actual_message" ]]; then
+                    if [[ "$norm_actual_message" != *"$norm_expected_message"* ]]; then
+                        mismatch=true
+                    fi
+                else
+                    # Fallback: search in full output text
+                    if [[ "$(echo "$grpc_output" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')" != *"$norm_expected_message"* ]]; then
+                        mismatch=true
+                    fi
+                fi
             fi
-            
+
+            # If no structured fields provided in expected_error, fallback to raw contains
+            if [[ -z "$expected_code" && -z "$expected_message" ]]; then
+                if [[ "$grpc_output" == *"$expected_error"* ]]; then
+                    mismatch=false
+                else
+                    mismatch=true
+                fi
+            fi
+
+            if [[ "$mismatch" == false ]]; then
+                return 0
+            fi
+
             log error "Error mismatch in $test_file"
-            log error "Expected error containing: $expected_error"
-            log error "Actual error: $grpc_output"
-            return 1  # FAIL
+            if [[ -n "$expected_code" || -n "$expected_message" ]]; then
+                log error "Expected (code/message): ${expected_code:-""} / ${norm_expected_message:-""}"
+                log error "Actual   (code/message): ${actual_code:-""} / ${norm_actual_message:-""}"
+            else
+                log error "Expected to contain: $expected_error"
+            fi
+            log error "Actual error output: $grpc_output"
+            return 1
         else
             log error "gRPC call failed for $test_file: $grpc_output"
             return 1  # FAIL
@@ -1030,18 +1124,9 @@ EOF
 
     [[ "$verbose" == "1" ]] && log info "Auto-selected progress mode: $([ "$verbose" == "1" ] && echo "verbose" || echo "dots") ($total tests, verbose=$verbose)"
     
-    # Start timing for detailed statistics (cross-platform with ms precision)
+    # Start timing for detailed statistics (millisecond precision)
     local start_time
-    if command -v python3 >/dev/null 2>&1; then
-        # Use python3 for high precision timing (cross-platform)
-        start_time=$(python3 -c "import time; print(int(time.time() * 1000))")
-    elif command -v node >/dev/null 2>&1; then
-        # Fallback to node.js
-        start_time=$(node -e "console.log(Date.now())")
-    else
-        # Fallback to second precision
-        start_time=$(($(date +%s) * 1000))
-    fi
+    start_time=$(($(date +%s%N)/1000000))
     
     local passed=0
     local failed=0
@@ -1053,6 +1138,8 @@ EOF
     local passed_tests=()
     local failed_tests=()
     local skipped_tests=()
+    # Aggregated gRPC durations (ms) per call
+    GRPCTESTIFY_GRPC_DURATIONS=()
     
     if [[ "$total" -eq 1 ]]; then
         log info "Running 1 test sequentially..."
@@ -1074,13 +1161,7 @@ EOF
         
         # Start timing for this test
         local test_start_time
-        if command -v python3 >/dev/null 2>&1; then
-            test_start_time=$(python3 -c "import time; print(int(time.time() * 1000))")
-        elif command -v node >/dev/null 2>&1; then
-            test_start_time=$(node -e "console.log(Date.now())")
-        else
-            test_start_time=$(($(date +%s) * 1000))
-        fi
+        test_start_time=$(($(date +%s%N)/1000000))
         
         # Pytest-style UI: verbose vs dots mode
         if [[ "$verbose" == "1" ]]; then
@@ -1091,13 +1172,7 @@ EOF
                 
                 # Calculate test duration
                 local test_end_time
-                if command -v python3 >/dev/null 2>&1; then
-                    test_end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
-                elif command -v node >/dev/null 2>&1; then
-                    test_end_time=$(node -e "console.log(Date.now())")
-                else
-                    test_end_time=$(($(date +%s) * 1000))
-                fi
+                test_end_time=$(($(date +%s%N)/1000000))
                 local test_duration=$((test_end_time - test_start_time))
                 passed_tests+=("$test_file|$test_duration")
             else
@@ -1105,13 +1180,7 @@ EOF
                 
                 # Calculate test duration
                 local test_end_time
-                if command -v python3 >/dev/null 2>&1; then
-                    test_end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
-                elif command -v node >/dev/null 2>&1; then
-                    test_end_time=$(node -e "console.log(Date.now())")
-                else
-                    test_end_time=$(($(date +%s) * 1000))
-                fi
+                test_end_time=$(($(date +%s%N)/1000000))
                 local test_duration=$((test_end_time - test_start_time))
                 
                 if [[ "$exit_code" -eq 3 ]]; then
@@ -1126,21 +1195,23 @@ EOF
             fi
         else
             # Dots mode (pytest-style)
-            if run_single_test "$test_file" "$([[ "$dry_run" == "1" ]] && echo "true" || echo "false")" >/dev/null 2>&1; then
-                local exit_code=$?
+            if [[ "$dry_run" == "1" ]]; then
+                if run_single_test "$test_file" "true"; then
+                    local exit_code=$?
+                else
+                    local exit_code=$?
+                fi
             else
-                local exit_code=$?
+                if run_single_test "$test_file" "false" >/dev/null 2>&1; then
+                    local exit_code=$?
+                else
+                    local exit_code=$?
+                fi
             fi
             
             # Calculate test duration
             local test_end_time
-            if command -v python3 >/dev/null 2>&1; then
-                test_end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
-            elif command -v node >/dev/null 2>&1; then
-                test_end_time=$(node -e "console.log(Date.now())")
-            else
-                test_end_time=$(($(date +%s) * 1000))
-            fi
+            test_end_time=$(($(date +%s%N)/1000000))
             local test_duration=$((test_end_time - test_start_time))
             
             case $exit_code in
@@ -1166,18 +1237,9 @@ EOF
     # Add newline after dots mode
     [[ "$verbose" != "1" ]] && echo
     
-    # Calculate execution time and advanced statistics (cross-platform with ms precision)
+    # Calculate execution time and advanced statistics (millisecond precision)
     local end_time
-    if command -v python3 >/dev/null 2>&1; then
-        # Use python3 for high precision timing (cross-platform)
-        end_time=$(python3 -c "import time; print(int(time.time() * 1000))")
-    elif command -v node >/dev/null 2>&1; then
-        # Fallback to node.js
-        end_time=$(node -e "console.log(Date.now())")
-    else
-        # Fallback to second precision
-        end_time=$(($(date +%s) * 1000))
-    fi
+    end_time=$(($(date +%s%N)/1000000))
     local duration_ms=$((end_time - start_time))
     local duration_sec=$((duration_ms / 1000))
     local remaining_ms=$((duration_ms % 1000))
@@ -1194,11 +1256,11 @@ EOF
     
     # Test results line with professional formatting
     if [[ $failed -gt 0 ]]; then
-        echo "❌ FAILED ($failed failed, $passed passed$([ "$skipped" -gt 0 ] && echo ", $skipped skipped" || echo "") in ${duration_sec}.$(printf "%03d" $remaining_ms)s)"
+        echo "❌ FAILED ($failed failed, $passed passed$([ "$skipped" -gt 0 ] && echo ", $skipped skipped" || echo "") in ${duration_ms}ms)"
     elif [[ $skipped -gt 0 ]]; then
-        echo "🔍 PASSED ($passed passed, $skipped skipped in ${duration_sec}.$(printf "%03d" $remaining_ms)s)"
+        echo "🔍 PASSED ($passed passed, $skipped skipped in ${duration_ms}ms)"
     else
-        echo "✅ PASSED ($passed passed in ${duration_sec}.$(printf "%03d" $remaining_ms)s)"
+        echo "✅ PASSED ($passed passed in ${duration_ms}ms)"
     fi
     
     echo "────────────────────────────────────────────────────────────────────────────────"
@@ -1209,9 +1271,27 @@ EOF
     echo "   • Passed: $passed"
     echo "   • Failed: $failed" 
     echo "   • Skipped: $skipped"
-    echo "   • Duration: ${duration_sec}.$(printf "%03d" $remaining_ms)s"
+    echo "   • Duration: ${duration_ms}ms"
     echo "   • Average per test: ${avg_per_test_ms}ms"
     
+    # gRPC timing and overhead statistics
+    if [[ ${#GRPCTESTIFY_GRPC_DURATIONS[@]} -gt 0 ]]; then
+        local total_grpc_ms=0
+        for d in "${GRPCTESTIFY_GRPC_DURATIONS[@]}"; do
+            total_grpc_ms=$((total_grpc_ms + d))
+        done
+        local avg_grpc_ms=$(( total_grpc_ms / ${#GRPCTESTIFY_GRPC_DURATIONS[@]} ))
+        local overhead_ms=$(( duration_ms - total_grpc_ms ))
+        local avg_overhead_per_test_ms=0
+        if [[ $total -gt 0 ]]; then
+            avg_overhead_per_test_ms=$(( overhead_ms / total ))
+        fi
+        echo "   • gRPC: total ${total_grpc_ms}ms, avg ${avg_grpc_ms}ms per call"
+        echo "   • Overhead: ${overhead_ms}ms total, avg ${avg_overhead_per_test_ms}ms per test"
+    else
+        echo "   • gRPC: no calls measured"
+    fi
+
     # Execution mode information
     if [[ "$parallel_jobs" -eq 1 ]]; then
         echo "   • Mode: Sequential (1 thread)"
@@ -1257,6 +1337,16 @@ EOF
             has_warnings=true
         fi
         echo "   • Found $headers_warnings HEADERS sections - use REQUEST_HEADERS instead"
+    fi
+    
+    # Failed tests section (full file paths)
+    if [[ $failed -gt 0 && ${#failed_tests[@]} -gt 0 ]]; then
+        echo "❌ Failed Tests:" 
+        for test_info in "${failed_tests[@]}"; do
+            local fpath=$(echo "$test_info" | cut -d'|' -f1)
+            local fdur=$(echo "$test_info" | cut -d'|' -f2)
+            echo "   • $fpath (${fdur}ms)"
+        done
     fi
     
     # Environment info
