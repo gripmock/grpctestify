@@ -7,10 +7,10 @@
 # source "$(dirname "${BASH_SOURCE[0]}")/../../core/plugin_integration.sh"
 
 # Plugin metadata
-readonly PLUGIN_TLS_VERSION="1.0.0"
-readonly PLUGIN_TLS_DESCRIPTION="Enhanced TLS/mTLS security with microkernel integration"
-readonly PLUGIN_TLS_AUTHOR="grpctestify-team"
-readonly PLUGIN_TLS_TYPE="security"
+export PLUGIN_TLS_VERSION="1.0.0"
+export PLUGIN_TLS_DESCRIPTION="Enhanced TLS/mTLS security with microkernel integration"
+export PLUGIN_TLS_AUTHOR="grpctestify-team"
+export PLUGIN_TLS_TYPE="security"
 
 # TLS configuration constants
 readonly TLS_MODE_PLAINTEXT="plaintext"
@@ -488,41 +488,24 @@ grpc_tls_event_handler() {
 
 # State database helper functions
 record_tls_config() {
-    local test_file="$1"
-    local status="$2"
-    local config="$3"
+    local test_file
+    test_file="$1"
+    local status
+    status="$2"
+    local config
+    config="$3"
     
-    local tls_key="tls_config_$(basename "$test_file")"
+    # shellcheck disable=SC2034
+    local tls_key
+    tls_key="tls_config_$(basename "$test_file")"
+    # shellcheck disable=SC2034
     GRPCTESTIFY_STATE["${tls_key}_status"]="$status"
+    # shellcheck disable=SC2034
     GRPCTESTIFY_STATE["${tls_key}_timestamp"]="$(date +%s)"
+    # shellcheck disable=SC2034
     [[ -n "$config" ]] && GRPCTESTIFY_STATE["${tls_key}_config"]="$config"
     
     return 0
-}
-
-# Legacy compatibility functions
-parse_tls_section() {
-    grpc_tls_parse_section "$@"
-}
-
-process_tls_configuration() {
-    local config="$1"
-    local test_file="$2"
-    
-    local tls_config
-    tls_config=$(process_tls_configuration "$config" "$test_file")
-    
-    # Convert to legacy format (mode|flags)
-    local mode
-    mode=$(echo "$tls_config" | jq -r '.mode')
-    local flags
-    flags=$(echo "$tls_config" | jq -r '.flags | join(" ")')
-    
-    echo "$mode|$flags"
-}
-
-validate_certificate_files() {
-    validate_certificate_files "$@"
 }
 
 # Export functions
@@ -530,4 +513,3 @@ export -f grpc_tls_init grpc_tls_handler grpc_tls_parse_section
 export -f extract_tls_section process_tls_configuration grpc_tls_generate_flags
 export -f grpc_tls_validate_config validate_certificate_files grpc_tls_validate_certificates
 export -f grpc_tls_event_handler record_tls_config
-export -f parse_tls_section process_tls_configuration validate_certificate_files

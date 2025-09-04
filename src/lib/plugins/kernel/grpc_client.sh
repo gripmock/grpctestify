@@ -7,10 +7,10 @@
 # source "$(dirname "${BASH_SOURCE[0]}")/../../core/plugin_integration.sh"
 
 # Plugin metadata
-readonly PLUGIN_GRPC_CLIENT_VERSION="1.0.0"
-readonly PLUGIN_GRPC_CLIENT_DESCRIPTION="Kernel gRPC client with microkernel integration"
-readonly PLUGIN_GRPC_CLIENT_AUTHOR="grpctestify-team"
-readonly PLUGIN_GRPC_CLIENT_TYPE="kernel"
+export PLUGIN_GRPC_CLIENT_VERSION="1.0.0"
+export PLUGIN_GRPC_CLIENT_DESCRIPTION="Kernel gRPC client with microkernel integration"
+export PLUGIN_GRPC_CLIENT_AUTHOR="grpctestify-team"
+export PLUGIN_GRPC_CLIENT_TYPE="kernel"
 
 # gRPC client configuration
 GRPC_CLIENT_TIMEOUT="${GRPC_CLIENT_TIMEOUT:-30}"
@@ -121,6 +121,20 @@ grpc_client_execute_call() {
     fi
     
     tlog debug "Executing gRPC call: $endpoint on $address"
+
+    # Allow override via plugin: plugin_grpc_client_execute(call_config_json, execution_options_json)
+    if command -v plugin_grpc_client_execute >/dev/null 2>&1; then
+        tlog debug "Delegating gRPC execution to override plugin"
+        local plugin_out
+        if plugin_out=$(plugin_grpc_client_execute "$call_config" "$execution_options"); then
+            echo "$plugin_out"
+            return 0
+        else
+            # If plugin reports failure, propagate non-zero but continue to record below
+            echo "$plugin_out"
+            return 1
+        fi
+    fi
     
     # Publish gRPC call start event
     local call_metadata
@@ -151,7 +165,8 @@ EOF
     
     # Execute gRPC call with monitoring
     local call_result=0
-    local start_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+    local start_time
+    start_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
     local response
     
     if enable_retry && [[ "$enable_retry" == "true" ]]; then
@@ -162,7 +177,8 @@ EOF
         call_result=$?
     fi
     
-    local end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+    local end_time
+    end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
     local duration=$((end_time - start_time))
     
     # Record call result
@@ -208,132 +224,50 @@ execute_grpc_call() {
     local dry_run="$8"
     local timeout="$9"
     
-    # Build grpcurl command array
-    local cmd=("grpcurl")
-    
-    # Add TLS configuration
-    if [[ -n "$tls_config" ]]; then
-        local tls_mode
-        tls_mode=$(echo "$tls_config" | jq -r '.mode // "plaintext"')
-        case "$tls_mode" in
-            "plaintext")
-                cmd+=("-plaintext")
-                ;;
-            "tls")
-                cmd+=("-insecure")  # For self-signed certificates
-                ;;
-            "mtls")
-                local cert_file
-                cert_file=$(echo "$tls_config" | jq -r '.cert_file // ""')
-                local key_file
-                key_file=$(echo "$tls_config" | jq -r '.key_file // ""')
-                local ca_file
-                ca_file=$(echo "$tls_config" | jq -r '.ca_file // ""')
-                
-                [[ -n "$cert_file" ]] && cmd+=("-cert" "$cert_file")
-                [[ -n "$key_file" ]] && cmd+=("-key" "$key_file")
-                [[ -n "$ca_file" ]] && cmd+=("-cacert" "$ca_file")
-                ;;
-        esac
-    else
-        cmd+=("-plaintext")
-    fi
-    
-    # Add proto configuration
-    if [[ -n "$proto_config" ]]; then
-        local proto_mode
-        proto_mode=$(echo "$proto_config" | jq -r '.mode // "reflection"')
-        case "$proto_mode" in
-            "file")
-                local proto_file
-                proto_file=$(echo "$proto_config" | jq -r '.file // ""')
-                [[ -n "$proto_file" ]] && cmd+=("-proto" "$proto_file")
-                ;;
-            "descriptor")
-                local descriptor_file
-                descriptor_file=$(echo "$proto_config" | jq -r '.descriptor // ""')
-                [[ -n "$descriptor_file" ]] && cmd+=("-protoset" "$descriptor_file")
-                ;;
-            "reflection")
-                # Default behavior, no extra flags needed
-                ;;
-        esac
-    fi
-    
-    # Add error formatting
-    cmd+=("-format-error")
-    
-    # Add timeout
-    [[ -n "$timeout" ]] && cmd+=("-max-time" "$timeout")
-    
-    # Combine headers and request_headers
+    # Combine headers and request_headers into array of -H pairs
+    local header_args=()
     local all_headers=""
-    if [[ -n "$headers" ]]; then
-        all_headers="$headers"
+    [[ -n "$headers" ]] && all_headers="$headers"
+    if [[ -n "$request_headers" ]]; then
+        all_headers+=$'\n'
     fi
     if [[ -n "$request_headers" ]]; then
-        if [[ -n "$all_headers" ]]; then
-            all_headers="$all_headers"$'\n'"$request_headers"
-        else
-            all_headers="$request_headers"
-        fi
+        all_headers+="$request_headers"
     fi
-    
-    # Add headers
     if [[ -n "$all_headers" ]]; then
-        while IFS= read -r header; do
-            if [[ -n "$header" && ! "$header" =~ ^[[:space:]]*$ ]]; then
-                cmd+=("-H" "$header")
-            fi
+        while IFS= read -r h; do
+            [[ -z "$h" || "$h" =~ ^[[:space:]]*$ ]] && continue
+            header_args+=("-H" "$h")
         done <<< "$all_headers"
     fi
     
-    # Add request data if present
-    if [[ -n "$request" ]]; then
-        cmd+=("-d" "@")
-    fi
+    # Build grpcurl argv via shared helper
+    local has_request="0"
+    [[ -n "$request" ]] && has_request="1"
+    build_grpcurl_args "$address" "$endpoint" "$tls_config" "$proto_config" header_args "$has_request"
     
-    # Add address and endpoint
-    cmd+=("$address" "$endpoint")
-    
-    # Handle dry-run mode
+    # Dry-run: preview the exact command (one line)
     if [[ "$dry_run" == "true" ]]; then
-        format_dry_run_output "$request" "$all_headers" "${cmd[@]}"
-        
-        # Return appropriate dry-run response
-        if [[ "${GRPCTESTIFY_DRY_RUN_EXPECT_ERROR:-false}" == "true" ]]; then
+        render_grpcurl_preview "$request" "${GRPCURL_ARGS[@]}"
+        # Simulated output path remains same as before (no execution)
+        if [[ -n "${GRPCTESTIFY_DRY_RUN_EXPECT_ERROR:-}" && "${GRPCTESTIFY_DRY_RUN_EXPECT_ERROR}" == "true" ]]; then
             echo '{"code": 999, "message": "DRY-RUN: Simulated gRPC error", "details": []}'
             return 1
-        else
-            if [[ -n "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE:-}" && "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" != "null" ]]; then
-                echo "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}"
-            else
-                echo '{"dry_run": true, "message": "Command preview completed", "status": "success"}'
-            fi
-            return 0
         fi
+        if [[ -n "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE:-}" && "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" != "null" ]]; then
+            echo "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}"
+        else
+            echo '{"dry_run": true, "message": "Command preview completed", "status": "success"}'
+        fi
+        return 0
     fi
     
-    # Show debug information in verbose mode
-    if [[ "${verbose:-false}" == "true" || "${LOG_LEVEL:-info}" == "debug" ]]; then
-        format_grpc_debug_output "$request" "$all_headers" "${cmd[@]}"
-    fi
-    
-    # Execute grpcurl command using stdin piping (no temp files)
-    if [[ -n "$request" ]]; then
-        # Try to compact JSON using jq, fallback to raw if jq fails
-        if echo "$request" | jq -c . >/dev/null 2>&1; then
-            # JSON request - pipe compacted JSON
-            echo "$request" | jq -c . | "${cmd[@]}" 2>&1
-            return $?
-        else
-            # Non-JSON request - pipe raw content
-            printf '%s' "$request" | "${cmd[@]}" 2>&1
-            return $?
-        fi
-    else
-        "${cmd[@]}" 2>&1
-    fi
+    # Execute via shared helper with timeout
+    local out
+    out=$(execute_grpcurl_argv "${timeout:-30}" "$request" "${GRPCTESTIFY_GRPC_DEBUG:+-v}" "${GRPCURL_ARGS[@]}")
+    local status=$?
+    echo "$out"
+    return $status
 }
 
 # Execute gRPC call with retry mechanism
@@ -543,15 +477,25 @@ grpc_client_event_handler() {
 
 # State database helper functions
 record_grpc_call() {
-    local endpoint="$1"
-    local status="$2"
-    local duration="$3"
-    local response="$4"
+    local endpoint
+    endpoint="$1"
+    local status
+    status="$2"
+    local duration
+    duration="$3"
+    local response
+    response="$4"
     
-    local call_key="grpc_call_${endpoint//\//_}"
+    # shellcheck disable=SC2034
+    local call_key
+    call_key="grpc_call_${endpoint//\//_}"
+    # shellcheck disable=SC2034
     GRPCTESTIFY_STATE["${call_key}_status"]="$status"
+    # shellcheck disable=SC2034
     GRPCTESTIFY_STATE["${call_key}_duration"]="$duration"
+    # shellcheck disable=SC2034
     GRPCTESTIFY_STATE["${call_key}_timestamp"]="$(date +%s)"
+    # shellcheck disable=SC2034
     [[ -n "$response" ]] && GRPCTESTIFY_STATE["${call_key}_response"]="$response"
     
     return 0

@@ -212,6 +212,7 @@ run_single_test() {
     # Build argv with shared helper
     local has_request="0"
     [[ -n "$request" ]] && has_request="1"
+    # Call the plugin's build_grpcurl_args
     build_grpcurl_args "$address" "$endpoint" "$tls_section" "$proto_section" header_args "$has_request"
     
     # Dry-run mode check (rich diagnostic output)
@@ -825,94 +826,10 @@ perform_update() {
     return 0
 }
 
-# Shared grpcurl helpers
-# Build grpcurl argv array from parsed sections and flags
-build_grpcurl_args() {
-    local address="$1"
-    local endpoint="$2"
-    local tls_json="$3"
-    local proto_json="$4"
-    local -n headers_ref=$5
-    local request_present="$6"
-
-    GRPCURL_ARGS=(grpcurl)
-
-    # TLS
-    local tls_mode="plaintext"
-    if [[ -n "$tls_json" ]]; then
-        tls_mode=$(echo "$tls_json" | jq -r '.mode // "plaintext"' 2>/dev/null || echo "plaintext")
-    fi
-    case "$tls_mode" in
-        plaintext)
-            GRPCURL_ARGS+=("-plaintext")
-            ;;
-        insecure)
-            GRPCURL_ARGS+=("-insecure")
-            ;;
-        tls|mtls)
-            local cert_file key_file ca_file
-            cert_file=$(echo "$tls_json" | jq -r '.cert_file // empty' 2>/dev/null)
-            key_file=$(echo "$tls_json" | jq -r '.key_file // empty' 2>/dev/null)
-            ca_file=$(echo "$tls_json" | jq -r '.ca_file // empty' 2>/dev/null)
-            [[ -n "$cert_file" ]] && GRPCURL_ARGS+=("-cert" "$cert_file")
-            [[ -n "$key_file" ]] && GRPCURL_ARGS+=("-key" "$key_file")
-            [[ -n "$ca_file" ]] && GRPCURL_ARGS+=("-cacert" "$ca_file")
-            ;;
-        *)
-            GRPCURL_ARGS+=("-plaintext")
-            ;;
-    esac
-
-    # Proto
-    if [[ -n "$proto_json" ]]; then
-        local proto_file
-        proto_file=$(echo "$proto_json" | jq -r '.file // empty' 2>/dev/null)
-        [[ -n "$proto_file" ]] && GRPCURL_ARGS+=("-proto" "$proto_file")
-    fi
-
-    # Headers
-    if [[ ${#headers_ref[@]} -gt 0 ]]; then
-        for ((i=0; i<${#headers_ref[@]}; i+=2)); do
-            local flag="${headers_ref[i]}"; local header="${headers_ref[i+1]}"
-            GRPCURL_ARGS+=("$flag" "$header")
-        done
-    fi
-
-    # Always include format option before positional args
-    GRPCURL_ARGS+=("-format-error")
-
-    # Data
-    if [[ "$request_present" == "1" ]]; then
-        GRPCURL_ARGS+=("-d" "@")
-    fi
-
-    # Address + endpoint
-    GRPCURL_ARGS+=("$address" "$endpoint")
-}
-
-# Render one-line reproducible command from args and optional request
-render_grpcurl_preview() {
-    local request="$1"; shift
-    local -a argv=("$@")
-    if [[ -n "$request" ]]; then
-        printf "echo '%s' | %s\n" "$request" "${argv[*]}"
-    else
-        printf "%s\n" "${argv[*]}"
-    fi
-}
-
-# Execute grpcurl with timeout using argv array and optional request via stdin
-execute_grpcurl_argv() {
-    local timeout_seconds="$1"; shift
-    local request="$1"; shift
-    local -a argv=("$@")
-
-    if [[ -n "$request" ]]; then
-        echo "$request" | kernel_timeout "$timeout_seconds" "${argv[@]}" 2>&1
-    else
-        kernel_timeout "$timeout_seconds" "${argv[@]}" 2>&1
-    fi
-}
+# Shared grpcurl helpers moved to src/lib/plugins/grpc/helpers.sh
+# build_grpcurl_args
+# render_grpcurl_preview
+# execute_grpcurl_argv
 
 # Pretty printing helpers for dry-run
 wrap_and_indent() {
@@ -1586,13 +1503,16 @@ EOF
         echo
         echo "📋 Generating $log_format report..."
         
+        # Ensure reporting plugin is available (bashly will inline src/lib/**/*.sh)
+        type reporting_generate_junit_report >/dev/null 2>&1 || true
+        type reporting_generate_json_report >/dev/null 2>&1 || true
+
         case "$log_format" in
             "junit")
-                # Pass test details to generate_junit_report
-                generate_junit_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time" "passed_tests" "failed_tests" "skipped_tests"
+                reporting_generate_junit_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time" "passed_tests" "failed_tests" "skipped_tests"
                 ;;
             "json")
-                generate_json_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time" "passed_tests" "failed_tests" "skipped_tests"
+                reporting_generate_json_report "$log_output" "$total" "$passed" "$failed" "$skipped" "$duration_ms" "$start_time" "passed_tests" "failed_tests" "skipped_tests"
                 ;;
         esac
         
