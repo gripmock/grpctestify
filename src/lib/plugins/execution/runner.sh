@@ -256,24 +256,10 @@ run_grpc_call() {
     
     cmd+=("$address" "$endpoint")
     
-    # Dry-run mode: show beautiful formatted command preview
+    # Dry-run mode: delegate preview to shared helper
     if [[ "$dry_run" == "true" ]]; then
-        format_dry_run_output "$request" "$headers" "${cmd[@]}"
-        # Return appropriate response based on test expectations
-        # If we expect an error (detected by caller), simulate gRPC error
-        if [[ "${GRPCTESTIFY_DRY_RUN_EXPECT_ERROR:-false}" == "true" ]]; then
-            echo '{"code": 999, "message": "DRY-RUN: Simulated gRPC error", "details": []}'
-            return 1
-        else
-            # If there's an expected response, return it; otherwise return dry-run status
-            if [[ -n "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE:-}" && "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" != "null" ]]; then
-                echo "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}"
-            else
-                # Return structured JSON response for compatibility
-                echo '{"dry_run": true, "message": "Command preview completed", "status": "success"}'
-            fi
-            return 0
-        fi
+        render_grpcurl_preview "$request" "${cmd[@]}"
+        return 0
     fi
     
     # Only show debug info in verbose mode or non-dots progress mode

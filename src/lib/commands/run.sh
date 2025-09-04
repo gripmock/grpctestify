@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Single-pass extractor for all sections in a .gctf file
 parse_gctf_sections() {
     local file="$1"
@@ -118,6 +119,17 @@ process_line() {
             res="$res$c"
         fi
     done
+    # Trim trailing spaces and tabs (no external sed)
+    local end_index=$(( ${#res} - 1 ))
+    while (( end_index >= 0 )); do
+        c="${res:end_index:1}"
+        if [[ "$c" == $'\t' || "$c" == ' ' ]]; then
+            res="${res:0:end_index}"
+            ((end_index--))
+            continue
+        fi
+        break
+    done
     echo "$res"
 }
 
@@ -141,6 +153,7 @@ run_single_test() {
     local headers=""
     local request_headers=""
     local options_section=""
+    local asserts_section=""
     local tls_section=""
     local proto_section=""
     while IFS=$'\t' read -r sec line; do
@@ -154,14 +167,12 @@ run_single_test() {
             REQUEST)
                 if [[ ! "$line" =~ ^[[:space:]]*# ]]; then
                     processed_line=$(process_line "$line")
-                    processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
                     [[ -n "$processed_line" ]] && request+="$processed_line"
                 fi
                 ;;
             RESPONSE)
                 if [[ ! "$line" =~ ^[[:space:]]*# ]]; then
                     processed_line=$(process_line "$line")
-                    processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
                     [[ -n "$processed_line" ]] && expected_response+="$processed_line"
                 fi
                 ;;
@@ -176,6 +187,9 @@ run_single_test() {
                 ;;
             OPTIONS)
                 options_section+="$line"$'\n'
+                ;;
+            ASSERTS)
+                asserts_section+="$line"$'\n'
                 ;;
             TLS)
                 tls_section+="$line"$'\n'
@@ -273,6 +287,9 @@ tolerance: ${tolerance_option}"
         if [[ -n "$expected_error" ]]; then
             print_section "Expected ERROR:" "$expected_error"
         fi
+        if [[ -n "$asserts_section" ]]; then
+            print_section "Expected ASSERTS:" "$asserts_section"
+        fi
         
         # Streaming hint removed per project requirements
         
@@ -340,8 +357,15 @@ tolerance: ${tolerance_option}"
             
             # Apply redact option (remove specified fields)
             if [[ -n "$redact_option" ]]; then
-                # Convert comma-separated list to jq array format
-                local redact_fields=$(echo "$redact_option" | sed 's/[]["]//g' | sed 's/,/","/g' | sed 's/^/"/' | sed 's/$/"/')
+                # Convert comma-separated list to jq array format using pure Bash (strip brackets/quotes, then join)
+                local redact_fields_raw="$redact_option"
+                redact_fields_raw=${redact_fields_raw//[/}
+                redact_fields_raw=${redact_fields_raw//]/}
+                redact_fields_raw=${redact_fields_raw/\"/}
+                redact_fields_raw=${redact_fields_raw//\"/}
+                local redact_fields
+                redact_fields=${redact_fields_raw//,/","}
+                redact_fields="\"$redact_fields\""
                 actual_for_comparison=$(echo "$actual_for_comparison" | jq -c "delpaths([[$redact_fields] | map([.])])" 2>/dev/null || echo "$actual_for_comparison")
                 expected_for_comparison=$(echo "$expected_for_comparison" | jq -c "delpaths([[$redact_fields] | map([.])])" 2>/dev/null || echo "$expected_for_comparison")
             fi
