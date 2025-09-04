@@ -23,62 +23,54 @@ readonly DEFAULT_RETRY_DELAY=1
 # readonly DEFAULT_PARALLEL_JOBS=1  # OLD: static value
 
 #######################################
-# Auto-detect optimal number of parallel jobs based on CPU cores
-# Uses multiple detection methods for cross-platform compatibility:
-# - nproc (Linux)
-# - sysctl hw.ncpu (macOS/BSD)
-# - /proc/cpuinfo (fallback Linux)
-# - reasonable default (fallback)
-# Returns:
-#   Optimal number of parallel jobs (typically CPU cores)
+# Get optimal CPU count for parallel execution
+# Returns: Number of CPU cores to use
 #######################################
-auto_detect_parallel_jobs() {
-    # Use portable CPU detection if available
-    if command -v portable_cpu_count >/dev/null 2>&1; then
-        portable_cpu_count
-    else
-        # Fallback to legacy detection
-        local cpu_count
-        
-        # Method 1: nproc (Linux, modern systems)
-        if command -v nproc >/dev/null 2>&1; then
-            cpu_count=$(nproc 2>/dev/null)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
+get_optimal_cpu_count() {
+    local cpu_count=1
+    
+    # Method 1: Use portable CPU count function
+    if is_utility_available "portable_cpu_count"; then
+        cpu_count=$(portable_cpu_count)
+        if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+            echo "$cpu_count"
+            return 0
         fi
-        
-        # Method 2: sysctl (macOS, BSD)
-        if command -v sysctl >/dev/null 2>&1; then
-            cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
-        fi
-        
-        # Method 3: /proc/cpuinfo (Linux fallback)
-        if [ -f /proc/cpuinfo ]; then
-            cpu_count=$(grep -c "^processor" /proc/cpuinfo 2>/dev/null)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
-        fi
-        
-        # Method 4: Native shell fallback
-        if command -v native_cpu_count >/dev/null 2>&1; then
-            cpu_count=$(native_cpu_count)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
-        fi
-        
-        # Fallback: reasonable default
-        echo "4"
     fi
+    
+    # Method 2: Direct nproc check
+    if is_utility_available "nproc"; then
+        cpu_count=$(nproc 2>/dev/null)
+        if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+            echo "$cpu_count"
+            return 0
+        fi
+    fi
+    
+    # Method 3: sysctl on BSD systems
+    if is_utility_available "sysctl"; then
+        case "$(uname -s)" in
+            "Darwin"|"FreeBSD"|"OpenBSD"|"NetBSD")
+                cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
+                if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+                    echo "$cpu_count"
+                    return 0
+                fi
+                ;;
+        esac
+    fi
+    
+    # Method 4: Native shell detection
+    if is_utility_available "native_cpu_count"; then
+        cpu_count=$(native_cpu_count)
+        if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+            echo "$cpu_count"
+            return 0
+        fi
+    fi
+    
+    # Fallback: conservative default
+    echo "1"
 }
 
 #######################################
@@ -90,7 +82,7 @@ get_default_parallel_jobs() {
     if [[ -n "${PARALLEL_JOBS:-}" ]]; then
         echo "${PARALLEL_JOBS}"
     else
-        auto_detect_parallel_jobs
+        get_optimal_cpu_count
     fi
 }
 # shellcheck disable=SC2034  # Used in future versions
@@ -103,7 +95,7 @@ readonly DEFAULT_AUTHOR="Babichev Maxim"
 readonly DEFAULT_EMAIL="info@babichev.net"
 
 # Export functions for use in other modules
-export -f auto_detect_parallel_jobs get_default_parallel_jobs
+export -f get_optimal_cpu_count get_default_parallel_jobs
 
 # File paths and directories (SECURITY: safe defaults)
 # shellcheck disable=SC2034  # Used by plugin system

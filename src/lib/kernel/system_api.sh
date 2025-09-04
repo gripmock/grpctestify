@@ -15,131 +15,28 @@ readonly SYSTEM_API_VERSION="1.0.0"
 # Returns: Number of CPU cores available to the system
 #######################################
 kernel_nproc() {
-    local cpu_count=0
-    
-    # Method 1: Direct system calls (fastest)
-    case "$(uname -s)" in
-        "Linux")
-            # Linux: Try multiple methods in order of reliability
-            if [[ -r /proc/cpuinfo ]]; then
-                cpu_count=$(grep -c "^processor" /proc/cpuinfo 2>/dev/null)
-            elif [[ -r /proc/stat ]]; then
-                cpu_count=$(grep "^cpu[0-9]" /proc/stat 2>/dev/null | wc -l)
-            elif [[ -d /sys/devices/system/cpu ]]; then
-                cpu_count=$(find /sys/devices/system/cpu -name "cpu[0-9]*" -type d 2>/dev/null | wc -l)
-            fi
-            ;;
-        "Darwin")
-            # macOS: Use sysctl
-            if command -v sysctl >/dev/null 2>&1; then
-                cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
-            fi
-            ;;
-        "FreeBSD"|"OpenBSD"|"NetBSD")
-            # BSD variants
-            if command -v sysctl >/dev/null 2>&1; then
-                cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
-            fi
-            ;;
-        "SunOS")
-            # Solaris
-            if command -v psrinfo >/dev/null 2>&1; then
-                cpu_count=$(psrinfo 2>/dev/null | wc -l)
-            fi
-            ;;
-        "CYGWIN_NT-"*|"MINGW"*|"MSYS_NT-"*)
-            # Windows variants
-            cpu_count="${NUMBER_OF_PROCESSORS:-}"
-            ;;
-    esac
-    
-    # Method 2: External tools fallback (if direct methods failed)
-    if [[ -z "$cpu_count" || "$cpu_count" -le 0 ]] 2>/dev/null; then
-        if command -v nproc >/dev/null 2>&1; then
-            cpu_count=$(nproc 2>/dev/null)
-        elif command -v sysctl >/dev/null 2>&1; then
-            cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
-        fi
-    fi
-    
-    # Method 3: Environment variables
-    if [[ -z "$cpu_count" || "$cpu_count" -le 0 ]] 2>/dev/null; then
-        cpu_count="${NUMBER_OF_PROCESSORS:-${NPROCESSORS_ONLN:-}}"
-    fi
-    
-    # Contract enforcement: Always return positive integer
-    if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]] 2>/dev/null; then
-        echo "$cpu_count"
-    else
-        # Reasonable default that works everywhere
-        echo "4"
-    fi
+    local cpu_count
+    cpu_count=$(cached_cpu_count 2>/dev/null || echo "4")
+    echo "$cpu_count"
 }
 
 #######################################
-# Kernel-level timeout function (replaces timeout/gtimeout)
-# Contract: Runs command with specified timeout, returns command exit code or 124 for timeout
+# Kernel-level timeout function
 # Arguments:
 #   1: timeout_seconds - timeout in seconds
-#   2+: command and arguments to execute
-# Returns: Exit code of command, or 124 if timeout occurred
+#   2+: command and arguments
+# Returns: Exit code of the command or 124 for timeout
 #######################################
 kernel_timeout() {
     local timeout_seconds="$1"
     shift
     
-    # Validate timeout parameter
-    if ! [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || [[ "$timeout_seconds" -eq 0 ]]; then
+    if [[ ! "$timeout_seconds" =~ ^[0-9]+$ ]] || [[ "$timeout_seconds" -le 0 ]]; then
         log_error "kernel_timeout: invalid timeout value: $timeout_seconds"
         return 1
     fi
     
-    # Method 1: Use system timeout if available
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "$timeout_seconds" "$@"
-        return $?
-    fi
-    
-    # Method 2: Use gtimeout on macOS (if installed)
-    if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout "$timeout_seconds" "$@"
-        return $?
-    fi
-    
-    # Method 3: Pure shell implementation
-    local cmd_pid timeout_pid exit_code
-    
-    # Start command in background
-    "$@" &
-    cmd_pid=$!
-    
-    # Start timeout killer in background
-    (
-        sleep "$timeout_seconds"
-        if kill -0 "$cmd_pid" 2>/dev/null; then
-            # Send TERM first, then KILL if needed
-            kill -TERM "$cmd_pid" 2>/dev/null
-            sleep 1
-            if kill -0 "$cmd_pid" 2>/dev/null; then
-                kill -KILL "$cmd_pid" 2>/dev/null
-            fi
-        fi
-    ) &
-    timeout_pid=$!
-    
-    # Wait for command completion
-    if wait "$cmd_pid" 2>/dev/null; then
-        exit_code=$?
-        # Kill timeout process
-        kill "$timeout_pid" 2>/dev/null
-        wait "$timeout_pid" 2>/dev/null
-        return $exit_code
-    else
-        # Command was killed by timeout
-        kill "$timeout_pid" 2>/dev/null
-        wait "$timeout_pid" 2>/dev/null
-        return 124  # Standard timeout exit code
-    fi
+    cached_timeout_exec "$timeout_seconds" "$@"
 }
 
 #######################################

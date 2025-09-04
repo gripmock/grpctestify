@@ -58,30 +58,30 @@ detect_os() {
 }
 
 #######################################
-# Cross-platform timeout implementation
+# Cross-platform timeout function
 # Arguments:
-#   1: timeout_seconds
+#   1: timeout_seconds - timeout in seconds
 #   2+: command and arguments
-# Returns:
-#   Exit code of command, or 124 for timeout
+# Returns: Exit code of the command or 124 for timeout
 #######################################
 portable_timeout() {
     local timeout_seconds="$1"
     shift
     
-    # Method 1: Use timeout if available (GNU coreutils)
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "$timeout_seconds" "$@"
+    if [[ ! "$timeout_seconds" =~ ^[0-9]+$ ]] || [[ "$timeout_seconds" -le 0 ]]; then
+        log_error "portable_timeout: invalid timeout value: $timeout_seconds"
+        return 1
+    fi
+    
+    # Use cached timeout utility if available
+    if is_timeout_available; then
+        local timeout_cmd
+        timeout_cmd=$(get_timeout_command)
+        "$timeout_cmd" "$timeout_seconds" "$@"
         return $?
     fi
     
-    # Method 2: Use gtimeout on macOS (if installed via brew)
-    if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout "$timeout_seconds" "$@"
-        return $?
-    fi
-    
-    # Method 3: Built-in timeout using background process and kill
+    # Fallback to pure shell implementation
     local cmd_pid timeout_pid
     
     # Start command in background
@@ -120,7 +120,7 @@ portable_cpu_count() {
     local cpu_count
     
     # Method 1: Native shell detection (preferred - Python-free)
-    if command -v native_cpu_count >/dev/null 2>&1; then
+    if is_utility_available "native_cpu_count"; then
         cpu_count=$(native_cpu_count)
         if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
             echo "$cpu_count"
@@ -134,7 +134,7 @@ portable_cpu_count() {
     case "$OS_TYPE" in
         linux)
             # Method 2: nproc (modern Linux)
-            if command -v nproc >/dev/null 2>&1; then
+            if is_utility_available "nproc"; then
                 cpu_count=$(nproc 2>/dev/null)
                 if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
                     echo "$cpu_count"
@@ -145,7 +145,7 @@ portable_cpu_count() {
             
         darwin|freebsd|openbsd)
             # Method 3: sysctl (BSD systems including macOS)
-            if command -v sysctl >/dev/null 2>&1; then
+            if is_utility_available "sysctl"; then
                 cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
                 if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
                     echo "$cpu_count"
@@ -156,7 +156,7 @@ portable_cpu_count() {
             
         solaris)
             # Solaris psrinfo
-            if command -v psrinfo >/dev/null 2>&1; then
+            if is_utility_available "psrinfo"; then
                 cpu_count=$(psrinfo | wc -l 2>/dev/null)
                 if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
                     echo "$cpu_count"
@@ -185,7 +185,7 @@ portable_cpu_count() {
 #######################################
 portable_timestamp_ms() {
     # Method 1: Native shell implementation (preferred - Python-free)
-    if command -v native_timestamp_ms >/dev/null 2>&1; then
+    if is_utility_available "native_timestamp_ms"; then
         native_timestamp_ms
         return 0
     fi

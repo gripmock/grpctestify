@@ -9,6 +9,7 @@ readonly KERNEL_NAME="grpctestify-microkernel"
 
 # Essential kernel components (MINIMIZED - moved others to plugins)
 readonly ESSENTIAL_COMPONENTS=(
+    "system_utils_cache" # System utilities cache (FIRST - eliminates repeated command -v checks)
     "system_api"        # Core system abstractions (FIRST - needed by others)
     "routine_manager"
     "resource_pool" 

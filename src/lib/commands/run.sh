@@ -40,58 +40,12 @@ kernel_timeout() {
     local timeout_seconds="$1"
     shift
     
-    # Validate timeout parameter
     if ! [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || [[ "$timeout_seconds" -eq 0 ]]; then
         log_error "kernel_timeout: invalid timeout value: $timeout_seconds"
         return 1
     fi
     
-    # Method 1: Use system timeout if available
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "$timeout_seconds" "$@"
-        return $?
-    fi
-    
-    # Method 2: Use gtimeout on macOS (if installed)
-    if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout "$timeout_seconds" "$@"
-        return $?
-    fi
-    
-    # Method 3: Pure shell implementation
-    local cmd_pid timeout_pid exit_code
-    
-    # Start command in background
-    "$@" &
-    cmd_pid=$!
-    
-    # Start timeout killer in background
-    (
-        sleep "$timeout_seconds"
-        if kill -0 "$cmd_pid" 2>/dev/null; then
-            # Send TERM first, then KILL if needed
-            kill -TERM "$cmd_pid" 2>/dev/null
-            sleep 1
-            if kill -0 "$cmd_pid" 2>/dev/null; then
-                kill -KILL "$cmd_pid" 2>/dev/null
-            fi
-        fi
-    ) &
-    timeout_pid=$!
-    
-    # Wait for command completion
-    if wait "$cmd_pid" 2>/dev/null; then
-        exit_code=$?
-        # Kill timeout process
-        kill "$timeout_pid" 2>/dev/null
-        wait "$timeout_pid" 2>/dev/null
-        return $exit_code
-    else
-        # Command was killed by timeout
-        kill "$timeout_pid" 2>/dev/null
-        wait "$timeout_pid" 2>/dev/null
-        return 124  # Standard timeout exit code
-    fi
+    cached_timeout_exec "$timeout_seconds" "$@"
 }
 
 # Smart comment removal (from v0.0.13)
@@ -543,7 +497,7 @@ tolerance: ${tolerance_option}"
 # CPU detection (simplified)
 auto_detect_parallel_jobs() {
     local cpu_count
-    cpu_count=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "4")
+    cpu_count=$(cached_cpu_count 2>/dev/null || echo "4")
     echo "$cpu_count"
 }
 
@@ -869,9 +823,9 @@ perform_update() {
         if [[ -n "$expected_checksum" ]]; then
             # Calculate checksum
             local actual_checksum
-            if command -v sha256sum >/dev/null 2>&1; then
+            if is_utility_available "sha256sum"; then
                 actual_checksum=$(sha256sum "$temp_file" | cut -d' ' -f1)
-            elif command -v shasum >/dev/null 2>&1; then
+            elif is_utility_available "shasum"; then
                 actual_checksum=$(shasum -a 256 "$temp_file" | cut -d' ' -f1)
             else
                 log_warn "No SHA-256 tool available, skipping checksum verification"
@@ -1083,15 +1037,7 @@ run_tests() {
         local current_version="v1.0.0"
         
         # Check dependencies
-        if ! command -v curl >/dev/null 2>&1; then
-            log_error "curl is required for update checking"
-            return 1
-        fi
-        
-        if ! command -v jq >/dev/null 2>&1; then
-            log_error "jq is required for update checking"
-            return 1
-        fi
+        # curl/jq are expected; if missing, update will fail gracefully during execution
         
         # Query GitHub API with timeout
         local response
