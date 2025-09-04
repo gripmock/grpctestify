@@ -1,4 +1,6 @@
+#!/bin/bash
 # shellcheck shell=bash
+
 # Single-pass extractor for all sections in a .gctf file
 parse_gctf_sections() {
     local file="$1"
@@ -12,8 +14,6 @@ parse_gctf_sections() {
     ' "$file"
 }
 
-#!/bin/bash
-
 # run.sh - Simplified test execution command based on simple_grpc_test_runner.sh
 # This file contains the main logic for running gRPC tests
 # Refactored to remove microkernel dependencies and use proven stable architecture
@@ -21,19 +21,7 @@ parse_gctf_sections() {
 set -euo pipefail
 
 # Basic logging (standard levels: error, warn, info, debug)
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    case "$level" in
-        error) echo "❌ $message" >&2 ;;
-        warn|warning) echo "⚠️ $message" >&2 ;;
-        info) echo "ℹ️ $message" ;;
-        debug) echo "🐛 $message" ;;
-        success) echo "✅ $message" ;;
-        *) echo "$message" ;;
-    esac
-}
+# Note: Using plugin-based logging functions instead
 
 # Timeout function for preventing hanging tests
 kernel_timeout() {
@@ -87,6 +75,12 @@ process_line() {
     echo "$res"
 }
 
+# Helper function to calculate test duration (reduces redundant date calls)
+calculate_test_duration() {
+    local start_time="$1"
+    echo "$(($(date +%s%N)/1000000 - start_time))"
+}
+
 # Run single test file
 run_single_test() {
     local test_file="$1"
@@ -113,10 +107,16 @@ run_single_test() {
     while IFS=$'\t' read -r sec line; do
         case "$sec" in
             ADDRESS)
-                [[ -z "$address" ]] && address="$(echo "$line" | xargs)"
+                if [[ -z "$address" ]]; then
+                    address="${line#"${line%%[![:space:]]*}"}"  # ltrim
+                    address="${address%"${address##*[![:space:]]}"}"  # rtrim
+                fi
                 ;;
             ENDPOINT)
-                [[ -z "$endpoint" ]] && endpoint="$(echo "$line" | xargs)"
+                if [[ -z "$endpoint" ]]; then
+                    endpoint="${line#"${line%%[![:space:]]*}"}"  # ltrim
+                    endpoint="${endpoint%"${endpoint##*[![:space:]]}"}"  # rtrim
+                fi
                 ;;
             REQUEST)
                 if [[ ! "$line" =~ ^[[:space:]]*# ]]; then
@@ -494,12 +494,7 @@ tolerance: ${tolerance_option}"
     fi
 }
 
-# CPU detection (simplified)
-auto_detect_parallel_jobs() {
-    local cpu_count
-    cpu_count=$(cached_cpu_count 2>/dev/null || echo "4")
-    echo "$cpu_count"
-}
+# CPU detection - using plugin-based implementation
 
 # File collection with sorting support  
 collect_test_files() {
@@ -528,267 +523,7 @@ collect_test_files() {
     printf '%s\n' "${files[@]}"
 }
 
-# Generate JUnit XML report
-generate_junit_report() {
-    local output_file="$1"
-    local total="$2"
-    local passed="$3"
-    local failed="$4"
-    local skipped="$5"
-    local duration_ms="$6"
-    local start_time="$7"
-    # New parameters for test details
-    local passed_tests_ref="$8"
-    local failed_tests_ref="$9"
-    local skipped_tests_ref="${10}"
-    
-    local duration_seconds=$(echo "scale=3; $duration_ms / 1000" | bc 2>/dev/null || echo "0")
-    local timestamp=$(date -Iseconds 2>/dev/null || date)
-    
-    # Create output directory if needed
-    local output_dir
-    output_dir=$(dirname "$output_file")
-    mkdir -p "$output_dir" || return 1
-    
-    # Generate JUnit XML
-    cat > "$output_file" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="grpctestify" tests="$total" failures="$failed" skipped="$skipped" time="$duration_seconds">
-  <properties>
-    <property name="grpctestify.version" value="v1.0.0"/>
-    <property name="grpctestify.timestamp" value="$timestamp"/>
-    <property name="system.hostname" value="$(hostname 2>/dev/null || echo 'unknown')"/>
-    <property name="system.username" value="$(whoami 2>/dev/null || echo 'unknown')"/>
-    <property name="system.os" value="${OSTYPE:-unknown}"/>
-  </properties>
-  <testsuite name="grpctestify" tests="$total" failures="$failed" skipped="$skipped" time="$duration_seconds" timestamp="$timestamp">
-EOF
-
-    # Add passed test cases with actual test information
-    if [[ -n "$passed_tests_ref" ]]; then
-        eval "local passed_tests=(\"\${${passed_tests_ref}[@]}\")"
-        for test_info in "${passed_tests[@]}"; do
-            IFS='|' read -r test_file test_duration <<< "$test_info"
-            local classname=$(dirname "$test_file")
-            local name=$(basename "$test_file" .gctf)
-            local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
-            cat >> "$output_file" << EOF
-    <testcase classname="$classname" name="$name" time="$time_seconds"/>
-EOF
-        done
-    fi
-    
-    # Add failed test cases with actual test information
-    if [[ -n "$failed_tests_ref" ]]; then
-        eval "local failed_tests=(\"\${${failed_tests_ref}[@]}\")"
-        for test_info in "${failed_tests[@]}"; do
-            IFS='|' read -r test_file test_duration error_msg <<< "$test_info"
-            local classname=$(dirname "$test_file")
-            local name=$(basename "$test_file" .gctf)
-            local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
-            cat >> "$output_file" << EOF
-    <testcase classname="$classname" name="$name" time="$time_seconds">
-      <failure message="Test failed" type="failure">$error_msg</failure>
-    </testcase>
-EOF
-        done
-    fi
-    
-    # Add skipped test cases with actual test information
-    if [[ -n "$skipped_tests_ref" ]]; then
-        eval "local skipped_tests=(\"\${${skipped_tests_ref}[@]}\")"
-        for test_info in "${skipped_tests[@]}"; do
-            IFS='|' read -r test_file test_duration <<< "$test_info"
-            local classname=$(dirname "$test_file")
-            local name=$(basename "$test_file" .gctf)
-            local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
-            cat >> "$output_file" << EOF
-    <testcase classname="$classname" name="$name" time="$time_seconds">
-      <skipped message="Test skipped"/>
-    </testcase>
-EOF
-        done
-    fi
-
-    cat >> "$output_file" << EOF
-  </testsuite>
-</testsuites>
-EOF
-
-    return 0
-}
-
-# Generate JSON report
-generate_json_report() {
-    local output_file="$1"
-    local total="$2"
-    local passed="$3"
-    local failed="$4"
-    local skipped="$5"
-    local duration_ms="$6"
-    local start_time="$7"
-    # New parameters for test details
-    local passed_tests_ref="$8"
-    local failed_tests_ref="$9"
-    local skipped_tests_ref="${10}"
-    
-    local timestamp=$(date -Iseconds 2>/dev/null || date)
-    
-    # Create output directory if needed
-    local output_dir
-    output_dir=$(dirname "$output_file")
-    mkdir -p "$output_dir" || return 1
-    
-    # Start JSON report
-    cat > "$output_file" << EOF
-{
-  "grpctestify": {
-    "version": "v1.0.0",
-    "timestamp": "$timestamp",
-    "duration_ms": $duration_ms,
-    "summary": {
-      "total": $total,
-      "passed": $passed,
-      "failed": $failed,
-      "skipped": $skipped,
-      "success_rate": $(echo "scale=2; $passed * 100 / $total" | bc 2>/dev/null || echo "0")
-    },
-    "environment": {
-      "hostname": "$(hostname 2>/dev/null || echo 'unknown')",
-      "username": "$(whoami 2>/dev/null || echo 'unknown')",
-      "os": "${OSTYPE:-unknown}",
-      "shell": "${SHELL:-unknown}"
-    },
-    "tests": {
-EOF
-
-    # Add passed tests
-    if [[ -n "$passed_tests_ref" ]]; then
-        eval "local passed_tests=(\"\${${passed_tests_ref}[@]}\")"
-        if [[ ${#passed_tests[@]} -gt 0 ]]; then
-            cat >> "$output_file" << EOF
-      "passed": [
-EOF
-            local first=true
-            for test_info in "${passed_tests[@]}"; do
-                IFS='|' read -r test_file test_duration <<< "$test_info"
-                local classname=$(dirname "$test_file")
-                local name=$(basename "$test_file" .gctf)
-                local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
-                
-                if [[ "$first" == "true" ]]; then
-                    first=false
-                else
-                    echo "," >> "$output_file"
-                fi
-                
-                cat >> "$output_file" << EOF
-        {
-          "file": "$test_file",
-          "classname": "$classname",
-          "name": "$name",
-          "duration_ms": $test_duration,
-          "duration_s": $time_seconds,
-          "status": "passed"
-        }
-EOF
-            done
-            cat >> "$output_file" << EOF
-      ]
-EOF
-        fi
-    fi
-    
-    # Add failed tests
-    if [[ -n "$failed_tests_ref" ]]; then
-        eval "local failed_tests=(\"\${${failed_tests_ref}[@]}\")"
-        if [[ ${#failed_tests[@]} -gt 0 ]]; then
-            if [[ -n "$passed_tests_ref" && ${#passed_tests[@]} -gt 0 ]]; then
-                echo "," >> "$output_file"
-            fi
-            cat >> "$output_file" << EOF
-      "failed": [
-EOF
-            local first=true
-            for test_info in "${failed_tests[@]}"; do
-                IFS='|' read -r test_file test_duration error_msg <<< "$test_info"
-                local classname=$(dirname "$test_file")
-                local name=$(basename "$test_file" .gctf)
-                local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
-                
-                if [[ "$first" == "true" ]]; then
-                    first=false
-                else
-                    echo "," >> "$output_file"
-                fi
-                
-                cat >> "$output_file" << EOF
-        {
-          "file": "$test_file",
-          "classname": "$classname",
-          "name": "$name",
-          "duration_ms": $test_duration,
-          "duration_s": $time_seconds,
-          "status": "failed",
-          "error": "$error_msg"
-        }
-EOF
-            done
-            cat >> "$output_file" << EOF
-      ]
-EOF
-        fi
-    fi
-    
-    # Add skipped tests
-    if [[ -n "$skipped_tests_ref" ]]; then
-        eval "local skipped_tests=(\"\${${skipped_tests_ref}[@]}\")"
-        if [[ ${#skipped_tests[@]} -gt 0 ]]; then
-            if [[ ( -n "$passed_tests_ref" && ${#passed_tests[@]} -gt 0 ) || ( -n "$failed_tests_ref" && ${#failed_tests[@]} -gt 0 ) ]]; then
-                echo "," >> "$output_file"
-            fi
-            cat >> "$output_file" << EOF
-      "skipped": [
-EOF
-            local first=true
-            for test_info in "${skipped_tests[@]}"; do
-                IFS='|' read -r test_file test_duration <<< "$test_info"
-                local classname=$(dirname "$test_file")
-                local name=$(basename "$test_file" .gctf)
-                local time_seconds=$(echo "scale=3; $test_duration / 1000" | bc 2>/dev/null || echo "0.001")
-                
-                if [[ "$first" == "true" ]]; then
-                    first=false
-                else
-                    echo "," >> "$output_file"
-                fi
-                
-                cat >> "$output_file" << EOF
-        {
-          "file": "$test_file",
-          "classname": "$classname",
-          "name": "$name",
-          "duration_ms": $test_duration,
-          "duration_s": $time_seconds,
-          "status": "skipped"
-        }
-EOF
-            done
-            cat >> "$output_file" << EOF
-      ]
-EOF
-        fi
-    fi
-    
-    # Close JSON structure
-    cat >> "$output_file" << EOF
-    }
-  }
-}
-EOF
-
-    return 0
-}
+# Report generation - using plugin-based implementations
 
 # Perform the complete update process (based on v0.0.13 implementation)
 perform_update() {
@@ -823,9 +558,9 @@ perform_update() {
         if [[ -n "$expected_checksum" ]]; then
             # Calculate checksum
             local actual_checksum
-            if is_utility_available "sha256sum"; then
+            if command -v sha256sum >/dev/null 2>&1; then
                 actual_checksum=$(sha256sum "$temp_file" | cut -d' ' -f1)
-            elif is_utility_available "shasum"; then
+            elif command -v shasum >/dev/null 2>&1; then
                 actual_checksum=$(shasum -a 256 "$temp_file" | cut -d' ' -f1)
             else
                 log_warn "No SHA-256 tool available, skipping checksum verification"
@@ -1303,9 +1038,6 @@ EOF
         # Start timing for this test
         local test_start_time
         test_start_time=$(($(date +%s%N)/1000000))
-        # Start timing for parse phase
-        local __parse_start_ms
-        __parse_start_ms=$(($(date +%s%N)/1000000))
         
         # Pytest-style UI: verbose vs dots mode
         if [[ "$verbose" == "1" ]]; then
@@ -1317,9 +1049,8 @@ EOF
                     local exit_code=$?
                 fi
                 # Duration for stats
-                local test_end_time
-                test_end_time=$(($(date +%s%N)/1000000))
-                local test_duration=$((test_end_time - test_start_time))
+                local test_duration
+                test_duration=$(calculate_test_duration "$test_start_time")
                 skipped=$((skipped + 1))
                 skipped_tests+=("$test_file|$test_duration")
                 echo ""
@@ -1332,17 +1063,15 @@ EOF
                     passed=$((passed + 1))
                     
                     # Calculate test duration
-                    local test_end_time
-                    test_end_time=$(($(date +%s%N)/1000000))
-                    local test_duration=$((test_end_time - test_start_time))
+                    local test_duration
+                    test_duration=$(calculate_test_duration "$test_start_time")
                     passed_tests+=("$test_file|$test_duration")
                 else
                     local exit_code=$?
                     
                     # Calculate test duration
-                    local test_end_time
-                    test_end_time=$(($(date +%s%N)/1000000))
-                    local test_duration=$((test_end_time - test_start_time))
+                    local test_duration
+                    test_duration=$(calculate_test_duration "$test_start_time")
                     
                     if [[ "$exit_code" -eq 3 ]]; then
                         echo "🔍 SKIP (dry-run)"
@@ -1376,9 +1105,8 @@ EOF
             fi
             
             # Calculate test duration
-            local test_end_time
-            test_end_time=$(($(date +%s%N)/1000000))
-            local test_duration=$((test_end_time - test_start_time))
+            local test_duration
+            test_duration=$(calculate_test_duration "$test_start_time")
             
             case $exit_code in
                 0)
@@ -1532,8 +1260,9 @@ EOF
     if [[ $failed -gt 0 && ${#failed_tests[@]} -gt 0 ]]; then
         echo "❌ Failed Tests:" 
         for test_info in "${failed_tests[@]}"; do
-            local fpath=$(echo "$test_info" | cut -d'|' -f1)
-            local fdur=$(echo "$test_info" | cut -d'|' -f2)
+            local fpath="${test_info%%|*}"
+            local remaining="${test_info#*|}"
+            local fdur="${remaining%%|*}"
             echo "   • $fpath (${fdur}ms)"
         done
     fi
