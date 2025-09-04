@@ -596,41 +596,7 @@ perform_update() {
 # render_grpcurl_preview
 # execute_grpcurl_argv
 
-# Pretty printing helpers for dry-run
-wrap_and_indent() {
-    local text="$1"
-    local width="${2:-80}"
-    local indent="${3:-2}"
-    local pad=""
-    printf -v pad '%*s' "$indent" ""
-    if [[ -z "$text" ]]; then
-        text="$(cat)"
-    fi
-    while IFS= read -r line; do
-        local remaining="$line"
-        while [[ ${#remaining} -gt $width ]]; do
-            printf "%s%s\n" "$pad" "${remaining:0:$width}"
-            remaining="${remaining:$width}"
-        done
-        printf "%s%s\n" "$pad" "$remaining"
-    done <<< "$text"
-}
 
-indent_only() {
-    local indent="${1:-2}"
-    local pad=""
-    printf -v pad '%*s' "$indent" ""
-    while IFS= read -r line; do
-        printf "%s%s\n" "$pad" "$line"
-    done
-}
-
-print_section() {
-    local title="$1"; shift
-    local content="$1"
-    printf "  %s\n" "$title"
-    wrap_and_indent "$content" 80 4
-}
 
 
 # Main test execution function (renamed for bashly)
@@ -952,7 +918,7 @@ EOF
     local max_iterations=$total
     local processed=0
     # Debug accumulators (only meaningful when GRPCTESTIFY_LOG_LEVEL=debug)
-    local PARSE_TOTAL_MS=0
+    
 
     if [[ "$total" -eq 1 ]]; then
         log_info "Running 1 test sequentially..."
@@ -1012,11 +978,7 @@ EOF
         if [[ "$verbose" == "1" ]]; then
             if [[ "$dry_run" == "1" ]]; then
                 # Dry-run: let run_single_test print the formatted preview, then separate
-                if run_single_test "$test_file" "true"; then
-                    local exit_code=$?
-                else
-                    local exit_code=$?
-                fi
+                run_single_test "$test_file" "true"
                 # Duration for stats
                 local test_duration
                 test_duration=$(calculate_test_duration "$test_start_time")
@@ -1054,11 +1016,7 @@ EOF
         else
             # Dots mode (pytest-style)
             if [[ "$dry_run" == "1" ]]; then
-                if run_single_test "$test_file" "true"; then
-                    local exit_code=$?
-                else
-                    local exit_code=$?
-                fi
+                run_single_test "$test_file" "true"
                 # For dry-run, show a simple separator between requests and skip progress symbols
                 printf "\n----\n\n"
             else
@@ -1121,8 +1079,7 @@ EOF
     local end_time
     end_time=$(($(date +%s%N)/1000000))
     local duration_ms=$((end_time - start_time))
-    local duration_sec=$((duration_ms / 1000))
-    local remaining_ms=$((duration_ms % 1000))
+
     
     # Calculate average time per test
     local avg_per_test_ms=0
@@ -1157,10 +1114,8 @@ EOF
     echo "   • Average per test: ${avg_per_test_ms}ms"
     
     # gRPC timing and overhead statistics (from perf aggregates)
-    local __pid="$$"
-    local __grpc_key="${__pid}|grpc.exec"
-    local total_grpc_ms="${PERF_SUM[$__grpc_key]:-0}"
-    local grpc_calls="${PERF_COUNT[$__grpc_key]:-0}"
+    local total_grpc_ms="${PERF_SUM["$$|grpc.exec"]:-0}"
+    local grpc_calls="${PERF_COUNT["$$|grpc.exec"]:-0}"
     if [[ "$grpc_calls" -gt 0 ]]; then
         local avg_grpc_ms=$(( total_grpc_ms / grpc_calls ))
         local overhead_ms=$(( duration_ms - total_grpc_ms ))
@@ -1183,17 +1138,13 @@ EOF
     
     # Success rate calculation (only for executed tests)
     local executed=$((passed + failed))
-    local success_rate
     if [[ "$dry_run" == "1" ]]; then
         echo "   • Success rate: N/A (dry-run mode)"
-        success_rate="N/A (dry-run)"
     elif [[ $executed -gt 0 ]]; then
         local success_rate_num=$(( (passed * 100) / executed ))
         echo "   • Success rate: ${success_rate_num}% ($passed/$executed executed)"
-        success_rate="${success_rate_num}%"
     else
         echo "   • Success rate: N/A (no tests executed)"
-        success_rate="N/A"
     fi
     
     # Performance analysis with emojis
