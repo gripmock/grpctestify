@@ -629,19 +629,19 @@ func main() {
 			Certificates: []tls.Certificate{cert},
 		}
 
-		lis, err = tls.Listen("tcp", ":50056", config)
+		lis, err = tls.Listen("tcp", ":50058", config)
 		if err != nil {
 			log.Fatalf("Failed to listen with TLS: %v", err)
 		}
 
-		fmt.Println("🔒 ShopFlow E-commerce Service is running with TLS on port 50056...")
+		fmt.Println("🔒 ShopFlow E-commerce Service is running with TLS on port 50058...")
 	} else {
-		lis, err = net.Listen("tcp", ":50056")
+		lis, err = net.Listen("tcp", ":50058")
 		if err != nil {
 			log.Fatalf("Failed to listen: %v", err)
 		}
 
-		fmt.Println("⚠️  ShopFlow E-commerce Service is running without TLS on port 50056...")
+		fmt.Println("⚠️  ShopFlow E-commerce Service is running without TLS on port 50058...")
 		fmt.Println("   Run 'make tls' to generate TLS certificates")
 	}
 

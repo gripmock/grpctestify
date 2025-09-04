@@ -647,7 +647,7 @@ func (s *MediaStreamingServer) ProcessFile(stream mediapb.MediaStreamingService_
 
 func main() {
 	// Create listener
-	lis, err := net.Listen("tcp", ":50055")
+	lis, err := net.Listen("tcp", ":50057")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -660,7 +660,7 @@ func main() {
 	mediapb.RegisterMediaStreamingServiceServer(s, mediaServer)
 	reflection.Register(s)
 
-	fmt.Println("📺 Media Streaming Service is running on port 50055...")
+	fmt.Println("📺 Media Streaming Service is running on port 50057...")
 	fmt.Println("Available methods:")
 	fmt.Println("  - UploadFile, DownloadFile, GetFileMetadata, UpdateFileMetadata")
 	fmt.Println("  - DeleteFile, ListFiles, HealthCheck")
