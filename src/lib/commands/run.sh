@@ -149,6 +149,10 @@ run_single_test() {
     local request_headers=$(awk '/--- REQUEST_HEADERS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
     local options_section=$(awk '/--- OPTIONS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
     
+    # Parse TLS and PROTO sections (JSON-like)
+    local tls_section=$(awk '/--- TLS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    local proto_section=$(awk '/--- PROTO ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    
     # Parse inline options from OPTIONS section
     local partial_option="false"
     local tolerance_option=""
@@ -205,75 +209,60 @@ run_single_test() {
         done <<< "$request_headers"
     fi
     
+    # Build argv with shared helper
+    local has_request="0"
+    [[ -n "$request" ]] && has_request="1"
+    build_grpcurl_args "$address" "$endpoint" "$tls_section" "$proto_section" header_args "$has_request"
+    
     # Dry-run mode check (rich diagnostic output)
     if [[ "$dry_run" == "true" ]]; then
+        echo "DRY-RUN ▶ File: $test_file"
         echo "DRY-RUN ▶ Reproducible command:"
+        render_grpcurl_preview "$request" "${GRPCURL_ARGS[@]}" | indent_only 2
+        
         if [[ -n "$request" ]]; then
-            if [[ ${#header_args[@]} -gt 0 ]]; then
-                printf "echo '%s' | grpcurl -plaintext" "$request"
-                for h in "${header_args[@]}"; do printf " %q" "$h"; done
-                printf " -d @ %q %q\n" "$address" "$endpoint"
-            else
-                printf "echo '%s' | grpcurl -plaintext -d @ %q %q\n" "$request" "$address" "$endpoint"
-            fi
-        else
-            printf "grpcurl -plaintext"
-            for h in "${header_args[@]}"; do printf " %q" "$h"; done
-            printf " %q %q\n" "$address" "$endpoint"
+            print_section "Request:" "$request"
         fi
-
-        if [[ -n "$request" ]]; then
-            echo "DRY-RUN ▶ Request:"
-            echo "$request"
-        fi
-
-        echo "DRY-RUN ▶ Effective OPTIONS:"
-        echo "  timeout: ${timeout_option:-30}"
-        echo "  partial: ${partial_option}"
-        echo "  redact: ${redact_option}"
-        echo "  tolerance: ${tolerance_option}"
-
+        
+        print_section "Effective OPTIONS:" "timeout: ${timeout_option:-30}
+partial: ${partial_option}
+redact: ${redact_option}
+tolerance: ${tolerance_option}"
+        
         if [[ -n "$expected_response" ]]; then
-            echo "DRY-RUN ▶ Expected RESPONSE:"
-            echo "$expected_response"
+            print_section "Expected RESPONSE:" "$expected_response"
         fi
         if [[ -n "$expected_error" ]]; then
-            echo "DRY-RUN ▶ Expected ERROR:"
-            echo "$expected_error"
+            print_section "Expected ERROR:" "$expected_error"
         fi
-
-        # Streaming hint
-        local request_blocks
-        request_blocks=$(awk '/--- REQUEST ---/{c++} END{print c+0}' "$test_file")
-        if [[ $request_blocks -gt 1 ]]; then
-            echo "DRY-RUN ▶ Hint: multiple REQUEST blocks detected (streaming). Current runner may not support streaming RPCs; try manual grpcurl patterns."
-        fi
-
+        
+        # Streaming hint removed per project requirements
+        
         return 3  # SKIPPED for dry-run
     fi
     
-    # Make gRPC call with per-test timeout
-    local grpc_output
-    local timeout_seconds="${timeout_option:-30}"  # Default 30 seconds per test
-    
+    # Execute real grpc call using shared helper
+    local timeout_seconds="${timeout_option:-${args[--timeout]:-30}}"  # per-file OPTIONS override, fallback to CLI --timeout, then 30
     if [[ -n "$request" ]]; then
         local grpc_start_ms=$(($(date +%s%N)/1000000))
-        if [[ ${#header_args[@]} -gt 0 ]]; then
-            grpc_output=$(echo "$request" | kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error "${header_args[@]}" -d @ "$address" "$endpoint" 2>&1)
-        else
-            grpc_output=$(echo "$request" | kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error -d @ "$address" "$endpoint" 2>&1)
-        fi
+        grpc_output=$(execute_grpcurl_argv "$timeout_seconds" "$request" "${GRPCURL_ARGS[@]}")
+        local grpc_status=$?
         local grpc_end_ms=$(($(date +%s%N)/1000000))
         local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
+        if [[ $grpc_status -eq 124 ]]; then
+            log error "gRPC call timed out after ${timeout_seconds}s in $test_file"
+            return 1
+        fi
     else
         local grpc_start_ms=$(($(date +%s%N)/1000000))
-        if [[ ${#header_args[@]} -gt 0 ]]; then
-            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error "${header_args[@]}" "$address" "$endpoint" 2>&1)
-        else
-            grpc_output=$(kernel_timeout "$timeout_seconds" grpcurl -plaintext -format-error "$address" "$endpoint" 2>&1)
-        fi
+        grpc_output=$(execute_grpcurl_argv "$timeout_seconds" "" "${GRPCURL_ARGS[@]}")
+        local grpc_status=$?
         local grpc_end_ms=$(($(date +%s%N)/1000000))
         local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
+        if [[ $grpc_status -eq 124 ]]; then
+            log error "gRPC call timed out after ${timeout_seconds}s in $test_file"
+            return 1
+        fi
     fi
     local grpc_exit_code=$?
     # record grpc duration if not timeout
@@ -836,6 +825,132 @@ perform_update() {
     return 0
 }
 
+# Shared grpcurl helpers
+# Build grpcurl argv array from parsed sections and flags
+build_grpcurl_args() {
+    local address="$1"
+    local endpoint="$2"
+    local tls_json="$3"
+    local proto_json="$4"
+    local -n headers_ref=$5
+    local request_present="$6"
+
+    GRPCURL_ARGS=(grpcurl)
+
+    # TLS
+    local tls_mode="plaintext"
+    if [[ -n "$tls_json" ]]; then
+        tls_mode=$(echo "$tls_json" | jq -r '.mode // "plaintext"' 2>/dev/null || echo "plaintext")
+    fi
+    case "$tls_mode" in
+        plaintext)
+            GRPCURL_ARGS+=("-plaintext")
+            ;;
+        insecure)
+            GRPCURL_ARGS+=("-insecure")
+            ;;
+        tls|mtls)
+            local cert_file key_file ca_file
+            cert_file=$(echo "$tls_json" | jq -r '.cert_file // empty' 2>/dev/null)
+            key_file=$(echo "$tls_json" | jq -r '.key_file // empty' 2>/dev/null)
+            ca_file=$(echo "$tls_json" | jq -r '.ca_file // empty' 2>/dev/null)
+            [[ -n "$cert_file" ]] && GRPCURL_ARGS+=("-cert" "$cert_file")
+            [[ -n "$key_file" ]] && GRPCURL_ARGS+=("-key" "$key_file")
+            [[ -n "$ca_file" ]] && GRPCURL_ARGS+=("-cacert" "$ca_file")
+            ;;
+        *)
+            GRPCURL_ARGS+=("-plaintext")
+            ;;
+    esac
+
+    # Proto
+    if [[ -n "$proto_json" ]]; then
+        local proto_file
+        proto_file=$(echo "$proto_json" | jq -r '.file // empty' 2>/dev/null)
+        [[ -n "$proto_file" ]] && GRPCURL_ARGS+=("-proto" "$proto_file")
+    fi
+
+    # Headers
+    if [[ ${#headers_ref[@]} -gt 0 ]]; then
+        for ((i=0; i<${#headers_ref[@]}; i+=2)); do
+            local flag="${headers_ref[i]}"; local header="${headers_ref[i+1]}"
+            GRPCURL_ARGS+=("$flag" "$header")
+        done
+    fi
+
+    # Always include format option before positional args
+    GRPCURL_ARGS+=("-format-error")
+
+    # Data
+    if [[ "$request_present" == "1" ]]; then
+        GRPCURL_ARGS+=("-d" "@")
+    fi
+
+    # Address + endpoint
+    GRPCURL_ARGS+=("$address" "$endpoint")
+}
+
+# Render one-line reproducible command from args and optional request
+render_grpcurl_preview() {
+    local request="$1"; shift
+    local -a argv=("$@")
+    if [[ -n "$request" ]]; then
+        printf "echo '%s' | %s\n" "$request" "${argv[*]}"
+    else
+        printf "%s\n" "${argv[*]}"
+    fi
+}
+
+# Execute grpcurl with timeout using argv array and optional request via stdin
+execute_grpcurl_argv() {
+    local timeout_seconds="$1"; shift
+    local request="$1"; shift
+    local -a argv=("$@")
+
+    if [[ -n "$request" ]]; then
+        echo "$request" | kernel_timeout "$timeout_seconds" "${argv[@]}" 2>&1
+    else
+        kernel_timeout "$timeout_seconds" "${argv[@]}" 2>&1
+    fi
+}
+
+# Pretty printing helpers for dry-run
+wrap_and_indent() {
+    local text="$1"
+    local width="${2:-80}"
+    local indent="${3:-2}"
+    local pad=""
+    printf -v pad '%*s' "$indent" ""
+    if [[ -z "$text" ]]; then
+        text="$(cat)"
+    fi
+    while IFS= read -r line; do
+        local remaining="$line"
+        while [[ ${#remaining} -gt $width ]]; do
+            printf "%s%s\n" "$pad" "${remaining:0:$width}"
+            remaining="${remaining:$width}"
+        done
+        printf "%s%s\n" "$pad" "$remaining"
+    done <<< "$text"
+}
+
+indent_only() {
+    local indent="${1:-2}"
+    local pad=""
+    printf -v pad '%*s' "$indent" ""
+    while IFS= read -r line; do
+        printf "%s%s\n" "$pad" "$line"
+    done
+}
+
+print_section() {
+    local title="$1"; shift
+    local content="$1"
+    printf "  %s\n" "$title"
+    wrap_and_indent "$content" 80 4
+}
+
+
 # Main test execution function (renamed for bashly)
 run_tests() {
     # Accept multiple test paths as arguments
@@ -1120,6 +1235,20 @@ EOF
         done < <(collect_test_files "$test_path" "$sort_mode")
     done
     
+    # Deduplicate while preserving order
+    if declare -p BASH_VERSINFO >/dev/null 2>&1; then
+        declare -A _seen
+        local unique_files=()
+        for f in "${test_files[@]}"; do
+            if [[ -z "${_seen[$f]:-}" ]]; then
+                _seen[$f]=1
+                unique_files+=("$f")
+            fi
+        done
+        test_files=("${unique_files[@]}")
+        unset _seen unique_files
+    fi
+    
     local total=${#test_files[@]}
     
     if [[ "$total" -eq 0 ]]; then
@@ -1132,6 +1261,11 @@ EOF
     # Start timing for detailed statistics (millisecond precision)
     local start_time
     start_time=$(($(date +%s%N)/1000000))
+    
+    # Global run timeout budget: total_tests * (CLI --timeout or 30)s * 1.2 safety
+    local cli_timeout_sec="${args[--timeout]:-30}"
+    [[ -z "$cli_timeout_sec" ]] && cli_timeout_sec=30
+    local budget_ms=$(( total * cli_timeout_sec * 1200 ))  # 1.2x safety factor
     
     local passed=0
     local failed=0
@@ -1147,6 +1281,11 @@ EOF
     GRPCTESTIFY_GRPC_DURATIONS=()
     # Progress dots counter for line wrapping (80 chars max per line)
     local dots_count=0
+    # Global abort flag
+    local aborted=false
+    # Safety cap to ensure we never exceed number of files
+    local max_iterations=$total
+    local processed=0
 
     if [[ "$total" -eq 1 ]]; then
         log info "Running 1 test sequentially..."
@@ -1163,6 +1302,36 @@ EOF
     
     # Use indexed loop instead of array expansion (more reliable in generated scripts)
     for (( i=0; i<${#test_files[@]}; i++ )); do
+        if [[ $processed -ge $max_iterations ]]; then
+            break
+        fi
+        # Check global budget before starting next test
+        local now_ms
+        now_ms=$(($(date +%s%N)/1000000))
+        local elapsed_ms=$((now_ms - start_time))
+        if [[ $elapsed_ms -gt $budget_ms ]]; then
+            aborted=true
+            local remaining=$(( total - i ))
+            # Record synthetic failures for remaining tests with reason
+            for (( j=i; j<total; j++ )); do
+                local rem_file="${test_files[$j]}"
+                failed_tests+=("$rem_file|0|Aborted by global timeout")
+            done
+            failed=$(( failed + remaining ))
+            # Keep UI consistent: print 'E' for each remaining in dots mode
+            if [[ "$verbose" != "1" ]]; then
+                for (( r=0; r<remaining; r++ )); do
+                    printf "E"
+                    dots_count=$((dots_count + 1))
+                    if [[ $((dots_count % 80)) -eq 0 ]]; then
+                        echo ""
+                    fi
+                done
+            fi
+            log error "Global run timeout exceeded: ${elapsed_ms}ms > budget ${budget_ms}ms. Aborting remaining tests."
+            break
+        fi
+        
         local test_file="${test_files[$i]}"
         local test_name=$(basename "$test_file" .gctf)
         
@@ -1172,32 +1341,50 @@ EOF
         
         # Pytest-style UI: verbose vs dots mode
         if [[ "$verbose" == "1" ]]; then
-            printf "Testing %s ... " "$test_name"
-            if run_single_test "$test_file" "$([[ "$dry_run" == "1" ]] && echo "true" || echo "false")"; then
-                echo "✅ PASS"
-                passed=$((passed + 1))
-                
-                # Calculate test duration
-                local test_end_time
-                test_end_time=$(($(date +%s%N)/1000000))
-                local test_duration=$((test_end_time - test_start_time))
-                passed_tests+=("$test_file|$test_duration")
-            else
-                local exit_code=$?
-                
-                # Calculate test duration
-                local test_end_time
-                test_end_time=$(($(date +%s%N)/1000000))
-                local test_duration=$((test_end_time - test_start_time))
-                
-                if [[ "$exit_code" -eq 3 ]]; then
-                    echo "🔍 SKIP (dry-run)"
-                    skipped=$((skipped + 1))
-                    skipped_tests+=("$test_file|$test_duration")
+            if [[ "$dry_run" == "1" ]]; then
+                # Dry-run: let run_single_test print the formatted preview, then separate
+                if run_single_test "$test_file" "true"; then
+                    local exit_code=$?
                 else
-                    echo "❌ FAIL"
-                    failed=$((failed + 1))
-                    failed_tests+=("$test_file|$test_duration|Test execution failed")
+                    local exit_code=$?
+                fi
+                # Duration for stats
+                local test_end_time
+                test_end_time=$(($(date +%s%N)/1000000))
+                local test_duration=$((test_end_time - test_start_time))
+                skipped=$((skipped + 1))
+                skipped_tests+=("$test_file|$test_duration")
+                echo ""
+                echo "----"
+                echo ""
+            else
+                printf "Testing %s ... " "$test_name"
+                if run_single_test "$test_file" "false"; then
+                    echo "✅ PASS"
+                    passed=$((passed + 1))
+                    
+                    # Calculate test duration
+                    local test_end_time
+                    test_end_time=$(($(date +%s%N)/1000000))
+                    local test_duration=$((test_end_time - test_start_time))
+                    passed_tests+=("$test_file|$test_duration")
+                else
+                    local exit_code=$?
+                    
+                    # Calculate test duration
+                    local test_end_time
+                    test_end_time=$(($(date +%s%N)/1000000))
+                    local test_duration=$((test_end_time - test_start_time))
+                    
+                    if [[ "$exit_code" -eq 3 ]]; then
+                        echo "🔍 SKIP (dry-run)"
+                        skipped=$((skipped + 1))
+                        skipped_tests+=("$test_file|$test_duration")
+                    else
+                        echo "❌ FAIL"
+                        failed=$((failed + 1))
+                        failed_tests+=("$test_file|$test_duration|Test execution failed")
+                    fi
                 fi
             fi
         else
@@ -1208,6 +1395,10 @@ EOF
                 else
                     local exit_code=$?
                 fi
+                # For dry-run, show a simple separator between requests and skip progress symbols
+                echo ""
+                echo "----"
+                echo ""
             else
                 if run_single_test "$test_file" "false" >/dev/null 2>&1; then
                     local exit_code=$?
@@ -1223,7 +1414,7 @@ EOF
             
             case $exit_code in
                 0)
-                    printf "."
+                    if [[ "$dry_run" != "1" ]]; then printf "."; fi
                     passed=$((passed + 1))
                     passed_tests+=("$test_file|$test_duration")
                     ;;
@@ -1235,19 +1426,29 @@ EOF
                     skipped_tests+=("$test_file|$test_duration")
                     ;;
                 *)
-                    printf "E"
+                    if [[ "$dry_run" != "1" ]]; then printf "E"; fi
                     failed=$((failed + 1))
                     failed_tests+=("$test_file|$test_duration|Test execution failed")
                     ;;
             esac
             
             # Line wrapping for progress dots (80 chars per line like other test tools)
-            dots_count=$((dots_count + 1))
-            if [[ $((dots_count % 80)) -eq 0 ]]; then
-                echo ""
+            if [[ "$dry_run" != "1" ]]; then
+                dots_count=$((dots_count + 1))
+                if [[ $((dots_count % 80)) -eq 0 ]]; then
+                    echo ""
+                fi
             fi
         fi
+        
+        processed=$((processed + 1))
     done
+    
+    # Post-loop guard: if processed exceeded planned total, treat as error
+    if [[ $processed -gt $total ]]; then
+        log error "Internal error: processed $processed tests > collected $total"
+        aborted=true
+    fi
     
     # Add newline after dots mode
     [[ "$verbose" != "1" ]] && echo
@@ -1406,6 +1607,9 @@ EOF
     if [[ "$dry_run" == "1" ]]; then
         return 0  # Dry-run always succeeds
     else
+        if [[ "$aborted" == "true" ]]; then
+            return 1
+        fi
         return $([[ $failed -eq 0 ]] && echo 0 || echo 1)
     fi
 }
