@@ -81,6 +81,32 @@ calculate_test_duration() {
     echo "$(($(date +%s%N)/1000000 - start_time))"
 }
 
+# Auto-detect optimal number of parallel jobs based on CPU cores
+auto_detect_parallel_jobs() {
+    local cpu_count
+    
+    # Method 1: nproc (Linux, modern systems)
+    if command -v nproc >/dev/null 2>&1; then
+        cpu_count=$(nproc 2>/dev/null)
+        if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+            echo "$cpu_count"
+            return 0
+        fi
+    fi
+    
+    # Method 2: sysctl (macOS, BSD)
+    if command -v sysctl >/dev/null 2>&1; then
+        cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
+        if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+            echo "$cpu_count"
+            return 0
+        fi
+    fi
+    
+    # Fallback: reasonable default
+    echo "4"
+}
+
 # Run single test file
 run_single_test() {
     local test_file="$1"
