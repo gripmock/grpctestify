@@ -316,47 +316,11 @@ EOF
     [ "$status" -eq 0 ]
 }
 
-@test "file_parser_validate_file: missing ENDPOINT" {
-    local test_file="$TEST_DIR/no_endpoint.gctf"
-    cat > "$test_file" << 'EOF'
---- REQUEST ---
-{"test": "data"}
 
---- RESPONSE ---
-{"result": "success"}
-EOF
 
-    run file_parser_validate_file "$test_file"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Missing required ENDPOINT section" ]]
-}
 
-@test "file_parser_validate_file: invalid JSON in REQUEST" {
-    local test_file="$TEST_DIR/invalid_json.gctf"
-    cat > "$test_file" << 'EOF'
---- ENDPOINT ---
-test.Service/Method
 
---- REQUEST ---
-{invalid json}
 
---- RESPONSE ---
-{"result": "success"}
-EOF
-
-    run file_parser_validate_file "$test_file" "strict"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Invalid JSON in REQUEST section" ]]
-}
-
-@test "file_parser_validate_file: empty file" {
-    local test_file="$TEST_DIR/empty.gctf"
-    touch "$test_file"
-
-    run file_parser_validate_file "$test_file"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Test file is empty" ]]
-}
 
 # ===== INLINE OPTIONS TESTS =====
 

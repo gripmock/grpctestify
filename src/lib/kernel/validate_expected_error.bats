@@ -4,7 +4,7 @@
 
 setup() {
     # Load the module under test
-    source "src/lib/plugins/execution/runner.sh"
+    source "src/lib/plugins/validation/error_validator.sh"
 }
 
 @test "validate_expected_error: basic validation works" {
