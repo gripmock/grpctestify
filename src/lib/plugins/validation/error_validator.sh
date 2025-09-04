@@ -59,13 +59,13 @@ validate_error_detailed() {
     
     if validate_expected_error "$expected_error" "$actual_error"; then
         if [[ "${verbose:-false}" == "true" ]]; then
-            tlog debug "✅ Error validation passed in $test_name"
+            log_debug "✅ Error validation passed in $test_name"
         fi
         return 0
     else
         # Detailed error reporting
         if [[ "${verbose:-false}" == "true" ]]; then
-            tlog error "❌ Error validation failed in $test_name"
+            log_error "❌ Error validation failed in $test_name"
             echo "Expected error:"
             echo "$expected_error" | jq -C . 2>/dev/null | sed 's/^/    /' || echo "$expected_error" | sed 's/^/    /'
             echo "Actual error:"
@@ -88,7 +88,7 @@ parse_error_structure() {
     local error_data="$1"
     
     if ! command -v jq >/dev/null 2>&1; then
-        tlog error "jq is required for error parsing but not installed"
+        log_error "jq is required for error parsing but not installed"
         return 1
     fi
     

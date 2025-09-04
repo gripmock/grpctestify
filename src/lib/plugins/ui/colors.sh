@@ -34,7 +34,7 @@ fi
 
 # Plugin initialization
 colors_plugin_init() {
-    tlog debug "Initializing colors plugin..."
+    log_debug "Initializing colors plugin..."
     
     # Register with enhanced plugin API
     if command -v plugin_register_enhanced >/dev/null 2>&1; then
@@ -46,7 +46,7 @@ colors_plugin_init() {
         plugin_register "colors" "colors_plugin_handler" "$PLUGIN_COLORS_DESCRIPTION" "ui"
     fi
     
-    tlog debug "Colors plugin initialized successfully"
+    log_debug "Colors plugin initialized successfully"
     return 0
 }
 
@@ -69,7 +69,7 @@ colors_plugin_handler() {
             echo "{\"name\":\"colors\",\"version\":\"$PLUGIN_COLORS_VERSION\",\"type\":\"$PLUGIN_COLORS_TYPE\"}"
             ;;
         *)
-    tlog error "Unknown colors plugin command: $command"
+    log_error "Unknown colors plugin command: $command"
             return 1
             ;;
     esac

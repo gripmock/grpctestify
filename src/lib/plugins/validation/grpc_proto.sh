@@ -26,11 +26,11 @@ declare -g PROTO_IMPORT_PATHS=""
 
 # Initialize proto plugin
 grpc_proto_init() {
-    tlog debug "Initializing proto contracts plugin..."
+    log_debug "Initializing proto contracts plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -53,7 +53,7 @@ grpc_proto_init() {
         state_db_set "proto.validation_errors" "0"
     fi
     
-    tlog debug "Proto contracts plugin initialized successfully"
+    log_debug "Proto contracts plugin initialized successfully"
     return 0
 }
 
@@ -86,7 +86,7 @@ grpc_proto_handler() {
             grpc_proto_clear_cache "${args[@]}"
             ;;
         *)
-    tlog error "Unknown proto command: $command"
+    log_error "Unknown proto command: $command"
             return 1
             ;;
     esac
@@ -98,16 +98,16 @@ grpc_proto_parse_proto_section() {
     local cache_key="${2:-auto}"
     
     if [[ -z "$test_file" ]]; then
-    tlog error "grpc_proto_parse_proto_section: test_file required"
+    log_error "grpc_proto_parse_proto_section: test_file required"
         return 1
     fi
     
     if [[ ! -f "$test_file" ]]; then
-    tlog error "Proto test file not found: $test_file"
+    log_error "Proto test file not found: $test_file"
         return 1
     fi
     
-    tlog debug "Parsing proto section from: $test_file"
+    log_debug "Parsing proto section from: $test_file"
     
     # Check cache first if enabled
     if [[ "$cache_key" == "auto" ]]; then
@@ -115,7 +115,7 @@ grpc_proto_parse_proto_section() {
     fi
     
     if proto_cache_get "$cache_key"; then
-    tlog debug "Proto configuration loaded from cache: $cache_key"
+    log_debug "Proto configuration loaded from cache: $cache_key"
         increment_proto_counter "cache_hits"
         return 0
     fi
@@ -141,7 +141,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "proto_processing" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for proto processing"
+    log_error "Failed to acquire resource for proto processing"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -174,13 +174,13 @@ EOF
     if [[ -n "$proto_section" ]]; then
         if ! process_proto_configuration "$proto_section"; then
             parsing_result=1
-    tlog error "Failed to process proto configuration"
+    log_error "Failed to process proto configuration"
         fi
     else
         # Default behavior: gRPC reflection
         PROTO_MODE="reflection"
         PROTO_FLAGS=""
-    tlog debug "No proto section found, using reflection mode"
+    log_debug "No proto section found, using reflection mode"
     fi
     
     # Cache successful parsing
@@ -219,7 +219,7 @@ EOF
 process_proto_configuration() {
     local proto_section="$1"
     
-    tlog debug "Processing proto configuration..."
+    log_debug "Processing proto configuration..."
     
     # Parse configuration line by line
     while IFS= read -r line; do
@@ -229,21 +229,21 @@ process_proto_configuration() {
         # Parse configuration directives
         if [[ "$line" =~ ^mode[[:space:]]*:[[:space:]]*(.+)$ ]]; then
             PROTO_MODE="${BASH_REMATCH[1]}"
-    tlog debug "Proto mode set to: $PROTO_MODE"
+    log_debug "Proto mode set to: $PROTO_MODE"
         elif [[ "$line" =~ ^files[[:space:]]*:[[:space:]]*(.+)$ ]]; then
             PROTO_FILES="${BASH_REMATCH[1]}"
-    tlog debug "Proto files set to: $PROTO_FILES"
+    log_debug "Proto files set to: $PROTO_FILES"
         elif [[ "$line" =~ ^descriptor[[:space:]]*:[[:space:]]*(.+)$ ]]; then
             PROTO_DESCRIPTOR="${BASH_REMATCH[1]}"
-    tlog debug "Proto descriptor set to: $PROTO_DESCRIPTOR"
+    log_debug "Proto descriptor set to: $PROTO_DESCRIPTOR"
         elif [[ "$line" =~ ^import_paths[[:space:]]*:[[:space:]]*(.+)$ ]]; then
             PROTO_IMPORT_PATHS="${BASH_REMATCH[1]}"
-    tlog debug "Proto import paths set to: $PROTO_IMPORT_PATHS"
+    log_debug "Proto import paths set to: $PROTO_IMPORT_PATHS"
         elif [[ "$line" =~ ^flags[[:space:]]*:[[:space:]]*(.+)$ ]]; then
             PROTO_FLAGS="${BASH_REMATCH[1]}"
-    tlog debug "Proto flags set to: $PROTO_FLAGS"
+    log_debug "Proto flags set to: $PROTO_FLAGS"
         else
-    tlog warning "Unrecognized proto configuration line: $line"
+    log_warn "Unrecognized proto configuration line: $line"
         fi
     done <<< "$proto_section"
     
@@ -261,7 +261,7 @@ validate_proto_configuration() {
             # Valid modes
             ;;
         *)
-    tlog error "Invalid proto mode: $PROTO_MODE"
+    log_error "Invalid proto mode: $PROTO_MODE"
             ((validation_errors++))
             ;;
     esac
@@ -269,7 +269,7 @@ validate_proto_configuration() {
     # Validate files if mode is 'files'
     if [[ "$PROTO_MODE" == "files" ]]; then
         if [[ -z "$PROTO_FILES" ]]; then
-    tlog error "Proto files required when mode is 'files'"
+    log_error "Proto files required when mode is 'files'"
             ((validation_errors++))
         else
             # Check if files exist
@@ -277,7 +277,7 @@ validate_proto_configuration() {
             for proto_file in "${file_list[@]}"; do
                 proto_file=$(echo "$proto_file" | xargs)  # Trim whitespace
                 if [[ ! -f "$proto_file" ]]; then
-    tlog error "Proto file not found: $proto_file"
+    log_error "Proto file not found: $proto_file"
                     ((validation_errors++))
                 fi
             done
@@ -287,10 +287,10 @@ validate_proto_configuration() {
     # Validate descriptor if mode is 'descriptor'
     if [[ "$PROTO_MODE" == "descriptor" ]]; then
         if [[ -z "$PROTO_DESCRIPTOR" ]]; then
-    tlog error "Proto descriptor required when mode is 'descriptor'"
+    log_error "Proto descriptor required when mode is 'descriptor'"
             ((validation_errors++))
         elif [[ ! -f "$PROTO_DESCRIPTOR" ]]; then
-    tlog error "Proto descriptor file not found: $PROTO_DESCRIPTOR"
+    log_error "Proto descriptor file not found: $PROTO_DESCRIPTOR"
             ((validation_errors++))
         fi
     fi
@@ -301,7 +301,7 @@ validate_proto_configuration() {
         for import_path in "${path_list[@]}"; do
             import_path=$(echo "$import_path" | xargs)  # Trim whitespace
             if [[ ! -d "$import_path" ]]; then
-    tlog warning "Proto import path not found: $import_path"
+    log_warn "Proto import path not found: $import_path"
             fi
         done
     fi
@@ -315,17 +315,17 @@ grpc_proto_load_proto_files() {
     local import_paths="${2:-}"
     
     if [[ -z "$files" ]]; then
-    tlog error "grpc_proto_load_proto_files: files required"
+    log_error "grpc_proto_load_proto_files: files required"
         return 1
     fi
     
-    tlog debug "Loading proto files: $files"
+    log_debug "Loading proto files: $files"
     
     # Acquire resource for proto loading
     local resource_token
     resource_token=$(pool_acquire "proto_processing" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for proto loading"
+    log_error "Failed to acquire resource for proto loading"
         return 1
     fi
     
@@ -338,10 +338,10 @@ grpc_proto_load_proto_files() {
         proto_file=$(echo "$proto_file" | xargs)  # Trim whitespace
         
         if [[ -f "$proto_file" ]]; then
-    tlog debug "Loaded proto file: $proto_file"
+    log_debug "Loaded proto file: $proto_file"
             ((files_loaded++))
         else
-    tlog error "Proto file not found: $proto_file"
+    log_error "Proto file not found: $proto_file"
             loading_result=1
         fi
     done
@@ -370,22 +370,22 @@ grpc_proto_load_descriptor() {
     local descriptor_file="$1"
     
     if [[ -z "$descriptor_file" ]]; then
-    tlog error "grpc_proto_load_descriptor: descriptor_file required"
+    log_error "grpc_proto_load_descriptor: descriptor_file required"
         return 1
     fi
     
     if [[ ! -f "$descriptor_file" ]]; then
-    tlog error "Proto descriptor file not found: $descriptor_file"
+    log_error "Proto descriptor file not found: $descriptor_file"
         return 1
     fi
     
-    tlog debug "Loading proto descriptor: $descriptor_file"
+    log_debug "Loading proto descriptor: $descriptor_file"
     
     # Acquire resource for descriptor loading
     local resource_token
     resource_token=$(pool_acquire "proto_processing" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for descriptor loading"
+    log_error "Failed to acquire resource for descriptor loading"
         return 1
     fi
     
@@ -393,9 +393,9 @@ grpc_proto_load_descriptor() {
     local loading_result=0
     if ! validate_descriptor_file "$descriptor_file"; then
         loading_result=1
-    tlog error "Invalid proto descriptor file: $descriptor_file"
+    log_error "Invalid proto descriptor file: $descriptor_file"
     else
-    tlog debug "Proto descriptor loaded successfully: $descriptor_file"
+    log_debug "Proto descriptor loaded successfully: $descriptor_file"
         increment_proto_counter "descriptors_loaded"
     fi
     
@@ -419,7 +419,7 @@ validate_descriptor_file() {
     
     # Basic validation: check if file is readable and has reasonable size
     if [[ ! -r "$descriptor_file" ]]; then
-    tlog error "Descriptor file is not readable: $descriptor_file"
+    log_error "Descriptor file is not readable: $descriptor_file"
         return 1
     fi
     
@@ -427,15 +427,15 @@ validate_descriptor_file() {
     local file_size
     file_size=$(stat -c %s "$descriptor_file" 2>/dev/null || stat -f %z "$descriptor_file" 2>/dev/null)
     if [[ $file_size -eq 0 ]]; then
-    tlog error "Descriptor file is empty: $descriptor_file"
+    log_error "Descriptor file is empty: $descriptor_file"
         return 1
     elif [[ $file_size -gt 104857600 ]]; then  # 100MB limit
-    tlog warning "Descriptor file is very large (${file_size} bytes): $descriptor_file"
+    log_warn "Descriptor file is very large (${file_size} bytes): $descriptor_file"
     fi
     
     # Basic binary format check (descriptor files are binary protobuf)
     if file "$descriptor_file" | grep -q "text"; then
-    tlog warning "Descriptor file appears to be text, expected binary: $descriptor_file"
+    log_warn "Descriptor file appears to be text, expected binary: $descriptor_file"
     fi
     
     return 0
@@ -505,7 +505,7 @@ grpc_proto_get_proto_flags() {
 grpc_proto_validate_proto_config() {
     local config_context="${1:-{}}"
     
-    tlog debug "Validating complete proto configuration"
+    log_debug "Validating complete proto configuration"
     
     local validation_errors=0
     
@@ -529,10 +529,10 @@ grpc_proto_validate_proto_config() {
     # Record validation result
     if [[ $validation_errors -eq 0 ]]; then
         state_db_atomic "record_proto_validation" "complete_config" "PASS"
-    tlog debug "Proto configuration validation passed"
+    log_debug "Proto configuration validation passed"
     else
         state_db_atomic "record_proto_validation" "complete_config" "FAIL"
-    tlog error "Proto configuration validation failed ($validation_errors errors)"
+    log_error "Proto configuration validation failed ($validation_errors errors)"
         increment_proto_counter "validation_errors" "$validation_errors"
     fi
     
@@ -563,13 +563,13 @@ proto_cache_set() {
 
 # Clear proto cache
 grpc_proto_clear_cache() {
-    tlog debug "Clearing proto cache..."
+    log_debug "Clearing proto cache..."
     
     if command -v state_db_get >/dev/null 2>&1; then
         # Get all cache keys and remove them
         # This is a simplified implementation
         state_db_set "proto.cache_entries" "0"
-    tlog debug "Proto cache cleared"
+    log_debug "Proto cache cleared"
     fi
 }
 
@@ -639,7 +639,7 @@ increment_proto_counter() {
 grpc_proto_event_handler() {
     local event_message="$1"
     
-    tlog debug "Proto plugin received event: $event_message"
+    log_debug "Proto plugin received event: $event_message"
     
     # Handle proto-related events
     # This could be used for:
@@ -663,7 +663,7 @@ grpc_proto_file_change_handler() {
         # Check if changed file is a proto file or descriptor
         if [[ "$changed_file" == *.proto || "$changed_file" == *.desc ]]; then
             if [[ "$PROTO_RELOAD_ON_CHANGE" == "true" ]]; then
-    tlog debug "Proto file changed, clearing cache: $changed_file"
+    log_debug "Proto file changed, clearing cache: $changed_file"
                 grpc_proto_clear_cache
             fi
         fi

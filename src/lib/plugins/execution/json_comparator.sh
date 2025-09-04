@@ -20,17 +20,17 @@ compare_json() {
     
     # Validate JSON inputs
     if ! command -v jq >/dev/null 2>&1; then
-	tlog error "jq is required for JSON comparison but not installed"
+	log_error "jq is required for JSON comparison but not installed"
         return 1
     fi
     
     if ! echo "$actual" | jq . >/dev/null 2>&1; then
-	tlog error "Invalid JSON in actual response"
+	log_error "Invalid JSON in actual response"
         return 1
     fi
     
     if ! echo "$expected" | jq . >/dev/null 2>&1; then
-	tlog error "Invalid JSON in expected response"
+	log_error "Invalid JSON in expected response"
         return 1
     fi
     
@@ -60,7 +60,7 @@ compare_json() {
             fi
             ;;
         *)
-	    tlog error "Unknown comparison type: $type"
+	    log_error "Unknown comparison type: $type"
             return 1
             ;;
     esac
@@ -87,13 +87,13 @@ compare_json_detailed() {
     # Perform comparison
     if compare_json "$actual" "$expected" "$type"; then
         if [[ "${verbose:-false}" == "true" ]]; then
-	    tlog debug "✅ JSON comparison passed ($type)"
+	    log_debug "✅ JSON comparison passed ($type)"
         fi
         return 0
     else
         # Detailed error reporting
         if [[ "${verbose:-false}" == "true" ]]; then
-	    tlog error "❌ JSON comparison failed ($type) in $test_name"
+	    log_error "❌ JSON comparison failed ($type) in $test_name"
             echo "Expected:"
             echo "$expected" | jq -C . 2>/dev/null | sed 's/^/    /' || echo "$expected" | sed 's/^/    /'
             echo "Actual:"
@@ -125,12 +125,12 @@ extract_json_field() {
     local field_path="$2"
     
     if ! command -v jq >/dev/null 2>&1; then
-	tlog error "jq is required for field extraction but not installed"
+	log_error "jq is required for field extraction but not installed"
         return 1
     fi
     
     if ! echo "$json_data" | jq . >/dev/null 2>&1; then
-	tlog error "Invalid JSON data for field extraction"
+	log_error "Invalid JSON data for field extraction"
         return 1
     fi
     
@@ -150,12 +150,12 @@ validate_json_schema() {
     local required_fields="$2"
     
     if ! command -v jq >/dev/null 2>&1; then
-	tlog error "jq is required for schema validation but not installed"
+	log_error "jq is required for schema validation but not installed"
         return 1
     fi
     
     if ! echo "$json_data" | jq . >/dev/null 2>&1; then
-	tlog error "Invalid JSON data for schema validation"
+	log_error "Invalid JSON data for schema validation"
         return 1
     fi
     
@@ -165,7 +165,7 @@ validate_json_schema() {
         for field in "${fields[@]}"; do
             field=$(echo "$field" | xargs)  # trim whitespace
             if ! echo "$json_data" | jq -e "has(\"$field\")" >/dev/null 2>&1; then
-	        tlog error "Missing required field: $field"
+	        log_error "Missing required field: $field"
                 return 1
             fi
         done
@@ -357,7 +357,7 @@ compare_responses() {
             fi
             ;;
         *)
-            tlog error "Unknown comparison type: $type"
+            log_error "Unknown comparison type: $type"
             return 1
             ;;
     esac

@@ -19,11 +19,11 @@ RESPONSE_TIME_SAMPLE_SIZE="${RESPONSE_TIME_SAMPLE_SIZE:-100}"
 
 # Initialize response time monitoring plugin
 grpc_response_time_init() {
-    tlog debug "Initializing gRPC response time monitoring plugin..."
+    log_debug "Initializing gRPC response time monitoring plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -46,7 +46,7 @@ grpc_response_time_init() {
         state_db_set "response_time.max_time" "0"
     fi
     
-    tlog debug "gRPC response time monitoring plugin initialized successfully"
+    log_debug "gRPC response time monitoring plugin initialized successfully"
     return 0
 }
 
@@ -73,7 +73,7 @@ grpc_response_time_handler() {
             grpc_response_time_reset_statistics "${args[@]}"
             ;;
         *)
-    tlog error "Unknown response time command: $command"
+    log_error "Unknown response time command: $command"
             return 1
             ;;
     esac
@@ -86,11 +86,11 @@ grpc_response_time_evaluate_assertion() {
     local assertion_context="${3:-{}}"
     
     if [[ -z "$response" || -z "$expected_time" ]]; then
-    tlog error "grpc_response_time_evaluate_assertion: response and expected_time required"
+    log_error "grpc_response_time_evaluate_assertion: response and expected_time required"
         return 1
     fi
     
-    tlog debug "Evaluating response time assertion: expected=$expected_time"
+    log_debug "Evaluating response time assertion: expected=$expected_time"
     
     # Publish assertion evaluation start event
     local assertion_metadata
@@ -113,7 +113,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "response_time_analysis" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for response time analysis"
+    log_error "Failed to acquire resource for response time analysis"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -121,7 +121,7 @@ EOF
     # Extract actual response time with enhanced methods
     local actual_time
     if ! actual_time=$(extract_response_time "$response"); then
-    tlog error "Failed to extract response time from response"
+    log_error "Failed to extract response time from response"
         pool_release "response_time_analysis" "$resource_token"
         state_db_rollback_transaction "$tx_id"
         return 1
@@ -130,7 +130,7 @@ EOF
     # Perform enhanced response time evaluation
     local evaluation_result=0
     if evaluate_response_time "$actual_time" "$expected_time"; then
-    tlog debug "Response time assertion passed: ${actual_time}ms <= ${expected_time}ms"
+    log_debug "Response time assertion passed: ${actual_time}ms <= ${expected_time}ms"
         
         # Record successful assertion
         state_db_atomic "record_response_time_assertion" "$actual_time" "$expected_time" "PASS"
@@ -139,7 +139,7 @@ EOF
         event_publish "performance.assertion.success" "{\"actual_time\":$actual_time,\"expected_time\":\"$expected_time\"}" "$EVENT_PRIORITY_NORMAL" "response_time"
     else
         evaluation_result=1
-    tlog error "Response time assertion failed: ${actual_time}ms > ${expected_time}ms"
+    log_error "Response time assertion failed: ${actual_time}ms > ${expected_time}ms"
         
         # Record failed assertion
         state_db_atomic "record_response_time_assertion" "$actual_time" "$expected_time" "FAIL"
@@ -193,7 +193,7 @@ extract_response_time() {
         fi
     fi
     
-    tlog error "Response time not found in gRPC response"
+    log_error "Response time not found in gRPC response"
     return 1
 }
 
@@ -209,10 +209,10 @@ evaluate_response_time() {
         local max_time="${BASH_REMATCH[2]}"
         
         if [[ $actual_time -ge $min_time && $actual_time -le $max_time ]]; then
-    tlog debug "Response time $actual_time ms is in range $min_time-$max_time ms"
+    log_debug "Response time $actual_time ms is in range $min_time-$max_time ms"
             return 0
         else
-    tlog error "Response time $actual_time ms is not in range $min_time-$max_time ms"
+    log_error "Response time $actual_time ms is not in range $min_time-$max_time ms"
             return 1
         fi
     elif [[ "$expected_time" =~ ^p([0-9]+):([0-9]+)$ ]]; then
@@ -221,20 +221,20 @@ evaluate_response_time() {
         local threshold="${BASH_REMATCH[2]}"
         
         # For now, treat as simple threshold (future: implement proper percentile tracking)
-    tlog debug "Percentile evaluation p$percentile: comparing $actual_time ms against $threshold ms"
+    log_debug "Percentile evaluation p$percentile: comparing $actual_time ms against $threshold ms"
         if [[ $actual_time -le $threshold ]]; then
             return 0
         else
-    tlog error "Response time $actual_time ms exceeds p$percentile threshold $threshold ms"
+    log_error "Response time $actual_time ms exceeds p$percentile threshold $threshold ms"
             return 1
         fi
     else
         # Simple threshold evaluation
         if [[ $actual_time -le $expected_time ]]; then
-    tlog debug "Response time $actual_time ms is within limit $expected_time ms"
+    log_debug "Response time $actual_time ms is within limit $expected_time ms"
             return 0
         else
-    tlog error "Response time $actual_time ms exceeds limit $expected_time ms"
+    log_error "Response time $actual_time ms exceeds limit $expected_time ms"
             return 1
         fi
     fi
@@ -246,7 +246,7 @@ grpc_response_time_track_response_time() {
     local endpoint="${2:-unknown}"
     
     if [[ -z "$response_time" || ! "$response_time" =~ ^[0-9]+$ ]]; then
-    tlog warning "Invalid response time for tracking: $response_time"
+    log_warn "Invalid response time for tracking: $response_time"
         return 1
     fi
     
@@ -267,7 +267,7 @@ grpc_response_time_track_response_time() {
         fi
     fi
     
-    tlog debug "Tracked response time: ${response_time}ms for endpoint: $endpoint"
+    log_debug "Tracked response time: ${response_time}ms for endpoint: $endpoint"
 }
 
 # Track individual response time sample
@@ -404,7 +404,7 @@ grpc_response_time_analyze_performance() {
 
 # Reset response time statistics
 grpc_response_time_reset_statistics() {
-    tlog debug "Resetting response time statistics..."
+    log_debug "Resetting response time statistics..."
     
     if command -v state_db_set >/dev/null 2>&1; then
         state_db_set "response_time.samples_collected" "0"
@@ -412,10 +412,10 @@ grpc_response_time_reset_statistics() {
         state_db_set "response_time.min_time" "999999"
         state_db_set "response_time.max_time" "0"
         
-    tlog debug "Response time statistics reset successfully"
+    log_debug "Response time statistics reset successfully"
         return 0
     else
-    tlog warning "State database not available for reset, using fallback"
+    log_warn "State database not available for reset, using fallback"
         return 1
     fi
 }
@@ -424,7 +424,7 @@ grpc_response_time_reset_statistics() {
 grpc_response_time_event_handler() {
     local event_message="$1"
     
-    tlog debug "Response time plugin received event: $event_message"
+    log_debug "Response time plugin received event: $event_message"
     
     # Handle performance-related events
     # This could be used for:

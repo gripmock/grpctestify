@@ -18,11 +18,11 @@ TYPE_VALIDATION_CACHE_SIZE="${TYPE_VALIDATION_CACHE_SIZE:-1000}"
 
 # Initialize type validation plugin
 grpc_type_validation_init() {
-    tlog debug "Initializing type validation plugin..."
+    log_debug "Initializing type validation plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -44,7 +44,7 @@ grpc_type_validation_init() {
         state_db_set "type_validation.cache_misses" "0"
     fi
     
-    tlog debug "Type validation plugin initialized successfully"
+    log_debug "Type validation plugin initialized successfully"
     return 0
 }
 
@@ -80,7 +80,7 @@ grpc_type_validation_handler() {
             grpc_type_validation_get_statistics "${args[@]}"
             ;;
         *)
-    tlog error "Unknown type validation command: $command"
+    log_error "Unknown type validation command: $command"
             return 1
             ;;
     esac
@@ -93,11 +93,11 @@ grpc_type_validation_validate_uuid() {
     local validation_context="${3:-{}}"
     
     if [[ -z "$value" ]]; then
-    tlog error "grpc_type_validation_validate_uuid: value required"
+    log_error "grpc_type_validation_validate_uuid: value required"
         return 1
     fi
     
-    tlog debug "Validating UUID: $value (version: $version)"
+    log_debug "Validating UUID: $value (version: $version)"
     
     # Check cache first
     local cache_key="uuid_${value}_${version}"
@@ -129,7 +129,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "type_validation" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for UUID validation"
+    log_error "Failed to acquire resource for UUID validation"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -137,7 +137,7 @@ EOF
     # Perform enhanced UUID validation
     local validation_result=0
     if validate_uuid "$value" "$version"; then
-    tlog debug "UUID validation passed: $value"
+    log_debug "UUID validation passed: $value"
         
         # Cache successful validation
         validation_cache_set "$cache_key" "true"
@@ -149,7 +149,7 @@ EOF
         event_publish "validation.type.success" "{\"type\":\"uuid\",\"value\":\"$value\"}" "$EVENT_PRIORITY_NORMAL" "type_validation"
     else
         validation_result=1
-    tlog error "UUID validation failed: $value"
+    log_error "UUID validation failed: $value"
         
         # Cache failed validation
         validation_cache_set "$cache_key" "false"
@@ -208,11 +208,11 @@ grpc_type_validation_validate_timestamp() {
     local validation_context="${3:-{}}"
     
     if [[ -z "$value" ]]; then
-    tlog error "grpc_type_validation_validate_timestamp: value required"
+    log_error "grpc_type_validation_validate_timestamp: value required"
         return 1
     fi
     
-    tlog debug "Validating timestamp: $value (format: $format)"
+    log_debug "Validating timestamp: $value (format: $format)"
     
     # Check cache first
     local cache_key="timestamp_${value}_${format}"
@@ -234,7 +234,7 @@ grpc_type_validation_validate_timestamp() {
             validate_unix_timestamp "$value" || validation_result=1
             ;;
         *)
-    tlog error "Unknown timestamp format: $format"
+    log_error "Unknown timestamp format: $format"
             validation_result=1
             ;;
     esac
@@ -243,11 +243,11 @@ grpc_type_validation_validate_timestamp() {
     if [[ $validation_result -eq 0 ]]; then
         validation_cache_set "$cache_key" "true"
         state_db_atomic "record_type_validation" "timestamp_$format" "$value" "PASS"
-    tlog debug "Timestamp validation passed: $value"
+    log_debug "Timestamp validation passed: $value"
     else
         validation_cache_set "$cache_key" "false"
         state_db_atomic "record_type_validation" "timestamp_$format" "$value" "FAIL"
-    tlog error "Timestamp validation failed: $value"
+    log_error "Timestamp validation failed: $value"
     fi
     
     # Update statistics
@@ -294,11 +294,11 @@ grpc_type_validation_validate_email() {
     local validation_context="${2:-{}}"
     
     if [[ -z "$value" ]]; then
-    tlog error "grpc_type_validation_validate_email: value required"
+    log_error "grpc_type_validation_validate_email: value required"
         return 1
     fi
     
-    tlog debug "Validating email: $value"
+    log_debug "Validating email: $value"
     
     # Check cache first
     local cache_key="email_${value}"
@@ -312,12 +312,12 @@ grpc_type_validation_validate_email() {
     if validate_email "$value"; then
         validation_cache_set "$cache_key" "true"
         state_db_atomic "record_type_validation" "email" "$value" "PASS"
-    tlog debug "Email validation passed: $value"
+    log_debug "Email validation passed: $value"
     else
         validation_result=1
         validation_cache_set "$cache_key" "false"
         state_db_atomic "record_type_validation" "email" "$value" "FAIL"
-    tlog error "Email validation failed: $value"
+    log_error "Email validation failed: $value"
     fi
     
     # Update statistics
@@ -344,11 +344,11 @@ grpc_type_validation_validate_url() {
     local validation_context="${3:-{}}"
     
     if [[ -z "$value" ]]; then
-    tlog error "grpc_type_validation_validate_url: value required"
+    log_error "grpc_type_validation_validate_url: value required"
         return 1
     fi
     
-    tlog debug "Validating URL: $value (schemes: $schemes)"
+    log_debug "Validating URL: $value (schemes: $schemes)"
     
     # Check cache first
     local cache_key="url_${value}_${schemes}"
@@ -362,12 +362,12 @@ grpc_type_validation_validate_url() {
     if validate_url "$value" "$schemes"; then
         validation_cache_set "$cache_key" "true"
         state_db_atomic "record_type_validation" "url" "$value" "PASS"
-    tlog debug "URL validation passed: $value"
+    log_debug "URL validation passed: $value"
     else
         validation_result=1
         validation_cache_set "$cache_key" "false"
         state_db_atomic "record_type_validation" "url" "$value" "FAIL"
-    tlog error "URL validation failed: $value"
+    log_error "URL validation failed: $value"
     fi
     
     # Update statistics
@@ -418,11 +418,11 @@ grpc_type_validation_validate_ip() {
     local validation_context="${3:-{}}"
     
     if [[ -z "$value" ]]; then
-    tlog error "grpc_type_validation_validate_ip: value required"
+    log_error "grpc_type_validation_validate_ip: value required"
         return 1
     fi
     
-    tlog debug "Validating IP address: $value (version: $version)"
+    log_debug "Validating IP address: $value (version: $version)"
     
     local validation_result=0
     case "$version" in
@@ -438,7 +438,7 @@ grpc_type_validation_validate_ip() {
             fi
             ;;
         *)
-    tlog error "Unknown IP version: $version"
+    log_error "Unknown IP version: $version"
             validation_result=1
             ;;
     esac
@@ -446,10 +446,10 @@ grpc_type_validation_validate_ip() {
     # Record result
     if [[ $validation_result -eq 0 ]]; then
         state_db_atomic "record_type_validation" "ip_$version" "$value" "PASS"
-    tlog debug "IP validation passed: $value"
+    log_debug "IP validation passed: $value"
     else
         state_db_atomic "record_type_validation" "ip_$version" "$value" "FAIL"
-    tlog error "IP validation failed: $value"
+    log_error "IP validation failed: $value"
     fi
     
     increment_validation_counter "validations_performed"
@@ -490,20 +490,20 @@ grpc_type_validation_validate_custom_pattern() {
     local validation_context="${3:-{}}"
     
     if [[ -z "$value" || -z "$pattern" ]]; then
-    tlog error "grpc_type_validation_validate_custom_pattern: value and pattern required"
+    log_error "grpc_type_validation_validate_custom_pattern: value and pattern required"
         return 1
     fi
     
-    tlog debug "Validating custom pattern: $value against $pattern"
+    log_debug "Validating custom pattern: $value against $pattern"
     
     local validation_result=0
     if [[ "$value" =~ $pattern ]]; then
         state_db_atomic "record_type_validation" "custom_pattern" "$value" "PASS"
-    tlog debug "Custom pattern validation passed: $value"
+    log_debug "Custom pattern validation passed: $value"
     else
         validation_result=1
         state_db_atomic "record_type_validation" "custom_pattern" "$value" "FAIL"
-    tlog error "Custom pattern validation failed: $value"
+    log_error "Custom pattern validation failed: $value"
     fi
     
     increment_validation_counter "validations_performed"
@@ -608,7 +608,7 @@ increment_validation_counter() {
 grpc_type_validation_event_handler() {
     local event_message="$1"
     
-    tlog debug "Type validation plugin received event: $event_message"
+    log_debug "Type validation plugin received event: $event_message"
     
     # Handle validation-related events
     # This could be used for:

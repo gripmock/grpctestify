@@ -28,7 +28,7 @@ readonly EVENT_PRIORITY_CRITICAL=4
 
 # Initialize event system
 event_system_init() {
-    tlog debug "Initializing event system..."
+    log_debug "Initializing event system..."
     
     # Mark event system as initialized
     EVENT_SYSTEM_INITIALIZED=true
@@ -36,7 +36,7 @@ event_system_init() {
     # Create event bus directory
     mkdir -p "$EVENT_BUS_DIR"
     if [[ ! -d "$EVENT_BUS_DIR" ]]; then
-    tlog error "Failed to create event bus directory: $EVENT_BUS_DIR"
+    log_error "Failed to create event bus directory: $EVENT_BUS_DIR"
         return 1
     fi
     
@@ -45,7 +45,7 @@ event_system_init() {
     if ! mkfifo "$EVENT_BUS_PIPE" 2>/dev/null; then
         # Pipe might already exist
         if [[ ! -p "$EVENT_BUS_PIPE" ]]; then
-    tlog error "Failed to create event bus pipe: $EVENT_BUS_PIPE"
+    log_error "Failed to create event bus pipe: $EVENT_BUS_PIPE"
             return 1
         fi
     fi
@@ -58,7 +58,7 @@ event_system_init() {
     # REMOVED: trap 'event_system_cleanup' EXIT
     # Now using unified signal_manager for proper cleanup handling
     
-    tlog debug "Event system initialized successfully (dispatcher PID: $EVENT_DISPATCHER_PID)"
+    log_debug "Event system initialized successfully (dispatcher PID: $EVENT_DISPATCHER_PID)"
     return 0
 }
 
@@ -70,20 +70,20 @@ event_subscribe() {
     local filter_expression="${4:-}"
     
     if [[ -z "$subscriber_id" || -z "$event_type" || -z "$handler_function" ]]; then
-    tlog error "event_subscribe: subscriber_id, event_type, and handler_function required"
+    log_error "event_subscribe: subscriber_id, event_type, and handler_function required"
         return 1
     fi
     
     # Silently skip - event system disabled for stability
     return 0
     
-    tlog debug "Subscribing '$subscriber_id' to event type '$event_type' with handler '$handler_function'"
+    log_debug "Subscribing '$subscriber_id' to event type '$event_type' with handler '$handler_function'"
     
     # Create subscriber pipe
     local subscriber_pipe="$EVENT_BUS_DIR/subscriber_${subscriber_id}"
     if ! mkfifo "$subscriber_pipe" 2>/dev/null; then
         if [[ ! -p "$subscriber_pipe" ]]; then
-    tlog error "Failed to create subscriber pipe: $subscriber_pipe"
+    log_error "Failed to create subscriber pipe: $subscriber_pipe"
             return 1
         fi
     fi
@@ -101,7 +101,7 @@ event_subscribe() {
         EVENT_SUBSCRIBERS["$event_type"]="$current_subscribers,$subscriber_id"
     fi
     
-    tlog debug "Subscriber '$subscriber_id' registered successfully for event type '$event_type'"
+    log_debug "Subscriber '$subscriber_id' registered successfully for event type '$event_type'"
     return 0
 }
 
@@ -111,11 +111,11 @@ event_unsubscribe() {
     local event_type="${2:-}"  # If empty, unsubscribe from all events
     
     if [[ -z "$subscriber_id" ]]; then
-    tlog error "event_unsubscribe: subscriber_id required"
+    log_error "event_unsubscribe: subscriber_id required"
         return 1
     fi
     
-    tlog debug "Unsubscribing '$subscriber_id' from event type '$event_type'"
+    log_debug "Unsubscribing '$subscriber_id' from event type '$event_type'"
     
     if [[ -n "$event_type" ]]; then
         # Unsubscribe from specific event type
@@ -150,7 +150,7 @@ event_unsubscribe() {
     unset EVENT_PIPES["$subscriber_id"]
     unset EVENT_FILTERS["$subscriber_id"]
     
-    tlog debug "Subscriber '$subscriber_id' unsubscribed successfully"
+    log_debug "Subscriber '$subscriber_id' unsubscribed successfully"
     return 0
 }
 
@@ -162,7 +162,7 @@ event_publish() {
     local source="${4:-unknown}"
     
     if [[ -z "$event_type" ]]; then
-    tlog error "event_publish: event_type required"
+    log_error "event_publish: event_type required"
         return 1
     fi
     
@@ -187,7 +187,7 @@ event_publish() {
 EOF
 )
     
-    tlog debug "Publishing event '$event_id' of type '$event_type' (priority: $priority)"
+    log_debug "Publishing event '$event_id' of type '$event_type' (priority: $priority)"
     
     # Send to event bus
     if [[ -p "$EVENT_BUS_PIPE" ]]; then
@@ -196,17 +196,17 @@ EOF
         # Update statistics
         EVENT_STATS["$event_type"]=$((EVENT_STATS["$event_type"] + 1))
         
-    tlog debug "Event '$event_id' published successfully"
+    log_debug "Event '$event_id' published successfully"
         return 0
     else
-    tlog debug "Event bus pipe not available: $EVENT_BUS_PIPE"
+    log_debug "Event bus pipe not available: $EVENT_BUS_PIPE"
         return 1
     fi
 }
 
 # Start background event dispatcher
 event_start_dispatcher() {
-    tlog debug "Starting event dispatcher..."
+    log_debug "Starting event dispatcher..."
     
     local dispatcher_iterations=0
     local max_dispatcher_iterations=${EVENT_MAX_DISPATCHER_ITERATIONS:-3600}  # Default 3600 iterations (1 hour with 1s interval)
@@ -232,7 +232,7 @@ event_start_dispatcher() {
         ((dispatcher_iterations++))
     done
     
-    tlog debug "Event dispatcher completed after $dispatcher_iterations iterations"
+    log_debug "Event dispatcher completed after $dispatcher_iterations iterations"
 }
 
 # Dispatch event message to subscribers
@@ -251,12 +251,12 @@ event_dispatch_message() {
     local event_id
     event_id=$(echo "$event_message" | grep -o '"event_id": *"[^"]*"' | sed 's/"event_id": *"\([^"]*\)"/\1/')
     
-    tlog debug "Dispatching event '$event_id' of type '$event_type'"
+    log_debug "Dispatching event '$event_id' of type '$event_type'"
     
     # Get subscribers for this event type
     local subscribers="${EVENT_SUBSCRIBERS[$event_type]:-}"
     if [[ -z "$subscribers" ]]; then
-    tlog debug "No subscribers for event type '$event_type'"
+    log_debug "No subscribers for event type '$event_type'"
         return 0
     fi
     
@@ -276,25 +276,25 @@ event_dispatch_to_subscriber() {
     local filter_expression="${EVENT_FILTERS[$subscriber_id]:-}"
     
     if [[ -z "$handler_function" ]]; then
-    tlog warning "No handler function for subscriber '$subscriber_id'"
+    log_warn "No handler function for subscriber '$subscriber_id'"
         return 1
     fi
     
     # Apply filter if specified
     if [[ -n "$filter_expression" ]]; then
         if ! event_apply_filter "$event_message" "$filter_expression"; then
-    tlog debug "Event filtered out for subscriber '$subscriber_id'"
+    log_debug "Event filtered out for subscriber '$subscriber_id'"
             return 0
         fi
     fi
     
-    tlog debug "Dispatching event to subscriber '$subscriber_id' with handler '$handler_function'"
+    log_debug "Dispatching event to subscriber '$subscriber_id' with handler '$handler_function'"
     
     # Call handler function with event message
     if command -v "$handler_function" >/dev/null 2>&1; then
         "$handler_function" "$event_message"
     else
-    tlog warning "Handler function '$handler_function' not found for subscriber '$subscriber_id'"
+    log_warn "Handler function '$handler_function' not found for subscriber '$subscriber_id'"
     fi
 }
 
@@ -383,11 +383,11 @@ event_wait_for() {
     local filter="${3:-}"
     
     if [[ -z "$event_type" ]]; then
-    tlog error "event_wait_for: event_type required"
+    log_error "event_wait_for: event_type required"
         return 1
     fi
     
-    tlog debug "Waiting for event type '$event_type' (timeout: ${timeout}s)"
+    log_debug "Waiting for event type '$event_type' (timeout: ${timeout}s)"
     
     # Create temporary subscriber
     local temp_subscriber="wait_$$_$(date +%s)"
@@ -426,13 +426,13 @@ event_wait_for() {
     event_unsubscribe "$temp_subscriber" "$event_type"
     rm -f "$temp_result_file"
     
-    tlog warning "Timeout waiting for event type '$event_type'"
+    log_warn "Timeout waiting for event type '$event_type'"
     return 124
 }
 
 # Cleanup event system
 event_system_cleanup() {
-    tlog debug "Cleaning up event system..."
+    log_debug "Cleaning up event system..."
     
     # Stop dispatcher
     if [[ -n "$EVENT_DISPATCHER_PID" ]]; then
@@ -450,7 +450,7 @@ event_system_cleanup() {
     # Clean up event directory
     [[ -d "$EVENT_BUS_DIR" ]] && rm -rf "$EVENT_BUS_DIR"
     
-    tlog debug "Event system cleaned up"
+    log_debug "Event system cleaned up"
 }
 
 # Test handler removed - was unused dead code

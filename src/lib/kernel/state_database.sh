@@ -25,12 +25,12 @@ declare -g -A STATE_VALIDATORS=()         # field_name -> validator_function
 
 # Initialize enhanced state database
 state_db_init() {
-    tlog debug "Initializing enhanced state database..."
+    log_debug "Initializing enhanced state database..."
     
     # Create state directory
     mkdir -p "$STATE_DB_DIR"
     if [[ ! -d "$STATE_DB_DIR" ]]; then
-    tlog error "Failed to create state database directory: $STATE_DB_DIR"
+    log_error "Failed to create state database directory: $STATE_DB_DIR"
         return 1
     fi
     
@@ -58,13 +58,13 @@ state_db_init() {
     # REMOVED: trap 'state_db_cleanup' EXIT  
     # Now using unified signal_manager for proper cleanup handling
     
-    tlog debug "Enhanced state database initialized successfully"
+    log_debug "Enhanced state database initialized successfully"
     return 0
 }
 
 # Setup database schema
 state_db_setup_schema() {
-    tlog debug "Setting up state database schema..."
+    log_debug "Setting up state database schema..."
     
     # Define core schema
     STATE_SCHEMA["test_id"]="string:required:unique"
@@ -81,22 +81,22 @@ state_db_setup_schema() {
     STATE_VALIDATORS["test_duration"]="state_validate_test_duration"
     STATE_VALIDATORS["test_timestamp"]="state_validate_timestamp"
     
-    tlog debug "State database schema configured"
+    log_debug "State database schema configured"
     return 0
 }
 
 # Load state from persistent file
 state_db_load_from_file() {
     if [[ ! -f "$STATE_DB_FILE" ]]; then
-    tlog debug "No existing state database file found, starting fresh"
+    log_debug "No existing state database file found, starting fresh"
         return 0
     fi
     
-    tlog debug "Loading state from file: $STATE_DB_FILE"
+    log_debug "Loading state from file: $STATE_DB_FILE"
     
     # Read and validate file
     if [[ ! -s "$STATE_DB_FILE" ]]; then
-    tlog debug "State database file is empty"
+    log_debug "State database file is empty"
         return 0
     fi
     
@@ -131,21 +131,21 @@ state_db_load_from_file() {
                     GRPCTESTIFY_STATE["$state_key"]="$value"
                     ;;
                 *)
-    tlog warning "Unknown state key in database: $key (line $line_num)"
+    log_warn "Unknown state key in database: $key (line $line_num)"
                     ;;
             esac
         else
-    tlog warning "Invalid state database line format: $line (line $line_num)"
+    log_warn "Invalid state database line format: $line (line $line_num)"
         fi
     done < "$STATE_DB_FILE"
     
-    tlog debug "State loaded from database successfully"
+    log_debug "State loaded from database successfully"
     return 0
 }
 
 # Save state to persistent file
 state_db_save_to_file() {
-    tlog debug "Saving state to file: $STATE_DB_FILE"
+    log_debug "Saving state to file: $STATE_DB_FILE"
     
     # Create temporary file for atomic write
     local temp_file="${STATE_DB_FILE}.tmp.$$"
@@ -181,10 +181,10 @@ state_db_save_to_file() {
     
     # Atomic move
     if mv "$temp_file" "$STATE_DB_FILE"; then
-    tlog debug "State saved to database successfully"
+    log_debug "State saved to database successfully"
         return 0
     else
-    tlog error "Failed to save state to database"
+    log_error "Failed to save state to database"
         rm -f "$temp_file"
         return 1
     fi
@@ -195,11 +195,11 @@ state_db_begin_transaction() {
     local transaction_id="${1:-tx_$$_$(date +%s)}"
     
         if [[ -n "${STATE_TRANSACTIONS[$transaction_id]:-}" ]]; then
-	tlog debug "Transaction '$transaction_id' already exists"
+	log_debug "Transaction '$transaction_id' already exists"
         return 0  # Return success for idempotency
     fi
     
-    tlog debug "Beginning transaction: $transaction_id"
+    log_debug "Beginning transaction: $transaction_id"
     
     # Create transaction snapshot
     local snapshot_data
@@ -216,25 +216,25 @@ state_db_commit_transaction() {
     local transaction_id="$1"
     
     if [[ -z "$transaction_id" ]]; then
-    tlog error "state_db_commit_transaction: transaction_id required"
+    log_error "state_db_commit_transaction: transaction_id required"
         return 1
     fi
     
     if [[ -z "${STATE_TRANSACTIONS[$transaction_id]:-}" ]]; then
-    tlog error "Transaction '$transaction_id' not found"
+    log_error "Transaction '$transaction_id' not found"
         return 1
     fi
     
-    tlog debug "Committing transaction: $transaction_id"
+    log_debug "Committing transaction: $transaction_id"
     
     # Save current state to file
     if state_db_save_to_file; then
         # Remove transaction
         unset STATE_TRANSACTIONS["$transaction_id"]
-    tlog debug "Transaction '$transaction_id' committed successfully"
+    log_debug "Transaction '$transaction_id' committed successfully"
         return 0
     else
-    tlog error "Failed to commit transaction '$transaction_id'"
+    log_error "Failed to commit transaction '$transaction_id'"
         return 1
     fi
 }
@@ -244,25 +244,25 @@ state_db_rollback_transaction() {
     local transaction_id="$1"
     
     if [[ -z "$transaction_id" ]]; then
-    tlog error "state_db_rollback_transaction: transaction_id required"
+    log_error "state_db_rollback_transaction: transaction_id required"
         return 1
     fi
     
     local snapshot_data="${STATE_TRANSACTIONS[$transaction_id]:-}"
     if [[ -z "$snapshot_data" ]]; then
-    tlog error "Transaction '$transaction_id' not found"
+    log_error "Transaction '$transaction_id' not found"
         return 1
     fi
     
-    tlog debug "Rolling back transaction: $transaction_id"
+    log_debug "Rolling back transaction: $transaction_id"
     
     # Restore state from snapshot
     if state_db_restore_snapshot "$snapshot_data"; then
         unset STATE_TRANSACTIONS["$transaction_id"]
-    tlog debug "Transaction '$transaction_id' rolled back successfully"
+    log_debug "Transaction '$transaction_id' rolled back successfully"
         return 0
     else
-    tlog error "Failed to rollback transaction '$transaction_id'"
+    log_error "Failed to rollback transaction '$transaction_id'"
         return 1
     fi
 }
@@ -289,11 +289,11 @@ state_db_restore_snapshot() {
     local snapshot_file="$1"
     
     if [[ ! -f "$snapshot_file" ]]; then
-    tlog error "Snapshot file not found: $snapshot_file"
+    log_error "Snapshot file not found: $snapshot_file"
         return 1
     fi
     
-    tlog debug "Restoring state from snapshot: $snapshot_file"
+    log_debug "Restoring state from snapshot: $snapshot_file"
     
     # Source the snapshot to restore state
     source "$snapshot_file"
@@ -301,7 +301,7 @@ state_db_restore_snapshot() {
     # Clean up snapshot file
     rm -f "$snapshot_file"
     
-    tlog debug "State restored from snapshot successfully"
+    log_debug "State restored from snapshot successfully"
     return 0
 }
 
@@ -312,18 +312,18 @@ state_db_acquire_lock() {
     local lock_id="lock_$$_$(date +%s)"
     
     if [[ -z "$key" ]]; then
-    tlog error "state_db_acquire_lock: key required"
+    log_error "state_db_acquire_lock: key required"
         return 1
     fi
     
-    tlog debug "Acquiring lock on key '$key' (timeout: ${timeout}s)"
+    log_debug "Acquiring lock on key '$key' (timeout: ${timeout}s)"
     
     local waited=0
     while [[ $waited -lt $timeout ]]; do
         if [[ -z "${STATE_LOCKS[$key]:-}" ]]; then
             # Lock is available
             STATE_LOCKS["$key"]="$lock_id:$(date +%s):$$"
-    tlog debug "Lock acquired on key '$key' (lock_id: $lock_id)"
+    log_debug "Lock acquired on key '$key' (lock_id: $lock_id)"
             echo "$lock_id"
             return 0
         fi
@@ -337,7 +337,7 @@ state_db_acquire_lock() {
         if [[ $((current_time - lock_timestamp)) -gt 60 ]]; then
             # Lock is stale, take it over
             STATE_LOCKS["$key"]="$lock_id:$current_time:$$"
-    tlog debug "Stale lock overtaken on key '$key' (lock_id: $lock_id)"
+    log_debug "Stale lock overtaken on key '$key' (lock_id: $lock_id)"
             echo "$lock_id"
             return 0
         fi
@@ -346,7 +346,7 @@ state_db_acquire_lock() {
         ((waited++))
     done
     
-    tlog warning "Timeout acquiring lock on key '$key'"
+    log_warn "Timeout acquiring lock on key '$key'"
     return 124
 }
 
@@ -356,13 +356,13 @@ state_db_release_lock() {
     local lock_id="$2"
     
     if [[ -z "$key" || -z "$lock_id" ]]; then
-    tlog error "state_db_release_lock: key and lock_id required"
+    log_error "state_db_release_lock: key and lock_id required"
         return 1
     fi
     
     local current_lock="${STATE_LOCKS[$key]:-}"
     if [[ -z "$current_lock" ]]; then
-    tlog warning "No lock found on key '$key'"
+    log_warn "No lock found on key '$key'"
         return 1
     fi
     
@@ -370,12 +370,12 @@ state_db_release_lock() {
     current_lock_id=$(echo "$current_lock" | cut -d: -f1)
     
     if [[ "$current_lock_id" != "$lock_id" ]]; then
-    tlog error "Lock ID mismatch for key '$key': expected '$lock_id', got '$current_lock_id'"
+    log_error "Lock ID mismatch for key '$key': expected '$lock_id', got '$current_lock_id'"
         return 1
     fi
     
     unset STATE_LOCKS["$key"]
-    tlog debug "Lock released on key '$key' (lock_id: $lock_id)"
+    log_debug "Lock released on key '$key' (lock_id: $lock_id)"
     return 0
 }
 
@@ -386,7 +386,7 @@ state_db_atomic() {
     local args=("$@")
     
     if [[ -z "$operation" ]]; then
-    tlog error "state_db_atomic: operation required"
+    log_error "state_db_atomic: operation required"
         return 1
     fi
     
@@ -436,26 +436,26 @@ state_db_create_backup() {
     
     if [[ -f "$STATE_DB_FILE" ]]; then
         cp "$STATE_DB_FILE" "$backup_file"
-    tlog debug "State backup created: $backup_file"
+    log_debug "State backup created: $backup_file"
         
         # Cleanup old backups
         local backup_count
         backup_count=$(find "$backup_dir" -name "state_backup_*.db" | wc -l)
         if [[ $backup_count -gt $STATE_MAX_BACKUPS ]]; then
             find "$backup_dir" -name "state_backup_*.db" -type f | sort | head -n $((backup_count - STATE_MAX_BACKUPS)) | xargs rm -f
-    tlog debug "Old backups cleaned up"
+    log_debug "Old backups cleaned up"
         fi
         
         return 0
     else
-    tlog warning "No state database file to backup"
+    log_warn "No state database file to backup"
         return 1
     fi
 }
 
 # Start backup daemon
 state_db_start_backup_daemon() {
-    tlog debug "Starting state database backup daemon..."
+    log_debug "Starting state database backup daemon..."
     
     local backup_iterations=0
     local max_backup_iterations=${STATE_MAX_BACKUP_ITERATIONS:-72}  # Default 72 iterations (12 hours with 10min interval)
@@ -466,7 +466,7 @@ state_db_start_backup_daemon() {
         ((backup_iterations++))
     done
     
-    tlog debug "State database backup daemon completed after $backup_iterations iterations"
+    log_debug "State database backup daemon completed after $backup_iterations iterations"
 }
 
 # Get database statistics
@@ -503,7 +503,7 @@ state_db_stats() {
 
 # Cleanup state database
 state_db_cleanup() {
-    tlog debug "Cleaning up state database..."
+    log_debug "Cleaning up state database..."
     
     # Save final state
     state_db_save_to_file
@@ -518,7 +518,7 @@ state_db_cleanup() {
         state_db_rollback_transaction "$tx_id"
     done
     
-    tlog debug "State database cleaned up"
+    log_debug "State database cleaned up"
 }
 
 # Core state access functions
@@ -527,18 +527,18 @@ state_db_set() {
     local value="$2"
     
     if [[ -z "$key" ]]; then
-        tlog error "state_db_set: key required"
+        log_error "state_db_set: key required"
         return 1
     fi
     
     # Validate key format (alphanumeric, underscores, and dots for namespacing)
     if [[ ! "$key" =~ ^[a-zA-Z0-9_.]+$ ]]; then
-        tlog error "state_db_set: invalid key format '$key'"
+        log_error "state_db_set: invalid key format '$key'"
         return 1
     fi
     
     GRPCTESTIFY_STATE["$key"]="$value"
-    tlog debug "Set state: $key = $value"
+    log_debug "Set state: $key = $value"
     return 0
 }
 
@@ -547,7 +547,7 @@ state_db_get() {
     local default_value="${2:-}"
     
     if [[ -z "$key" ]]; then
-        tlog error "state_db_get: key required"
+        log_error "state_db_get: key required"
         return 1
     fi
     

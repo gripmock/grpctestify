@@ -43,8 +43,14 @@ io_glog() {
     local message="$*"
     local timestamp formatted_message
     
-    # Skip debug logs unless explicitly enabled
-    if [[ "$level" == "debug" && "${DEBUG:-}" != "true" && "${GRPCTESTIFY_DEBUG:-}" != "true" ]]; then
+    # Log-level filtering (error < warn < info < debug < trace). Default: info
+    local current_level
+    current_level=$(get_log_level)
+    local cur_v msg_v
+    cur_v=$(_log_level_value "$current_level")
+    msg_v=$(_log_level_value "$level")
+    # Print only if message level is at least as important as the current threshold
+    if [[ "$msg_v" -gt "$cur_v" ]]; then
         return 0
     fi
     
@@ -55,6 +61,9 @@ io_glog() {
     case "$level" in
         debug)
             formatted_message="🐛 DEBUG [$timestamp]: $message"
+            ;;
+        trace)
+            formatted_message="🔬 TRACE [$timestamp]: $message"
             ;;
         info)
             formatted_message="ℹ️  INFO [$timestamp]: $message"
@@ -73,28 +82,27 @@ io_glog() {
             ;;
     esac
     
-    # Use Plugin IO API for safe output
-    if command -v plugin_io_error_print >/dev/null 2>&1; then
-        case "$level" in
-            error|warn)
-                plugin_io_error_print "$formatted_message"
-                ;;
-            *)
-                plugin_io_print "%s\n" "$formatted_message"
-                ;;
-        esac
-    else
-        # Fallback to stderr for errors/warnings
-        case "$level" in
-            error|warn)
-                printf "%s\n" "$formatted_message" >&2
-                ;;
-            *)
-                printf "%s\n" "$formatted_message"
-                ;;
-        esac
-    fi
+    # Direct output (avoid plugin IO to prevent potential blocking)
+    case "$level" in
+        error|warn)
+            printf "%s\n" "$formatted_message" >&2
+            ;;
+        *)
+            printf "%s\n" "$formatted_message"
+            ;;
+    esac
 }
+
+#######################################
+# Level-specific helpers (preferred API)
+# Usage: log_error "msg"; log_warn "msg"; log_info "msg"; log_debug "msg"
+#######################################
+
+log_error() { io_glog error "$@"; }
+log_warn()  { io_glog warn  "$@"; }
+log_info()  { io_glog info  "$@"; }
+log_debug() { io_glog debug "$@"; }
+log_trace() { io_glog trace "$@"; }
 
 #######################################
 # Specialized logging functions for better semantics
@@ -198,13 +206,18 @@ is_io_logging_active() {
 
 # Get log level setting
 get_log_level() {
-    if [[ "${DEBUG:-}" == "true" || "${GRPCTESTIFY_DEBUG:-}" == "true" ]]; then
-        echo "debug"
-    elif [[ "${VERBOSE:-}" == "true" ]]; then
-        echo "info"
-    else
-        echo "warn"
+    local lvl="${GRPCTESTIFY_LOG_LEVEL:-}"
+    if [[ -n "$lvl" ]]; then
+        lvl="${lvl,,}"
+        case "$lvl" in
+            error) echo "error"; return ;;
+            warn) echo "warn"; return ;;
+            info) echo "info"; return ;;
+            debug) echo "debug"; return ;;
+            trace) echo "trace"; return ;;
+        esac
     fi
+    echo "info"
 }
 
 # Set log level
@@ -213,21 +226,29 @@ set_log_level() {
     
     case "$level" in
         debug)
-            export GRPCTESTIFY_DEBUG=true
-            export VERBOSE=true
+            export GRPCTESTIFY_LOG_LEVEL=debug
             ;;
         info)
-            export GRPCTESTIFY_DEBUG=false
-            export VERBOSE=true
+            export GRPCTESTIFY_LOG_LEVEL=info
             ;;
         warn)
-            export GRPCTESTIFY_DEBUG=false
-            export VERBOSE=false
+            export GRPCTESTIFY_LOG_LEVEL=warn
             ;;
         error)
-            export GRPCTESTIFY_DEBUG=false
-            export VERBOSE=false
+            export GRPCTESTIFY_LOG_LEVEL=error
             ;;
+    esac
+}
+
+# Convert level to numeric value for comparisons (lower is more severe)
+_log_level_value() {
+    case "${1,,}" in
+        error) echo 0 ;;
+        warn) echo 1 ;;
+        info) echo 2 ;;
+        debug) echo 3 ;;
+        trace) echo 4 ;;
+        *) echo 2 ;; # default info
     esac
 }
 
@@ -260,3 +281,95 @@ export -f init_logging_io io_glog log_test_event log_system
 export -f log_performance log_network log_plugin
 export -f restore_original_log is_io_logging_active
 export -f get_log_level set_log_level log_batch log_context
+export -f log_error log_warn log_info log_debug log_trace
+
+#######################################
+# Perf API (trace-only, concurrency-safe by PID)
+# Functions:
+#   perf_push key     # start span
+#   perf_pop key      # end span -> log_trace one line if enabled
+#   perf_mark key     # increment counter
+#   perf_summary      # print aggregates for this PID
+# Env (optional):
+#   PERF_THRESHOLD_MS (default 0) - skip spans shorter than threshold
+#   PERF_SAMPLING_N   (default 1) - log every N-th span for key
+#######################################
+declare -Ag PERF_T0=()       # key: "pid|key" -> t0_ms
+declare -Ag PERF_COUNT=()    # key: "pid|key" -> count
+declare -Ag PERF_SUM=()      # key: "pid|key" -> total_ms
+
+perf__enabled() {
+    [[ "$(get_log_level)" == "trace" ]]
+}
+
+perf_push() { :; }
+perf_pop() { :; }
+
+perf_mark() { :; }
+
+perf_add() {
+    local key="$1"
+    local ms="$2"
+    [[ -z "$key" || -z "$ms" ]] && return 0
+    # Always aggregate; printing remains trace-only via perf_summary
+    local agg_key="$$|$key"
+    local cur_sum="${PERF_SUM[$agg_key]:-0}"
+    local cur_cnt="${PERF_COUNT[$agg_key]:-0}"
+    PERF_SUM[$agg_key]=$(( cur_sum + ms ))
+    PERF_COUNT[$agg_key]=$(( cur_cnt + 1 ))
+}
+
+perf_summary() {
+    perf__enabled || return 0
+    local pid="$$"
+    local k
+    for k in "${!PERF_SUM[@]}"; do
+        [[ "$k" != ${pid}\|* ]] && continue
+        local key="${k#${pid}|}"
+        local total="${PERF_SUM[$k]:-0}"
+        local cnt="${PERF_COUNT[$k]:-0}"
+        local avg=0
+        (( cnt > 0 )) && avg=$(( total / cnt ))
+        log_trace "perf.summary key=${key} total=${total}ms count=${cnt} avg=${avg}ms"
+    done
+}
+
+export -f perf_push perf_pop perf_mark perf_summary perf_add
+#######################################
+# gperf - lightweight start/stop perf markers (trace-only)
+# Usage:
+#   gperf "parsing"   # start
+#   ... code ...
+#   gperf "parsing"   # stop -> prints one trace line with duration
+#######################################
+declare -Ag __GPERF_T0=()
+# Aggregated performance metrics (PID-scoped keys: "$$|key")
+declare -Ag PERF_SUM=()
+declare -Ag PERF_COUNT=()
+
+gperf() {
+    local key="$1"
+    [[ -z "$key" ]] && return 0
+    # Only active in trace level
+    if [[ "$(get_log_level)" != "trace" ]]; then
+        return 0
+    fi
+    local now
+    now=$(($(date +%s%N)/1000000))
+    if [[ -z "${__GPERF_T0[$key]:-}" ]]; then
+        __GPERF_T0[$key]="$now"
+    else
+        local dur=$((now - __GPERF_T0[$key]))
+        unset __GPERF_T0[$key]
+        # aggregate by PID|key for concurrency safety
+        local agg_key="$$|$key"
+        local cur_sum="${PERF_SUM[$agg_key]:-0}"
+        local cur_cnt="${PERF_COUNT[$agg_key]:-0}"
+        PERF_SUM[$agg_key]=$(( cur_sum + dur ))
+        PERF_COUNT[$agg_key]=$(( cur_cnt + 1 ))
+        # single concise trace line
+        log_trace "perf key=${key} dur=${dur}ms"
+    fi
+}
+
+export -f gperf

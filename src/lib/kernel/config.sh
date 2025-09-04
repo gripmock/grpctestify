@@ -13,7 +13,7 @@ readonly CONFIG_VERSION="1.0.0"
 
 # Default values
 readonly DEFAULT_TIMEOUT=30
-# DEFAULT_ADDRESS removed - use GRPCTESTIFY_ADDRESS instead
+ 
 # shellcheck disable=SC2034  # Used in future versions
 readonly DEFAULT_CACHE_TTL=3600
 # shellcheck disable=SC2034  # Used in future versions
@@ -176,8 +176,7 @@ readonly ERROR_CONFIGURATION=12
 
 # Environment variable names
 readonly ENV_ADDRESS="GRPCTESTIFY_ADDRESS"
-# ENV variables for flags removed - use flags directly
-readonly ENV_NO_COLOR="GRPCTESTIFY_NO_COLOR"
+ 
 readonly ENV_PLUGIN_PATH="GRPCTESTIFY_PLUGIN_PATH"
 readonly ENV_CACHE_DIR="GRPCTESTIFY_CACHE_DIR"
 
@@ -203,12 +202,12 @@ validate_plugin_path() {
             fi
             ;;
         *)
-    tlog error "Plugin path not allowed: $plugin_path"
+    log_error "Plugin path not allowed: $plugin_path"
             return 1
             ;;
     esac
     
-    tlog error "Invalid plugin path: $plugin_path"
+    log_error "Invalid plugin path: $plugin_path"
     return 1
 }
 

@@ -20,11 +20,11 @@ readonly TLS_MODE_INSECURE="insecure"
 
 # Initialize TLS plugin
 grpc_tls_init() {
-    tlog debug "Initializing TLS plugin..."
+    log_debug "Initializing TLS plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -37,7 +37,7 @@ grpc_tls_init() {
     # Subscribe to TLS-related events
     event_subscribe "tls" "tls.*" "grpc_tls_event_handler"
     
-    tlog debug "TLS plugin initialized successfully"
+    log_debug "TLS plugin initialized successfully"
     return 0
 }
 
@@ -61,7 +61,7 @@ grpc_tls_handler() {
             grpc_tls_validate_certificates "${args[@]}"
             ;;
         *)
-    tlog error "Unknown TLS command: $command"
+    log_error "Unknown TLS command: $command"
             return 1
             ;;
     esac
@@ -72,11 +72,11 @@ grpc_tls_parse_section() {
     local test_file="$1"
     
     if [[ -z "$test_file" || ! -f "$test_file" ]]; then
-    tlog error "grpc_tls_parse_section: valid test_file required"
+    log_error "grpc_tls_parse_section: valid test_file required"
         return 1
     fi
     
-    tlog debug "Parsing TLS section from: $test_file"
+    log_debug "Parsing TLS section from: $test_file"
     
     # Publish TLS parsing start event
     local parse_metadata
@@ -98,7 +98,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "tls_operations" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for TLS parsing"
+    log_error "Failed to acquire resource for TLS parsing"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -111,7 +111,7 @@ EOF
     if [[ -n "$tls_section" ]]; then
         local tls_config
         if tls_config=$(process_tls_configuration "$tls_section" "$test_file"); then
-    tlog debug "TLS configuration parsed successfully"
+    log_debug "TLS configuration parsed successfully"
             
             # Store TLS configuration in state
             state_db_atomic "record_tls_config" "$test_file" "SUCCESS" "$tls_config"
@@ -123,7 +123,7 @@ EOF
             echo "$tls_config"
         else
             parsing_result=1
-    tlog error "TLS configuration parsing failed"
+    log_error "TLS configuration parsing failed"
             
             # Store parsing failure
             state_db_atomic "record_tls_config" "$test_file" "FAILED" ""
@@ -136,7 +136,7 @@ EOF
         local default_config
         default_config=$(jq -n '{mode: "plaintext", flags: ["-plaintext"]}')
         
-    tlog debug "No TLS section found, using default plaintext configuration"
+    log_debug "No TLS section found, using default plaintext configuration"
         echo "$default_config"
     fi
     
@@ -222,7 +222,7 @@ process_tls_configuration() {
                     authority="$value"
                     ;;
                 *)
-    tlog warning "Unknown TLS configuration key: $key"
+    log_warn "Unknown TLS configuration key: $key"
                     ;;
             esac
         fi
@@ -254,14 +254,14 @@ process_tls_configuration() {
             mode="$TLS_MODE_TLS"
             ;;
         *)
-    tlog error "Unknown TLS mode: $mode"
+    log_error "Unknown TLS mode: $mode"
             return 1
             ;;
     esac
     
     # Validate certificate files if specified
     if ! validate_certificate_files "$cacert" "$cert" "$key"; then
-    tlog error "TLS certificate validation failed"
+    log_error "TLS certificate validation failed"
         return 1
     fi
     
@@ -315,13 +315,13 @@ grpc_tls_validate_config() {
     local tls_config="$1"
     
     if [[ -z "$tls_config" ]]; then
-    tlog error "TLS configuration is empty"
+    log_error "TLS configuration is empty"
         return 1
     fi
     
     # Validate JSON structure
     if ! echo "$tls_config" | jq . >/dev/null 2>&1; then
-    tlog error "Invalid JSON in TLS configuration"
+    log_error "Invalid JSON in TLS configuration"
         return 1
     fi
     
@@ -329,7 +329,7 @@ grpc_tls_validate_config() {
     local mode
     mode=$(echo "$tls_config" | jq -r '.mode // ""')
     if [[ -z "$mode" ]]; then
-    tlog error "Missing TLS mode in configuration"
+    log_error "Missing TLS mode in configuration"
         return 1
     fi
     
@@ -342,7 +342,7 @@ grpc_tls_validate_config() {
             key=$(echo "$tls_config" | jq -r '.certificates.client_key // ""')
             
             if [[ -z "$cert" || -z "$key" ]]; then
-    tlog error "mTLS mode requires both client certificate and key"
+    log_error "mTLS mode requires both client certificate and key"
                 return 1
             fi
             ;;
@@ -350,12 +350,12 @@ grpc_tls_validate_config() {
             # Valid modes
             ;;
         *)
-    tlog error "Invalid TLS mode: $mode"
+    log_error "Invalid TLS mode: $mode"
             return 1
             ;;
     esac
     
-    tlog debug "TLS configuration validation passed"
+    log_debug "TLS configuration validation passed"
     return 0
 }
 
@@ -368,11 +368,11 @@ validate_certificate_files() {
     # Validate CA certificate
     if [[ -n "$cacert" ]]; then
         if [[ ! -f "$cacert" ]]; then
-    tlog error "CA certificate file not found: $cacert"
+    log_error "CA certificate file not found: $cacert"
             return 1
         fi
         if [[ ! -r "$cacert" ]]; then
-    tlog error "CA certificate file not readable: $cacert"
+    log_error "CA certificate file not readable: $cacert"
             return 1
         fi
     fi
@@ -380,11 +380,11 @@ validate_certificate_files() {
     # Validate client certificate
     if [[ -n "$cert" ]]; then
         if [[ ! -f "$cert" ]]; then
-    tlog error "Client certificate file not found: $cert"
+    log_error "Client certificate file not found: $cert"
             return 1
         fi
         if [[ ! -r "$cert" ]]; then
-    tlog error "Client certificate file not readable: $cert"
+    log_error "Client certificate file not readable: $cert"
             return 1
         fi
     fi
@@ -392,11 +392,11 @@ validate_certificate_files() {
     # Validate client key
     if [[ -n "$key" ]]; then
         if [[ ! -f "$key" ]]; then
-    tlog error "Client key file not found: $key"
+    log_error "Client key file not found: $key"
             return 1
         fi
         if [[ ! -r "$key" ]]; then
-    tlog error "Client key file not readable: $key"
+    log_error "Client key file not readable: $key"
             return 1
         fi
     fi
@@ -414,7 +414,7 @@ grpc_tls_validate_certificates() {
     
     # Check if openssl is available
     if ! command -v openssl >/dev/null 2>&1; then
-    tlog debug "openssl not available, skipping certificate validation"
+    log_debug "openssl not available, skipping certificate validation"
         return 0
     fi
     
@@ -429,28 +429,28 @@ grpc_tls_validate_certificates() {
     # Validate CA certificate
     if [[ -n "$cacert" && -f "$cacert" ]]; then
         if ! openssl x509 -in "$cacert" -noout -text >/dev/null 2>&1; then
-    tlog error "Invalid CA certificate format: $cacert"
+    log_error "Invalid CA certificate format: $cacert"
             return 1
         fi
-    tlog debug "CA certificate validation passed: $cacert"
+    log_debug "CA certificate validation passed: $cacert"
     fi
     
     # Validate client certificate
     if [[ -n "$cert" && -f "$cert" ]]; then
         if ! openssl x509 -in "$cert" -noout -text >/dev/null 2>&1; then
-    tlog error "Invalid client certificate format: $cert"
+    log_error "Invalid client certificate format: $cert"
             return 1
         fi
-    tlog debug "Client certificate validation passed: $cert"
+    log_debug "Client certificate validation passed: $cert"
     fi
     
     # Validate client key
     if [[ -n "$key" && -f "$key" ]]; then
         if ! openssl rsa -in "$key" -noout -check >/dev/null 2>&1; then
-    tlog error "Invalid client key format: $key"
+    log_error "Invalid client key format: $key"
             return 1
         fi
-    tlog debug "Client key validation passed: $key"
+    log_debug "Client key validation passed: $key"
     fi
     
     # Validate certificate-key pair
@@ -461,10 +461,10 @@ grpc_tls_validate_certificates() {
         key_modulus=$(openssl rsa -noout -modulus -in "$key" 2>/dev/null)
         
         if [[ "$cert_modulus" != "$key_modulus" ]]; then
-    tlog error "Client certificate and key do not match"
+    log_error "Client certificate and key do not match"
             return 1
         fi
-    tlog debug "Certificate-key pair validation passed"
+    log_debug "Certificate-key pair validation passed"
     fi
     
     return 0
@@ -474,7 +474,7 @@ grpc_tls_validate_certificates() {
 grpc_tls_event_handler() {
     local event_message="$1"
     
-    tlog debug "TLS plugin received event: $event_message"
+    log_debug "TLS plugin received event: $event_message"
     
     # Handle TLS-related events
     # This could be used for:

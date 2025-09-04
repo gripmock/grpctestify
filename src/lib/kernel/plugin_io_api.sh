@@ -39,7 +39,7 @@ plugin_io_progress() {
     
     # Validate parameters
     if [[ -z "$test_name" || -z "$status" || -z "$symbol" ]]; then
-    tlog error "plugin_io_progress: Missing required parameters"
+    log_error "plugin_io_progress: Missing required parameters"
         return 1
     fi
     
@@ -47,7 +47,7 @@ plugin_io_progress() {
     case "$status" in
         running|passed|failed|skipped|error) ;;
         *)
-    tlog error "plugin_io_progress: Invalid status '$status'"
+    log_error "plugin_io_progress: Invalid status '$status'"
             return 1
             ;;
     esac
@@ -86,7 +86,7 @@ plugin_io_result() {
     
     # Validate parameters
     if [[ -z "$test_name" || -z "$status" || -z "$duration" ]]; then
-    tlog error "plugin_io_result: Missing required parameters"
+    log_error "plugin_io_result: Missing required parameters"
         return 1
     fi
     
@@ -94,14 +94,14 @@ plugin_io_result() {
     case "$status" in
         PASSED|FAILED|ERROR|SKIPPED) ;;
         *)
-    tlog error "plugin_io_result: Invalid status '$status'"
+    log_error "plugin_io_result: Invalid status '$status'"
             return 1
             ;;
     esac
     
     # Validate duration is numeric
     if ! [[ "$duration" =~ ^[0-9]+$ ]]; then
-    tlog error "plugin_io_result: Duration must be numeric (milliseconds)"
+    log_error "plugin_io_result: Duration must be numeric (milliseconds)"
         return 1
     fi
     
@@ -130,7 +130,7 @@ plugin_io_error() {
     
     # Validate parameters
     if [[ -z "$test_name" || -z "$error_details" ]]; then
-    tlog error "plugin_io_error: Missing required parameters"
+    log_error "plugin_io_error: Missing required parameters"
         return 1
     fi
     

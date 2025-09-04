@@ -25,11 +25,11 @@ retry_with_backoff() {
     local delay="$initial_delay"
     
     while [[ $attempt -le $max_retries ]]; do
-    tlog debug "Attempt $attempt/$max_retries: calling $func_name"
+    log_debug "Attempt $attempt/$max_retries: calling $func_name"
         
         if "$func_name" "$@"; then
             if [[ $attempt -gt 1 ]]; then
-                tlog info "Function succeeded on attempt $attempt"
+                log_info "Function succeeded on attempt $attempt"
             fi
             return 0
         fi
@@ -37,11 +37,11 @@ retry_with_backoff() {
         local exit_code=$?
         
         if [[ $attempt -eq $max_retries ]]; then
-    tlog error "Command failed after $max_retries attempts"
+    log_error "Command failed after $max_retries attempts"
             return $exit_code
         fi
         
-    tlog warning "Command failed (attempt $attempt/$max_retries), retrying in ${delay}s..."
+    log_warn "Command failed (attempt $attempt/$max_retries), retrying in ${delay}s..."
         sleep "$delay"
         
         # Calculate next delay with exponential backoff
@@ -67,7 +67,7 @@ retry_grpc_call() {
     local last_error=""
     
     while [[ $retry_count -lt $max_retries ]]; do
-    tlog debug "🔍 gRPC call attempt $((retry_count + 1))/$max_retries to $address/$endpoint"
+    log_debug "🔍 gRPC call attempt $((retry_count + 1))/$max_retries to $address/$endpoint"
         
         # Attempt the gRPC call
         local grpc_output
@@ -76,7 +76,7 @@ retry_grpc_call() {
         
         if [[ $grpc_status -eq 0 ]]; then
             if [[ $retry_count -gt 0 ]]; then
-                tlog info "gRPC call succeeded on attempt $((retry_count + 1))"
+                log_info "gRPC call succeeded on attempt $((retry_count + 1))"
             fi
             echo "$grpc_output"
             return 0
@@ -86,7 +86,7 @@ retry_grpc_call() {
         
         # Check if this is a retryable error
         if ! is_retryable_error "$grpc_output" "$grpc_status"; then
-    tlog debug "❌ gRPC error (non-retryable): $grpc_output"
+    log_debug "❌ gRPC error (non-retryable): $grpc_output"
             echo "$grpc_output"
             return $grpc_status
         fi
@@ -100,13 +100,13 @@ retry_grpc_call() {
                 delay="$GRPCTESTIFY_DEFAULT_MAX_RETRY_DELAY"
             fi
             
-    tlog warning "gRPC call failed (attempt $retry_count/$max_retries), retrying in ${delay}s..."
-    tlog debug "📝 Error details: $grpc_output"
+    log_warn "gRPC call failed (attempt $retry_count/$max_retries), retrying in ${delay}s..."
+    log_debug "📝 Error details: $grpc_output"
             sleep "$delay"
         fi
     done
     
-    tlog error "gRPC call failed after $max_retries attempts"
+    log_error "gRPC call failed after $max_retries attempts"
     echo "$last_error"
     return 1
 }
@@ -156,7 +156,7 @@ wait_for_service() {
     local timeout_seconds="${2:-30}"
     local check_interval="${3:-2}"
     
-    tlog info "Waiting for service at $address (timeout: ${timeout_seconds}s)"
+    log_info "Waiting for service at $address (timeout: ${timeout_seconds}s)"
     
     local start_time
     start_time=$(date +%s)
@@ -164,15 +164,15 @@ wait_for_service() {
     
     while [[ $(date +%s) -lt $end_time ]]; do
         if check_service_health "$address"; then
-            tlog info "Service is available at $address"
+            log_info "Service is available at $address"
             return 0
         fi
         
-    tlog debug "⏳ Service not ready, waiting ${check_interval}s..."
+    log_debug "⏳ Service not ready, waiting ${check_interval}s..."
         sleep "$check_interval"
     done
     
-    tlog error "Service at $address did not become available within ${timeout_seconds}s"
+    log_error "Service at $address did not become available within ${timeout_seconds}s"
     return 1
 }
 
@@ -204,23 +204,23 @@ handle_network_failure() {
     local test_file="$2"
     local retry_count="${3:-0}"
     
-    tlog error "Network failure in test: $test_file"
-    tlog error "Error: $error_message"
+    log_error "Network failure in test: $test_file"
+    log_error "Error: $error_message"
     
     if [[ $retry_count -gt 0 ]]; then
-    tlog info "This was retry attempt $retry_count"
+    log_info "This was retry attempt $retry_count"
     fi
     
     # Check if we should suggest starting a test server
     if [[ "$error_message" == *"connection refused"* ]]; then
-    tlog info "💡 Tip: Make sure your gRPC server is running"
-    tlog info "   You can start a test server with: make up"
+    log_info "💡 Tip: Make sure your gRPC server is running"
+    log_info "   You can start a test server with: make up"
     fi
     
     # Check if we should suggest checking the address
     if [[ "$error_message" == *"network is unreachable"* ]]; then
-    tlog info "💡 Tip: Check if the server address is correct"
-    tlog info "   Current address: $(get_config 'default_address' 'localhost:4770')"
+    log_info "💡 Tip: Check if the server address is correct"
+    log_info "   Current address: $(get_config 'default_address' 'localhost:4770')"
     fi
 }
 
@@ -230,26 +230,26 @@ recover_from_test_failure() {
     local error_message="$2"
     local max_recovery_attempts="${3:-2}"
     
-    tlog warning "Attempting to recover from test failure: $test_file"
+    log_warn "Attempting to recover from test failure: $test_file"
     
     local recovery_attempt=1
     
     while [[ $recovery_attempt -le $max_recovery_attempts ]]; do
-    tlog info "Recovery attempt $recovery_attempt/$max_recovery_attempts"
+    log_info "Recovery attempt $recovery_attempt/$max_recovery_attempts"
         
         # Wait a bit before retrying
         sleep $((recovery_attempt * 2))
         
         # Try to run the test again
         if run_single_test "$test_file"; then
-            tlog info "Test recovered successfully on attempt $recovery_attempt"
+            log_info "Test recovered successfully on attempt $recovery_attempt"
             return 0
         fi
         
         ((recovery_attempt++))
     done
     
-    tlog error "Failed to recover test after $max_recovery_attempts attempts"
+    log_error "Failed to recover test after $max_recovery_attempts attempts"
     return 1
 }
 

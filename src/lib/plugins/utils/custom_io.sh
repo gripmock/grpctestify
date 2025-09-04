@@ -37,19 +37,19 @@ io_init() {
     
     # Initialize mutex system first
     if ! mutex_init; then
-    tlog error "Failed to initialize mutex system"
+    log_error "Failed to initialize mutex system"
         return 1
     fi
     
     # Create IO directory
     if ! mkdir -p "$GRPCTESTIFY_IO_DIR" 2>/dev/null; then
-    tlog error "Failed to create IO directory: $GRPCTESTIFY_IO_DIR"
+    log_error "Failed to create IO directory: $GRPCTESTIFY_IO_DIR"
         return 1
     fi
     
     # Create named pipes
     if ! mkfifo "$GRPCTESTIFY_PROGRESS_PIPE" "$GRPCTESTIFY_RESULTS_PIPE" "$GRPCTESTIFY_ERRORS_PIPE" 2>/dev/null; then
-    tlog error "Failed to create named pipes"
+    log_error "Failed to create named pipes"
         return 1
     fi
     
@@ -58,7 +58,7 @@ io_init() {
     GRPCTESTIFY_IO_READER_PID=$!
     
     GRPCTESTIFY_IO_INITIALIZED=true
-    tlog debug "Custom IO system initialized: $GRPCTESTIFY_IO_DIR"
+    log_debug "Custom IO system initialized: $GRPCTESTIFY_IO_DIR"
     return 0
 }
 
@@ -90,7 +90,7 @@ io_cleanup() {
     mutex_cleanup
     
     GRPCTESTIFY_IO_INITIALIZED=false
-    tlog debug "Custom IO system cleaned up"
+    log_debug "Custom IO system cleaned up"
     return 0
 }
 
@@ -133,7 +133,7 @@ io_start_reader() {
     
     # Log if we hit max iterations
     if [[ $iteration_count -ge $max_iterations ]]; then
-        tlog warn "IO reader reached maximum iterations ($max_iterations) - stopping to prevent infinite loop"
+        log_warn "IO reader reached maximum iterations ($max_iterations) - stopping to prevent infinite loop"
     fi
     
     exec 3<&- 4<&- 5<&-

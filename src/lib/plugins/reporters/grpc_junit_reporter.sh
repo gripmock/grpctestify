@@ -14,11 +14,11 @@ readonly PLUGIN_JUNIT_REPORTER_TYPE="reporter"
 
 # Initialize JUnit reporter plugin
 grpc_junit_reporter_init() {
-    tlog debug "Initializing JUnit reporter plugin..."
+    log_debug "Initializing JUnit reporter plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -31,7 +31,7 @@ grpc_junit_reporter_init() {
     # Subscribe to reporting events
     event_subscribe "junit_reporter" "report.*" "grpc_junit_reporter_event_handler"
     
-    tlog debug "JUnit reporter plugin initialized successfully"
+    log_debug "JUnit reporter plugin initialized successfully"
     return 0
 }
 
@@ -52,7 +52,7 @@ grpc_junit_reporter_handler() {
             grpc_junit_reporter_convert_to_junit "${args[@]}"
             ;;
         *)
-    tlog error "Unknown JUnit reporter command: $command"
+    log_error "Unknown JUnit reporter command: $command"
             return 1
             ;;
     esac
@@ -64,11 +64,11 @@ grpc_junit_reporter_generate() {
     local report_config="${2:-{}}"
     
     if [[ -z "$output_file" ]]; then
-    tlog error "grpc_junit_reporter_generate: output_file required"
+    log_error "grpc_junit_reporter_generate: output_file required"
         return 1
     fi
     
-    tlog debug "Generating JUnit XML report: $output_file"
+    log_debug "Generating JUnit XML report: $output_file"
     
     # Publish report generation start event
     local report_metadata
@@ -91,7 +91,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "junit_reporting" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for JUnit report generation"
+    log_error "Failed to acquire resource for JUnit report generation"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -101,7 +101,7 @@ EOF
     local start_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
     
     if generate_junit_report_from_state "$output_file" "$report_config"; then
-    tlog info "📊 JUnit XML report generated successfully: $output_file"
+    log_info "📊 JUnit XML report generated successfully: $output_file"
         local end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
         local duration=$((end_time - start_time))
         
@@ -112,7 +112,7 @@ EOF
         event_publish "report.generation.success" "{\"output_file\":\"$output_file\",\"duration\":$duration}" "$EVENT_PRIORITY_NORMAL" "junit_reporter"
     else
         generation_result=1
-    tlog error "JUnit XML report generation failed: $output_file"
+    log_error "JUnit XML report generation failed: $output_file"
         local end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
         local duration=$((end_time - start_time))
         
@@ -214,10 +214,10 @@ EOF
 EOF
 
     if [[ $? -eq 0 ]]; then
-    tlog debug "JUnit XML report written to: $output_file"
+    log_debug "JUnit XML report written to: $output_file"
         return 0
     else
-    tlog error "Failed to write JUnit XML report to: $output_file"
+    log_error "Failed to write JUnit XML report to: $output_file"
         return 1
     fi
 }
@@ -304,7 +304,7 @@ grpc_junit_reporter_validate_xml() {
     local output_file="$1"
     
     if [[ ! -f "$output_file" ]]; then
-    tlog error "Report file does not exist: $output_file"
+    log_error "Report file does not exist: $output_file"
         return 1
     fi
     
@@ -312,7 +312,7 @@ grpc_junit_reporter_validate_xml() {
     if ! xmllint --noout "$output_file" 2>/dev/null; then
         # Fallback validation if xmllint is not available
         if ! grep -q "<?xml" "$output_file" || ! grep -q "<testsuites" "$output_file"; then
-    tlog error "Invalid XML structure in report file: $output_file"
+    log_error "Invalid XML structure in report file: $output_file"
             return 1
         fi
     fi
@@ -321,12 +321,12 @@ grpc_junit_reporter_validate_xml() {
     local required_elements=("testsuites" "testsuite")
     for element in "${required_elements[@]}"; do
         if ! grep -q "<$element" "$output_file"; then
-    tlog error "Missing required element '<$element>' in report: $output_file"
+    log_error "Missing required element '<$element>' in report: $output_file"
             return 1
         fi
     done
     
-    tlog debug "JUnit XML report validation passed: $output_file"
+    log_debug "JUnit XML report validation passed: $output_file"
     return 0
 }
 
@@ -354,7 +354,7 @@ grpc_junit_reporter_convert_to_junit() {
             echo "$test_results"
             ;;
         *)
-    tlog error "Unsupported output format: $output_format"
+    log_error "Unsupported output format: $output_format"
             return 1
             ;;
     esac
@@ -364,7 +364,7 @@ grpc_junit_reporter_convert_to_junit() {
 grpc_junit_reporter_event_handler() {
     local event_message="$1"
     
-    tlog debug "JUnit reporter received event: $event_message"
+    log_debug "JUnit reporter received event: $event_message"
     
     # Handle reporting events
     # This could be used for:
@@ -390,7 +390,7 @@ record_junit_generation() {
     return 0
 }
 
-# Legacy functions removed - use grpc_junit_reporter_generate directly
+ 
 
 # Export functions
 export -f grpc_junit_reporter_init grpc_junit_reporter_handler grpc_junit_reporter_generate

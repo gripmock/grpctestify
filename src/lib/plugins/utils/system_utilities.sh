@@ -97,12 +97,12 @@ validate_plugin_path() {
             fi
             ;;
         *)
-	    tlog error "Plugin path not allowed: $plugin_path"
+	    log_error "Plugin path not allowed: $plugin_path"
             return 1
             ;;
     esac
     
-    tlog error "Invalid plugin path: $plugin_path"
+    log_error "Invalid plugin path: $plugin_path"
     return 1
 }
 

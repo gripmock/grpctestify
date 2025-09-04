@@ -72,3 +72,6 @@ examples/**/server/*.pid
 
 # Bashly generated output
 grpctestify.sh
+
+# Local plan, never commit
+PLAN.md

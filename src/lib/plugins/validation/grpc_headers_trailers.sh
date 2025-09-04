@@ -19,11 +19,11 @@ CASE_SENSITIVE_HEADERS="${CASE_SENSITIVE_HEADERS:-true}"
 
 # Initialize headers and trailers validation plugin
 grpc_headers_trailers_init() {
-    tlog debug "Initializing gRPC headers and trailers validation plugin..."
+    log_debug "Initializing gRPC headers and trailers validation plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -45,7 +45,7 @@ grpc_headers_trailers_init() {
         state_db_set "headers_trailers.validation_failures" "0"
     fi
     
-    tlog debug "gRPC headers and trailers validation plugin initialized successfully"
+    log_debug "gRPC headers and trailers validation plugin initialized successfully"
     return 0
 }
 
@@ -75,7 +75,7 @@ grpc_headers_trailers_handler() {
             grpc_headers_trailers_extract_metadata "${args[@]}"
             ;;
         *)
-    tlog error "Unknown headers/trailers command: $command"
+    log_error "Unknown headers/trailers command: $command"
             return 1
             ;;
     esac
@@ -89,11 +89,11 @@ grpc_headers_trailers_evaluate_header() {
     local validation_options="${4:-{}}"
     
     if [[ -z "$response" || -z "$header_name" ]]; then
-    tlog error "grpc_headers_trailers_evaluate_header: response and header_name required"
+    log_error "grpc_headers_trailers_evaluate_header: response and header_name required"
             return 1
         fi
     
-    tlog debug "Evaluating header assertion: $header_name"
+    log_debug "Evaluating header assertion: $header_name"
     
     # Publish header validation start event
     local validation_metadata
@@ -117,7 +117,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "header_trailer_validation" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for header validation"
+    log_error "Failed to acquire resource for header validation"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -125,7 +125,7 @@ EOF
     # Extract actual header value with enhanced methods
     local actual_value
     if ! actual_value=$(extract_header_value "$response" "$header_name" "$validation_options"); then
-    tlog error "Failed to extract header '$header_name' from response"
+    log_error "Failed to extract header '$header_name' from response"
         pool_release "header_trailer_validation" "$resource_token"
         state_db_rollback_transaction "$tx_id"
         return 1
@@ -134,7 +134,7 @@ EOF
     # Perform enhanced header validation
     local validation_result=0
     if validate_header_value "$actual_value" "$expected_value" "$validation_options"; then
-    tlog debug "Header assertion passed: $header_name = '$actual_value'"
+    log_debug "Header assertion passed: $header_name = '$actual_value'"
         
         # Record successful validation
         state_db_atomic "record_header_validation" "$header_name" "$actual_value" "$expected_value" "PASS"
@@ -143,7 +143,7 @@ EOF
         event_publish "validation.header.success" "{\"header_name\":\"$header_name\",\"actual_value\":\"$actual_value\"}" "$EVENT_PRIORITY_NORMAL" "headers_trailers"
     else
         validation_result=1
-    tlog error "Header assertion failed: $header_name expected '$expected_value', got '$actual_value'"
+    log_error "Header assertion failed: $header_name expected '$expected_value', got '$actual_value'"
         
         # Record failed validation
         state_db_atomic "record_header_validation" "$header_name" "$actual_value" "$expected_value" "FAIL"
@@ -175,11 +175,11 @@ grpc_headers_trailers_evaluate_trailer() {
     local validation_options="${4:-{}}"
     
     if [[ -z "$response" || -z "$trailer_name" ]]; then
-    tlog error "grpc_headers_trailers_evaluate_trailer: response and trailer_name required"
+    log_error "grpc_headers_trailers_evaluate_trailer: response and trailer_name required"
         return 1
     fi
     
-    tlog debug "Evaluating trailer assertion: $trailer_name"
+    log_debug "Evaluating trailer assertion: $trailer_name"
     
     # Publish trailer validation start event
     local validation_metadata
@@ -203,7 +203,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "header_trailer_validation" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for trailer validation"
+    log_error "Failed to acquire resource for trailer validation"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -211,7 +211,7 @@ EOF
     # Extract actual trailer value with enhanced methods
     local actual_value
     if ! actual_value=$(extract_trailer_value "$response" "$trailer_name" "$validation_options"); then
-    tlog error "Failed to extract trailer '$trailer_name' from response"
+    log_error "Failed to extract trailer '$trailer_name' from response"
         pool_release "header_trailer_validation" "$resource_token"
         state_db_rollback_transaction "$tx_id"
         return 1
@@ -220,7 +220,7 @@ EOF
     # Perform enhanced trailer validation
     local validation_result=0
     if validate_trailer_value "$actual_value" "$expected_value" "$validation_options"; then
-    tlog debug "Trailer assertion passed: $trailer_name = '$actual_value'"
+    log_debug "Trailer assertion passed: $trailer_name = '$actual_value'"
         
         # Record successful validation
         state_db_atomic "record_trailer_validation" "$trailer_name" "$actual_value" "$expected_value" "PASS"
@@ -229,7 +229,7 @@ EOF
         event_publish "validation.trailer.success" "{\"trailer_name\":\"$trailer_name\",\"actual_value\":\"$actual_value\"}" "$EVENT_PRIORITY_NORMAL" "headers_trailers"
     else
         validation_result=1
-    tlog error "Trailer assertion failed: $trailer_name expected '$expected_value', got '$actual_value'"
+    log_error "Trailer assertion failed: $trailer_name expected '$expected_value', got '$actual_value'"
         
         # Record failed validation
         state_db_atomic "record_trailer_validation" "$trailer_name" "$actual_value" "$expected_value" "FAIL"
@@ -296,7 +296,7 @@ extract_header_value() {
         return 0
     fi
     
-    tlog error "Header '$header_name' not found in gRPC response"
+    log_error "Header '$header_name' not found in gRPC response"
     return 1
 }
 
@@ -343,7 +343,7 @@ extract_trailer_value() {
         return 0
     fi
     
-    tlog error "Trailer '$trailer_name' not found in gRPC response"
+    log_error "Trailer '$trailer_name' not found in gRPC response"
     return 1
 }
 
@@ -392,7 +392,7 @@ validate_header_value() {
             fi
             ;;
         *)
-    tlog error "Unknown validation type: $validation_type"
+    log_error "Unknown validation type: $validation_type"
             return 1
             ;;
     esac
@@ -421,10 +421,10 @@ grpc_headers_trailers_validate_all_headers() {
     done
     
     if [[ $validation_failures -eq 0 ]]; then
-    tlog debug "All headers validated successfully ($total_validations headers)"
+    log_debug "All headers validated successfully ($total_validations headers)"
         return 0
     else
-    tlog error "$validation_failures out of $total_validations header validations failed"
+    log_error "$validation_failures out of $total_validations header validations failed"
         return 1
     fi
 }
@@ -447,10 +447,10 @@ grpc_headers_trailers_validate_all_trailers() {
     done
     
     if [[ $validation_failures -eq 0 ]]; then
-    tlog debug "All trailers validated successfully ($total_validations trailers)"
+    log_debug "All trailers validated successfully ($total_validations trailers)"
         return 0
     else
-    tlog error "$validation_failures out of $total_validations trailer validations failed"
+    log_error "$validation_failures out of $total_validations trailer validations failed"
         return 1
     fi
 }
@@ -474,7 +474,7 @@ grpc_headers_trailers_extract_metadata() {
             }' 2>/dev/null
             ;;
         *)
-    tlog error "Unknown metadata type: $metadata_type"
+    log_error "Unknown metadata type: $metadata_type"
             return 1
             ;;
     esac
@@ -544,7 +544,7 @@ increment_validation_counter() {
 grpc_headers_trailers_event_handler() {
     local event_message="$1"
     
-    tlog debug "Headers/trailers plugin received event: $event_message"
+    log_debug "Headers/trailers plugin received event: $event_message"
     
     # Handle validation-related events
     # This could be used for:
@@ -565,7 +565,7 @@ grpc_headers_trailers_call_handler() {
     endpoint=$(echo "$event_message" | jq -r '.endpoint // empty' 2>/dev/null)
     
     if [[ -n "$endpoint" && "$endpoint" != "null" ]]; then
-    tlog debug "Received gRPC call event for endpoint: $endpoint"
+    log_debug "Received gRPC call event for endpoint: $endpoint"
         # Could implement automatic header/trailer tracking here
     fi
     

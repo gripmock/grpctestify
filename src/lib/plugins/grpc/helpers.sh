@@ -26,6 +26,7 @@ build_grpcurl_args() {
     local -n headers_ref=$5
     local request_present="$6"
 
+    
     GRPCURL_ARGS=(grpcurl)
 
     # TLS (accept both legacy and plugin JSON schemas)
@@ -87,6 +88,7 @@ build_grpcurl_args() {
 
     # Address + endpoint
     GRPCURL_ARGS+=("$address" "$endpoint")
+    
 }
 
 render_grpcurl_preview() {

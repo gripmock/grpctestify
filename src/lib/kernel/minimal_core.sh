@@ -68,47 +68,47 @@ kernel_init() {
         init_logging_io
     fi
     
-    tlog debug "🚀 Initializing grpctestify microkernel v$KERNEL_VERSION..."
+    log_debug "🚀 Initializing grpctestify microkernel v$KERNEL_VERSION..."
     
     # Load essential kernel components first
     if ! kernel_load_essential_components; then
-        tlog error "Failed to load essential kernel components"
+        log_error "Failed to load essential kernel components"
         return 1
     fi
     
     # Initialize plugin integration system with enhanced API
     if ! plugin_integration_init; then
-        tlog error "Failed to initialize plugin integration system"
+        log_error "Failed to initialize plugin integration system"
         return 1
     fi
     
     # Auto-discover and load all plugins
     if ! kernel_load_all_plugins; then
-        tlog error "Failed to load plugins"
+        log_error "Failed to load plugins"
         return 1
     fi
     
     KERNEL_INITIALIZED=true
-    tlog debug "✅ Microkernel initialized successfully"
-    tlog debug "Loaded components: ${KERNEL_COMPONENTS_LOADED[*]}"
-    tlog debug "Loaded plugins: ${KERNEL_PLUGINS_LOADED[*]}"
+    log_debug "✅ Microkernel initialized successfully"
+    log_debug "Loaded components: ${KERNEL_COMPONENTS_LOADED[*]}"
+    log_debug "Loaded plugins: ${KERNEL_PLUGINS_LOADED[*]}"
     
     return 0
 }
 
 # Load essential kernel components
 kernel_load_essential_components() {
-    tlog debug "Loading essential kernel components..."
+    log_debug "Loading essential kernel components..."
     
     for component in "${ESSENTIAL_COMPONENTS[@]}"; do
         if ! kernel_load_component "$component"; then
-    tlog error "Failed to load essential component: $component"
+    log_error "Failed to load essential component: $component"
             return 1
         fi
         KERNEL_COMPONENTS_LOADED+=("$component")
     done
     
-    tlog debug "Essential components loaded successfully"
+    log_debug "Essential components loaded successfully"
     return 0
 }
 
@@ -118,7 +118,7 @@ kernel_load_component() {
     local component_file="src/lib/kernel/${component}.sh"
     
     if [[ ! -f "$component_file" ]]; then
-    tlog error "Component file not found: $component_file"
+    log_error "Component file not found: $component_file"
         return 1
     fi
     
@@ -126,12 +126,12 @@ kernel_load_component() {
     local init_function="${component}_init"
     if command -v "$init_function" >/dev/null 2>&1; then
         if ! "$init_function"; then
-    tlog error "Failed to initialize component: $component"
+    log_error "Failed to initialize component: $component"
             return 1
         fi
-    tlog debug "Component initialized: $component"
+    log_debug "Component initialized: $component"
     else
-    tlog debug "Component loaded (no init function): $component"
+    log_debug "Component loaded (no init function): $component"
     fi
     
     return 0
@@ -139,13 +139,13 @@ kernel_load_component() {
 
 # Load all plugins from plugin directories
 kernel_load_all_plugins() {
-    tlog debug "Auto-discovering and loading plugins..."
+    log_debug "Auto-discovering and loading plugins..."
     
     # Initialize enhanced plugin API first
     if command -v plugin_register_enhanced >/dev/null 2>&1; then
-    tlog debug "Enhanced plugin API available"
+    log_debug "Enhanced plugin API available"
     else
-    tlog warning "Enhanced plugin API not available, using basic API"
+    log_warn "Enhanced plugin API not available, using basic API"
     fi
     
     local total_plugins=0
@@ -154,7 +154,7 @@ kernel_load_all_plugins() {
     # Scan each plugin directory in order
     for plugin_dir in "${PLUGIN_DIRECTORIES[@]}"; do
         if [[ -d "$plugin_dir" ]]; then
-    tlog debug "Scanning plugin directory: $plugin_dir"
+    log_debug "Scanning plugin directory: $plugin_dir"
             
             # Find all .sh files that look like plugins
             while IFS= read -r -d '' plugin_file; do
@@ -169,11 +169,11 @@ kernel_load_all_plugins() {
                 fi
             done < <(find "$plugin_dir" -name "*.sh" -type f -print0)
         else
-    tlog debug "Plugin directory not found: $plugin_dir"
+    log_debug "Plugin directory not found: $plugin_dir"
         fi
     done
     
-    tlog debug "Plugin discovery complete: $loaded_plugins/$total_plugins plugins loaded"
+    log_debug "Plugin discovery complete: $loaded_plugins/$total_plugins plugins loaded"
     return 0
 }
 
@@ -182,7 +182,7 @@ kernel_load_plugin() {
     local plugin_file="$1"
     local plugin_name="$2"
     
-    tlog debug "Loading plugin: $plugin_name from $plugin_file"
+    log_debug "Loading plugin: $plugin_name from $plugin_file"
     
     # Check if plugin has an init function
     local init_function="${plugin_name}_init"
@@ -190,14 +190,14 @@ kernel_load_plugin() {
         # Try alternative naming patterns
         init_function="${plugin_name}_plugin_init"
         if ! command -v "$init_function" >/dev/null 2>&1; then
-    tlog debug "No init function found for plugin: $plugin_name (skipping)"
+    log_debug "No init function found for plugin: $plugin_name (skipping)"
             return 1
         fi
     fi
     
     # Initialize the plugin
     if "$init_function"; then
-    tlog debug "Plugin loaded successfully: $plugin_name"
+    log_debug "Plugin loaded successfully: $plugin_name"
         
         # Trigger plugin loaded event
         if command -v event_publish >/dev/null 2>&1; then
@@ -206,7 +206,7 @@ kernel_load_plugin() {
         
         return 0
     else
-    tlog warning "Failed to initialize plugin: $plugin_name"
+    log_warn "Failed to initialize plugin: $plugin_name"
         return 1
     fi
 }
@@ -267,7 +267,7 @@ EOF
 
 # Graceful kernel shutdown
 kernel_shutdown() {
-    tlog debug "🛑 Shutting down grpctestify microkernel..."
+    log_debug "🛑 Shutting down grpctestify microkernel..."
     
     # Trigger shutdown event for plugins
     if command -v event_publish >/dev/null 2>&1; then
@@ -295,7 +295,7 @@ kernel_shutdown() {
     done
     
     KERNEL_INITIALIZED=false
-    tlog debug "✅ Microkernel shutdown complete"
+    log_debug "✅ Microkernel shutdown complete"
 }
 
 # Enhanced plugin discovery for external directories
@@ -303,7 +303,7 @@ kernel_discover_external_plugins() {
     local external_dir="${1:-${GRPCTESTIFY_PLUGIN_DIR:-$HOME/.grpctestify/plugins}}"
     
     if [[ -d "$external_dir" ]]; then
-    tlog debug "Scanning external plugin directory: $external_dir"
+    log_debug "Scanning external plugin directory: $external_dir"
         
         while IFS= read -r -d '' plugin_file; do
             local plugin_name
@@ -311,7 +311,7 @@ kernel_discover_external_plugins() {
             
             if kernel_load_plugin "$plugin_file" "$plugin_name"; then
                 KERNEL_PLUGINS_LOADED+=("$plugin_name")
-    tlog debug "Loaded external plugin: $plugin_name"
+    log_debug "Loaded external plugin: $plugin_name"
             fi
         done < <(find "$external_dir" -name "*.sh" -type f -print0)
     fi

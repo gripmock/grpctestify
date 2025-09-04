@@ -16,18 +16,18 @@ RESOURCE_POOL_TIMEOUT="${RESOURCE_POOL_TIMEOUT:-30}"        # seconds
 resource_pool_init() {
     # Check if already initialized
     if [[ "$RESOURCE_POOL_INITIALIZED" == "true" ]]; then
-        tlog debug "Resource pool system already initialized, skipping..."
+        log_debug "Resource pool system already initialized, skipping..."
         return 0
     fi
     
-    tlog debug "Initializing resource pool system..."
+    log_debug "Initializing resource pool system..."
     
     # Setup cleanup on exit
     # REMOVED: trap 'resource_pool_cleanup_all' EXIT
     # Now using unified signal_manager for proper cleanup handling
     
     RESOURCE_POOL_INITIALIZED=true
-    tlog debug "Resource pool system initialized successfully"
+    log_debug "Resource pool system initialized successfully"
     return 0
 }
 
@@ -37,16 +37,16 @@ pool_create() {
     local max_resources="${2:-10}"
     
     if [[ -z "$pool_name" ]]; then
-        tlog error "pool_create: pool_name required"
+        log_error "pool_create: pool_name required"
         return 1
     fi
     
     if [[ ${RESOURCE_POOLS[$pool_name]:-0} -gt 0 ]]; then
-        tlog debug "pool_create: pool '$pool_name' already exists"
+        log_debug "pool_create: pool '$pool_name' already exists"
         return 0
     fi
     
-    tlog debug "Creating resource pool '$pool_name' with $max_resources resources"
+    log_debug "Creating resource pool '$pool_name' with $max_resources resources"
     
     # Create in-memory token array instead of temporary file
     local i
@@ -58,7 +58,7 @@ pool_create() {
     RESOURCE_POOLS["$pool_name"]=$max_resources
     POOL_ACQUIRED["$pool_name"]=0
     
-    tlog debug "Resource pool '$pool_name' created successfully (in-memory)"
+    log_debug "Resource pool '$pool_name' created successfully (in-memory)"
     return 0
 }
 
@@ -68,17 +68,17 @@ pool_acquire() {
     local timeout="${2:-$RESOURCE_POOL_TIMEOUT}"
     
     if [[ -z "$pool_name" ]]; then
-        tlog error "pool_acquire: pool_name required"
+        log_error "pool_acquire: pool_name required"
         return 1
     fi
     
     # Check if pool exists
     if [[ ${RESOURCE_POOLS[$pool_name]:-0} -eq 0 ]]; then
-        tlog error "pool_acquire: pool '$pool_name' does not exist"
+        log_error "pool_acquire: pool '$pool_name' does not exist"
         return 1
     fi
     
-    tlog debug "Acquiring resource from pool '$pool_name' (timeout: ${timeout}s)"
+    log_debug "Acquiring resource from pool '$pool_name' (timeout: ${timeout}s)"
     
     # Try to acquire a token with timeout
     local start_time=$(date +%s)
@@ -93,7 +93,7 @@ pool_acquire() {
                 # Mark token as acquired
                 POOL_TOKENS["$token_key"]="acquired"
                 POOL_ACQUIRED["$pool_name"]=$((POOL_ACQUIRED["$pool_name"] + 1))
-                tlog debug "Acquired resource from pool '$pool_name' (token: $i, acquired: ${POOL_ACQUIRED[$pool_name]})"
+                log_debug "Acquired resource from pool '$pool_name' (token: $i, acquired: ${POOL_ACQUIRED[$pool_name]})"
                 echo "token_$i"
                 return 0
             fi
@@ -107,7 +107,7 @@ pool_acquire() {
         sleep 0.1
     done
     
-    tlog warning "pool_acquire: timeout waiting for resource from pool '$pool_name'"
+    log_warn "pool_acquire: timeout waiting for resource from pool '$pool_name'"
     return 124  # timeout exit code
 }
 
@@ -117,13 +117,13 @@ pool_release() {
     local token="${2:-token_default}"
     
     if [[ -z "$pool_name" ]]; then
-        tlog error "pool_release: pool_name required"
+        log_error "pool_release: pool_name required"
         return 1
     fi
     
     # Check if pool exists
     if [[ ${RESOURCE_POOLS[$pool_name]:-0} -eq 0 ]]; then
-        tlog error "pool_release: pool '$pool_name' does not exist"
+        log_error "pool_release: pool '$pool_name' does not exist"
         return 1
     fi
     
@@ -132,13 +132,13 @@ pool_release() {
     if [[ "$token" =~ ^token_([0-9]+)$ ]]; then
         token_num="${BASH_REMATCH[1]}"
     else
-        tlog error "pool_release: invalid token format '$token'"
+        log_error "pool_release: invalid token format '$token'"
         return 1
     fi
     
     # Check if token is valid for this pool
     if [[ $token_num -ge ${RESOURCE_POOLS[$pool_name]} ]]; then
-        tlog error "pool_release: token $token_num is invalid for pool '$pool_name'"
+        log_error "pool_release: token $token_num is invalid for pool '$pool_name'"
         return 1
     fi
     
@@ -146,7 +146,7 @@ pool_release() {
     
     # Check if token was actually acquired
     if [[ "${POOL_TOKENS[$token_key]}" != "acquired" ]]; then
-        tlog warning "pool_release: token $token was not acquired from pool '$pool_name'"
+        log_warn "pool_release: token $token was not acquired from pool '$pool_name'"
         return 1
     fi
     
@@ -154,7 +154,7 @@ pool_release() {
     POOL_TOKENS["$token_key"]="available"
     POOL_ACQUIRED["$pool_name"]=$((POOL_ACQUIRED["$pool_name"] - 1))
     
-    tlog debug "Released resource to pool '$pool_name' (token: $token, acquired: ${POOL_ACQUIRED[$pool_name]})"
+    log_debug "Released resource to pool '$pool_name' (token: $token, acquired: ${POOL_ACQUIRED[$pool_name]})"
     return 0
 }
 
@@ -163,7 +163,7 @@ pool_available() {
     local pool_name="$1"
     
     if [[ -z "$pool_name" ]]; then
-    tlog error "pool_available: pool_name required"
+    log_error "pool_available: pool_name required"
         return 1
     fi
     
@@ -185,7 +185,7 @@ pool_status() {
     local format="${2:-summary}"  # summary|detailed|json
     
     if [[ -z "$pool_name" ]]; then
-    tlog error "pool_status: pool_name required"
+    log_error "pool_status: pool_name required"
         return 1
     fi
     
@@ -262,24 +262,24 @@ pool_delete() {
     local force="${2:-false}"
     
     if [[ -z "$pool_name" ]]; then
-    tlog error "pool_delete: pool_name required"
+    log_error "pool_delete: pool_name required"
         return 1
     fi
     
     # Check if pool exists
     if [[ ${RESOURCE_POOLS[$pool_name]:-0} -eq 0 ]]; then
-        tlog warning "pool_delete: pool '$pool_name' does not exist"
+        log_warn "pool_delete: pool '$pool_name' does not exist"
         return 1
     fi
     
     # Check if resources are still acquired
     local acquired="${POOL_ACQUIRED[$pool_name]:-0}"
     if [[ $acquired -gt 0 && "$force" != "true" ]]; then
-        tlog error "pool_delete: pool '$pool_name' has $acquired acquired resources (use force=true to override)"
+        log_error "pool_delete: pool '$pool_name' has $acquired acquired resources (use force=true to override)"
         return 1
     fi
     
-    tlog debug "Deleting resource pool '$pool_name' (force: $force)"
+    log_debug "Deleting resource pool '$pool_name' (force: $force)"
     
     # Clean up tokens for this pool
     local i
@@ -291,7 +291,7 @@ pool_delete() {
     unset RESOURCE_POOLS["$pool_name"]
     unset POOL_ACQUIRED["$pool_name"]
     
-    tlog debug "Resource pool '$pool_name' deleted successfully"
+    log_debug "Resource pool '$pool_name' deleted successfully"
     return 0
 }
 
@@ -315,13 +315,13 @@ pool_stats() {
 
 # Cleanup all resource pools
 resource_pool_cleanup_all() {
-    tlog debug "Cleaning up all resource pools..."
+    log_debug "Cleaning up all resource pools..."
     
     for pool_name in "${!RESOURCE_POOLS[@]}"; do
         pool_delete "$pool_name" true
     done
     
-    tlog debug "All resource pools cleaned up"
+    log_debug "All resource pools cleaned up"
 }
 
 # Check if a pool exists
@@ -337,7 +337,7 @@ pool_wait_available() {
     local timeout="${3:-$RESOURCE_POOL_TIMEOUT}"
     
     if [[ -z "$pool_name" ]]; then
-    tlog error "pool_wait_available: pool_name required"
+    log_error "pool_wait_available: pool_name required"
         return 1
     fi
     
@@ -357,7 +357,7 @@ pool_wait_available() {
         waited=$((current_time - start_time))
     done
     
-    tlog warning "pool_wait_available: timeout waiting for $required resources in pool '$pool_name'"
+    log_warn "pool_wait_available: timeout waiting for $required resources in pool '$pool_name'"
     return 124
 }
 
@@ -368,7 +368,7 @@ pool_acquire_batch() {
     local timeout="${3:-$RESOURCE_POOL_TIMEOUT}"
     
     if [[ $count -lt 1 ]]; then
-    tlog error "pool_acquire_batch: count must be >= 1"
+    log_error "pool_acquire_batch: count must be >= 1"
         return 1
     fi
     
@@ -387,7 +387,7 @@ pool_acquire_batch() {
             for ((j = 0; j < ${#tokens[@]}; j++)); do
                 pool_release "$pool_name" "${tokens[$j]}"
             done
-    tlog error "pool_acquire_batch: failed to acquire $count resources from '$pool_name' (got $acquired)"
+    log_error "pool_acquire_batch: failed to acquire $count resources from '$pool_name' (got $acquired)"
             return 1
         fi
     done
@@ -404,7 +404,7 @@ pool_release_batch() {
     local tokens=("$@")
     
     if [[ ${#tokens[@]} -eq 0 ]]; then
-    tlog error "pool_release_batch: no tokens provided"
+    log_error "pool_release_batch: no tokens provided"
         return 1
     fi
     
@@ -415,7 +415,7 @@ pool_release_batch() {
         fi
     done
     
-    tlog debug "pool_release_batch: released $released/${#tokens[@]} resources to pool '$pool_name'"
+    log_debug "pool_release_batch: released $released/${#tokens[@]} resources to pool '$pool_name'"
     [[ $released -eq ${#tokens[@]} ]]
 }
 

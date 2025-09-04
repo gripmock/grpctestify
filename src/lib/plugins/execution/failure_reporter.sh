@@ -183,7 +183,7 @@ handle_grpc_error() {
         fi
         
         if [[ "$error_matches" == "true" ]]; then
-	    tlog debug "✅ Expected error received: $error_code - $error_message"
+	    log_debug "✅ Expected error received: $error_code - $error_message"
             return 0  # Expected error
         fi
     fi

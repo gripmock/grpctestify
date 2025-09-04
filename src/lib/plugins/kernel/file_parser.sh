@@ -28,11 +28,11 @@ declare -A SUPPORTED_SECTIONS=(
 
 # Initialize file parser plugin
 file_parser_init() {
-    tlog debug "Initializing file parser plugin..."
+    log_debug "Initializing file parser plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -45,7 +45,7 @@ file_parser_init() {
     # Subscribe to file parsing events
     event_subscribe "file_parser" "file.*" "file_parser_event_handler"
     
-    tlog debug "File parser plugin initialized successfully"
+    log_debug "File parser plugin initialized successfully"
     return 0
 }
 
@@ -86,7 +86,7 @@ file_parser_handler() {
             file_parser_parse_components "${args[@]}"
             ;;
         *)
-    tlog error "Unknown file parser command: $command"
+    log_error "Unknown file parser command: $command"
             return 1
             ;;
     esac
@@ -98,11 +98,11 @@ file_parser_parse_file() {
     local parse_options="${2:-{}}"
     
     if [[ -z "$test_file" || ! -f "$test_file" ]]; then
-    tlog error "file_parser_parse_file: valid test_file required"
+    log_error "file_parser_parse_file: valid test_file required"
         return 1
     fi
     
-    tlog debug "Parsing test file: $test_file"
+    log_debug "Parsing test file: $test_file"
     
     # Publish parsing start event
     local parse_metadata
@@ -125,7 +125,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "file_parsing" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for file parsing: $test_file"
+    log_error "Failed to acquire resource for file parsing: $test_file"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -135,7 +135,7 @@ EOF
     local parsed_data
     
     if parsed_data=$(parse_test_file "$test_file" "$parse_options"); then
-    tlog debug "File parsed successfully: $test_file"
+    log_debug "File parsed successfully: $test_file"
         
         # Store parsed data in state database
         state_db_atomic "record_parsed_file" "$test_file" "SUCCESS" "$parsed_data"
@@ -147,7 +147,7 @@ EOF
         echo "$parsed_data"
     else
         parsing_result=1
-    tlog error "File parsing failed: $test_file"
+    log_error "File parsing failed: $test_file"
         
         # Record failed parsing
         state_db_atomic "record_parsed_file" "$test_file" "FAILED" ""
@@ -223,7 +223,7 @@ parse_test_file() {
     
     # Validate required sections
     if [[ -z "$endpoint" ]]; then
-    tlog error "Missing ENDPOINT section in $test_file"
+    log_error "Missing ENDPOINT section in $test_file"
         return 1
     fi
     
@@ -458,18 +458,18 @@ file_parser_extract_section() {
     local section="$2"
     
     if [[ -z "$test_file" || -z "$section" ]]; then
-    tlog error "file_parser_extract_section: test_file and section required"
+    log_error "file_parser_extract_section: test_file and section required"
         return 1
     fi
     
     if [[ ! -f "$test_file" ]]; then
-    tlog error "Test file does not exist: $test_file"
+    log_error "Test file does not exist: $test_file"
         return 1
     fi
     
     # Check if section is supported
     if [[ -z "${SUPPORTED_SECTIONS[$section]:-}" ]]; then
-    tlog warning "Unsupported section: $section"
+    log_warn "Unsupported section: $section"
     fi
     
     extract_section "$test_file" "$section"
@@ -481,23 +481,23 @@ file_parser_validate_file() {
     local validation_rules="${2:-strict}"
     
     if [[ -z "$test_file" ]]; then
-    tlog error "file_parser_validate_file: test_file required"
+    log_error "file_parser_validate_file: test_file required"
         return 1
     fi
     
     if [[ ! -f "$test_file" ]]; then
-    tlog error "Test file does not exist: $test_file"
+    log_error "Test file does not exist: $test_file"
         return 1
     fi
     
     if [[ ! -r "$test_file" ]]; then
-    tlog error "Test file is not readable: $test_file"
+    log_error "Test file is not readable: $test_file"
         return 1
     fi
     
     # Check file extension
     if [[ ! "$test_file" =~ \.gctf$ ]]; then
-    tlog warning "Test file does not have .gctf extension: $test_file"
+    log_warn "Test file does not have .gctf extension: $test_file"
         if [[ "$validation_rules" == "strict" ]]; then
             return 1
         fi
@@ -505,7 +505,7 @@ file_parser_validate_file() {
     
     # Basic content validation
     if [[ ! -s "$test_file" ]]; then
-    tlog error "Test file is empty: $test_file"
+    log_error "Test file is empty: $test_file"
         return 1
     fi
     
@@ -513,7 +513,7 @@ file_parser_validate_file() {
     local endpoint
     endpoint="$(extract_section "$test_file" "ENDPOINT")"
     if [[ -z "$endpoint" ]]; then
-    tlog error "Missing required ENDPOINT section in: $test_file"
+    log_error "Missing required ENDPOINT section in: $test_file"
         return 1
     fi
     
@@ -524,7 +524,7 @@ file_parser_validate_file() {
         content="$(extract_section "$test_file" "$section")"
         if [[ -n "$content" ]]; then
             if ! echo "$content" | jq . >/dev/null 2>&1; then
-    tlog error "Invalid JSON in $section section of: $test_file"
+    log_error "Invalid JSON in $section section of: $test_file"
                 if [[ "$validation_rules" == "strict" ]]; then
                     return 1
                 fi
@@ -532,7 +532,7 @@ file_parser_validate_file() {
         fi
     done
     
-    tlog debug "File validation passed: $test_file"
+    log_debug "File validation passed: $test_file"
     return 0
 }
 
@@ -542,7 +542,7 @@ file_parser_list_sections() {
     local output_format="${2:-summary}"
     
     if [[ -z "$test_file" || ! -f "$test_file" ]]; then
-    tlog error "file_parser_list_sections: valid test_file required"
+    log_error "file_parser_list_sections: valid test_file required"
         return 1
     fi
     
@@ -588,7 +588,7 @@ file_parser_parse_components() {
     local test_file="$1"
     
     if [[ -z "$test_file" || ! -f "$test_file" ]]; then
-    tlog error "file_parser_parse_components: valid test_file required"
+    log_error "file_parser_parse_components: valid test_file required"
         return 1
     fi
     
@@ -628,7 +628,7 @@ file_parser_parse_components() {
 file_parser_event_handler() {
     local event_message="$1"
     
-    tlog debug "File parser received event: $event_message"
+    log_debug "File parser received event: $event_message"
     
     # Handle file parsing events
     # This could be used for:
@@ -654,7 +654,7 @@ record_parsed_file() {
     return 0
 }
 
-# Legacy compatibility functions removed - were unused dead code
+ 
 
 # extract_asserts is now handled by the assertion coordinator plugin
 
@@ -664,4 +664,4 @@ export -f parse_test_file extract_section extract_all_request_sections
 export -f extract_section_header parse_inline_options file_parser_extract_section
 export -f file_parser_validate_file file_parser_list_sections file_parser_parse_components
 export -f file_parser_event_handler record_parsed_file
-# Legacy function exports removed - were unused dead code
+ 

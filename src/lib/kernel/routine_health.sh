@@ -33,20 +33,20 @@ readonly PROBE_TYPE_RESOURCE="resource"      # Check resource usage
 routine_health_init() {
     # Check if already initialized
     if [[ "$ROUTINE_HEALTH_INITIALIZED" == "true" ]]; then
-        tlog debug "Routine health system already initialized, skipping..."
+        log_debug "Routine health system already initialized, skipping..."
         return 0
     fi
     
-    tlog debug "Initializing routine health probe system..."
+    log_debug "Initializing routine health probe system..."
     
     # Ensure dependencies are available
     if ! command -v routine_manager_init >/dev/null 2>&1; then
-    tlog error "Routine health requires routine_manager.sh"
+    log_error "Routine health requires routine_manager.sh"
         return 1
     fi
     
     if ! command -v health_monitor_init >/dev/null 2>&1; then
-    tlog error "Routine health requires health_monitor.sh"
+    log_error "Routine health requires health_monitor.sh"
         return 1
     fi
     
@@ -62,7 +62,7 @@ routine_health_init() {
     # Now using unified signal_manager for proper cleanup handling
     
     ROUTINE_HEALTH_INITIALIZED=true
-    tlog debug "Routine health probe system initialized successfully"
+    log_debug "Routine health probe system initialized successfully"
     return 0
 }
 
@@ -76,24 +76,24 @@ routine_spawn_monitored() {
     local max_failures="${6:-$ROUTINE_MAX_FAILURES}"
     
     if [[ -z "$command" ]]; then
-    tlog error "routine_spawn_monitored: command required"
+    log_error "routine_spawn_monitored: command required"
         return 1
     fi
     
-    tlog debug "Spawning monitored routine '$routine_id' with probe type '$probe_type'"
+    log_debug "Spawning monitored routine '$routine_id' with probe type '$probe_type'"
     
     # Spawn the routine using routine_manager
     local spawned_routine_id
     spawned_routine_id=$(routine_spawn "$command" "$routine_id")
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to spawn routine '$routine_id'"
+    log_error "Failed to spawn routine '$routine_id'"
         return 1
     fi
     
     # Get routine PID
     local routine_pid="${ROUTINE_PIDS[$routine_id]:-}"
     if [[ -z "$routine_pid" ]]; then
-    tlog error "No PID found for routine '$routine_id'"
+    log_error "No PID found for routine '$routine_id'"
         return 1
     fi
     
@@ -114,11 +114,11 @@ routine_health_register() {
     local max_failures="${6:-$ROUTINE_MAX_FAILURES}"
     
     if [[ -z "$routine_id" || -z "$routine_pid" ]]; then
-    tlog error "routine_health_register: routine_id and routine_pid required"
+    log_error "routine_health_register: routine_id and routine_pid required"
         return 1
     fi
     
-    tlog debug "Registering routine '$routine_id' (PID: $routine_pid) for health monitoring"
+    log_debug "Registering routine '$routine_id' (PID: $routine_pid) for health monitoring"
     
     # Create probe command based on type
     local probe_command
@@ -128,12 +128,12 @@ routine_health_register() {
             ;;
         "$PROBE_TYPE_COMMAND")
             if [[ -z "$probe_config" ]]; then
-    tlog error "Custom command required for probe type '$probe_type'"
+    log_error "Custom command required for probe type '$probe_type'"
                 return 1
             fi
             # SECURITY: Validate custom probe command to prevent injection
             if [[ ! "$probe_config" =~ ^[a-zA-Z0-9_/.-]+(\s+[a-zA-Z0-9_/.-]+)*$ ]]; then
-    tlog error "Invalid probe command (security): $probe_config"
+    log_error "Invalid probe command (security): $probe_config"
                 return 1
             fi
             probe_command="$probe_config"
@@ -145,7 +145,7 @@ routine_health_register() {
             probe_command="routine_health_probe_resource '$routine_id'"
             ;;
         *)
-    tlog error "Unknown probe type: $probe_type"
+    log_error "Unknown probe type: $probe_type"
             return 1
             ;;
     esac
@@ -161,7 +161,7 @@ routine_health_register() {
     # Register with health monitor
     health_monitor_register "$routine_id" "$routine_pid" "routine_health" "$probe_command"
     
-    tlog debug "Routine '$routine_id' registered for health monitoring successfully"
+    log_debug "Routine '$routine_id' registered for health monitoring successfully"
     return 0
 }
 
@@ -174,7 +174,7 @@ routine_health_probe_heartbeat() {
     local current_time=$(date +%s)
     
     if [[ ! -f "$heartbeat_file" ]]; then
-    tlog warning "Heartbeat file missing for routine '$routine_id'"
+    log_warn "Heartbeat file missing for routine '$routine_id'"
         return 1
     fi
     
@@ -183,11 +183,11 @@ routine_health_probe_heartbeat() {
     local heartbeat_age=$((current_time - last_heartbeat))
     
     if [[ $heartbeat_age -gt $timeout ]]; then
-    tlog warning "Heartbeat stale for routine '$routine_id' (age: ${heartbeat_age}s, timeout: ${timeout}s)"
+    log_warn "Heartbeat stale for routine '$routine_id' (age: ${heartbeat_age}s, timeout: ${timeout}s)"
         return 1
     fi
     
-    tlog debug "Heartbeat healthy for routine '$routine_id' (age: ${heartbeat_age}s)"
+    log_debug "Heartbeat healthy for routine '$routine_id' (age: ${heartbeat_age}s)"
     return 0
 }
 
@@ -197,16 +197,16 @@ routine_health_probe_response() {
     
     local routine_pid="${ROUTINE_PIDS[$routine_id]:-}"
     if [[ -z "$routine_pid" ]]; then
-    tlog error "No PID found for routine '$routine_id'"
+    log_error "No PID found for routine '$routine_id'"
         return 1
     fi
     
     # Send USR1 signal to test responsiveness
     if kill -USR1 "$routine_pid" 2>/dev/null; then
-    tlog debug "Process responsive for routine '$routine_id'"
+    log_debug "Process responsive for routine '$routine_id'"
         return 0
     else
-    tlog warning "Process unresponsive for routine '$routine_id'"
+    log_warn "Process unresponsive for routine '$routine_id'"
         return 1
     fi
 }
@@ -217,7 +217,7 @@ routine_health_probe_resource() {
     
     local routine_pid="${ROUTINE_PIDS[$routine_id]:-}"
     if [[ -z "$routine_pid" ]]; then
-    tlog error "No PID found for routine '$routine_id'"
+    log_error "No PID found for routine '$routine_id'"
         return 1
     fi
     
@@ -225,10 +225,10 @@ routine_health_probe_resource() {
     if kill -0 "$routine_pid" 2>/dev/null; then
         # Could check memory usage, CPU usage, etc. here
         # For now, just verify process exists
-    tlog debug "Resource check passed for routine '$routine_id'"
+    log_debug "Resource check passed for routine '$routine_id'"
         return 0
     else
-    tlog warning "Process not found for routine '$routine_id'"
+    log_warn "Process not found for routine '$routine_id'"
         return 1
     fi
 }
@@ -238,17 +238,17 @@ routine_health_probe() {
     local routine_id="$1"
     
     if [[ -z "$routine_id" ]]; then
-    tlog error "routine_health_probe: routine_id required"
+    log_error "routine_health_probe: routine_id required"
         return 1
     fi
     
     local probe_command="${ROUTINE_PROBE_COMMANDS[$routine_id]:-}"
     if [[ -z "$probe_command" ]]; then
-    tlog error "No probe command configured for routine '$routine_id'"
+    log_error "No probe command configured for routine '$routine_id'"
         return 1
     fi
     
-    tlog debug "Performing health probe on routine '$routine_id'"
+    log_debug "Performing health probe on routine '$routine_id'"
     
     local probe_result
     local probe_start_time=$(date +%s)
@@ -257,18 +257,18 @@ routine_health_probe() {
     if timeout "${ROUTINE_TIMEOUTS[$routine_id]}" bash -c "$probe_command"; then
         probe_result="$HEALTH_HEALTHY"
         ROUTINE_PROBE_FAILURES["$routine_id"]=0
-    tlog debug "Health probe successful for routine '$routine_id'"
+    log_debug "Health probe successful for routine '$routine_id'"
     else
         probe_result="$HEALTH_UNHEALTHY"
         local failures=$((ROUTINE_PROBE_FAILURES["$routine_id"] + 1))
         ROUTINE_PROBE_FAILURES["$routine_id"]=$failures
-    tlog warning "Health probe failed for routine '$routine_id' (failure count: $failures)"
+    log_warn "Health probe failed for routine '$routine_id' (failure count: $failures)"
         
         # Check if we should kill the routine
         local max_failures
         max_failures=$(echo "${ROUTINE_HEALTH_CONFIG[$routine_id]}" | sed -n 's/.*max_failures:\([^,]*\).*/\1/p')
         if [[ $failures -ge ${max_failures:-$ROUTINE_MAX_FAILURES} ]]; then
-    tlog error "Routine '$routine_id' exceeded max failures ($failures), killing..."
+    log_error "Routine '$routine_id' exceeded max failures ($failures), killing..."
             routine_health_kill_unresponsive "$routine_id"
             probe_result="$HEALTH_CRITICAL"
         fi
@@ -286,7 +286,7 @@ routine_health_probe() {
 routine_health_kill_unresponsive() {
     local routine_id="$1"
     
-    tlog warning "Killing unresponsive routine '$routine_id'"
+    log_warn "Killing unresponsive routine '$routine_id'"
     
     # Try graceful termination first
     if routine_kill "$routine_id" "TERM"; then
@@ -296,7 +296,7 @@ routine_health_kill_unresponsive() {
         local routine_pid="${ROUTINE_PIDS[$routine_id]:-}"
         if [[ -n "$routine_pid" ]] && kill -0 "$routine_pid" 2>/dev/null; then
             # Force kill
-    tlog warning "Force killing routine '$routine_id'"
+    log_warn "Force killing routine '$routine_id'"
             routine_kill "$routine_id" "KILL"
         fi
     fi
@@ -315,11 +315,11 @@ routine_health_unregister() {
     local routine_id="$1"
     
     if [[ -z "$routine_id" ]]; then
-    tlog error "routine_health_unregister: routine_id required"
+    log_error "routine_health_unregister: routine_id required"
         return 1
     fi
     
-    tlog debug "Unregistering routine '$routine_id' from health monitoring"
+    log_debug "Unregistering routine '$routine_id' from health monitoring"
     
     # Unregister from health monitor
     health_monitor_unregister "$routine_id"
@@ -332,7 +332,7 @@ routine_health_unregister() {
     unset ROUTINE_LAST_PROBE["$routine_id"]
     unset ROUTINE_PROBE_FAILURES["$routine_id"]
     
-    tlog debug "Routine '$routine_id' unregistered from health monitoring"
+    log_debug "Routine '$routine_id' unregistered from health monitoring"
     return 0
 }
 
@@ -342,7 +342,7 @@ routine_health_status() {
     local format="${2:-status}"  # status|detailed|json
     
     if [[ -z "$routine_id" ]]; then
-    tlog error "routine_health_status: routine_id required"
+    log_error "routine_health_status: routine_id required"
         return 1
     fi
     
@@ -432,7 +432,7 @@ routine_health_stats() {
 
 # Force health check on all routines
 routine_health_check_all() {
-    tlog debug "Performing health check on all monitored routines..."
+    log_debug "Performing health check on all monitored routines..."
     
     local checked=0
     for routine_id in "${!ROUTINE_HEALTH_STATUS[@]}"; do
@@ -440,20 +440,20 @@ routine_health_check_all() {
         ((checked++))
     done
     
-    tlog debug "Health check completed on $checked routines"
+    log_debug "Health check completed on $checked routines"
     return 0
 }
 
 # Cleanup routine health system
 routine_health_cleanup() {
-    tlog debug "Cleaning up routine health system..."
+    log_debug "Cleaning up routine health system..."
     
     # Unregister all routines
     for routine_id in "${!ROUTINE_HEALTH_STATUS[@]}"; do
         routine_health_unregister "$routine_id"
     done
     
-    tlog debug "Routine health system cleaned up"
+    log_debug "Routine health system cleaned up"
 }
 
 # Check if routine is being monitored
@@ -468,12 +468,12 @@ routine_health_set_timeout() {
     local timeout="$2"
     
     if [[ -z "$routine_id" || -z "$timeout" ]]; then
-    tlog error "routine_health_set_timeout: routine_id and timeout required"
+    log_error "routine_health_set_timeout: routine_id and timeout required"
         return 1
     fi
     
     ROUTINE_TIMEOUTS["$routine_id"]="$timeout"
-    tlog debug "Timeout set to ${timeout}s for routine '$routine_id'"
+    log_debug "Timeout set to ${timeout}s for routine '$routine_id'"
     return 0
 }
 

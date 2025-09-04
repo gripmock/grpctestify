@@ -16,7 +16,7 @@ declare -g PROGRESS_STATUS=""
 
 # Plugin initialization
 progress_plugin_init() {
-    tlog debug "Initializing progress plugin..."
+    log_debug "Initializing progress plugin..."
     
     # Register with enhanced plugin API
     if command -v plugin_register_enhanced >/dev/null 2>&1; then
@@ -28,7 +28,7 @@ progress_plugin_init() {
         plugin_register "progress" "progress_plugin_handler" "$PLUGIN_PROGRESS_DESCRIPTION" "ui"
     fi
     
-    tlog debug "Progress plugin initialized successfully"
+    log_debug "Progress plugin initialized successfully"
     return 0
 }
 
@@ -63,7 +63,7 @@ progress_plugin_handler() {
             echo "{\"name\":\"progress\",\"version\":\"$PLUGIN_PROGRESS_VERSION\",\"type\":\"$PLUGIN_PROGRESS_TYPE\"}"
             ;;
         *)
-    tlog error "Unknown progress plugin command: $command"
+    log_error "Unknown progress plugin command: $command"
             return 1
                 ;;
         esac
@@ -121,7 +121,7 @@ progress_init() {
     PROGRESS_CURRENT=0
     PROGRESS_STATUS="$status"
     
-    tlog debug "Progress initialized: 0/$total - $status"
+    log_debug "Progress initialized: 0/$total - $status"
 }
 
 progress_update() {
@@ -134,7 +134,8 @@ progress_update() {
     PROGRESS_STATUS="$status"
     
     # Trigger real-time display if not in quiet mode
-    if [[ "${GRPCTESTIFY_QUIET:-false}" != "true" ]]; then
+    # Always display realtime progress when enabled by UI mode; quiet is controlled by CLI flags only
+    if true; then
         progress_display_realtime
     fi
 }

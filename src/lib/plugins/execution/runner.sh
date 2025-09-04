@@ -57,61 +57,61 @@ log_test_details() {
     local execution_time="${10}"
     
     if [[ "${LOG_LEVEL:-info}" == "debug" ]]; then
-    tlog debug "════════════════════════════════════════"
-    tlog debug "📋 TEST DETAILS: $test_name"
-    tlog debug "════════════════════════════════════════"
-    tlog debug "🌐 Target: $address/$endpoint"
+    log_debug "════════════════════════════════════════"
+    log_debug "📋 TEST DETAILS: $test_name"
+    log_debug "════════════════════════════════════════"
+    log_debug "🌐 Target: $address/$endpoint"
         
         if [[ -n "$headers" ]]; then
-    tlog debug "📤 Headers:"
+    log_debug "📤 Headers:"
             # Optimized: avoid while read loop for simple logging
-    tlog debug "    $headers"
+    log_debug "    $headers"
         fi
         
         if [[ -n "$request" ]]; then
-    tlog debug "📤 Request Data:"
+    log_debug "📤 Request Data:"
             # Optimized: use direct output instead of line-by-line processing
             io_printf "    %s\n" "$request"
         else
-    tlog debug "📤 Request: (empty)"
+    log_debug "📤 Request: (empty)"
         fi
         
-    tlog debug "⏱️  Execution Time: ${execution_time}ms"
-    tlog debug "🔢 gRPC Status Code: $grpc_status"
+    log_debug "⏱️  Execution Time: ${execution_time}ms"
+    log_debug "🔢 gRPC Status Code: $grpc_status"
         
         if [[ -n "$actual_response" ]]; then
-    tlog debug "📥 Actual Response:"
+    log_debug "📥 Actual Response:"
             # Optimized: use direct output instead of sed
             io_printf "    %s\n" "$actual_response"
         else
-    tlog debug "📥 Actual Response: (empty)"
+    log_debug "📥 Actual Response: (empty)"
         fi
         
         if [[ -n "$expected_response" ]]; then
-    tlog debug "✅ Expected Response:"
+    log_debug "✅ Expected Response:"
             # Optimized: use direct output instead of sed
             io_printf "    %s\n" "$expected_response"
         fi
         
         if [[ -n "$expected_error" ]]; then
-    tlog debug "⚠️  Expected Error:"
+    log_debug "⚠️  Expected Error:"
             # Optimized: use direct output instead of sed
             io_printf "    %s\n" "$expected_error"
         fi
         
-    tlog debug "════════════════════════════════════════"
+    log_debug "════════════════════════════════════════"
     fi
 }
 
 # Source response comparison utilities
 
-# Helper function to tlog debug messages only in non-dots mode
+# Helper function to log_debug messages only in non-dots mode
 log_test_success() {
     local message="$1"
     local progress_mode="$2"
     
     if [[ "$progress_mode" != "dots" ]]; then
-        tlog debug "$message"
+        log_debug "$message"
     fi
 }
 
@@ -124,7 +124,7 @@ format_dry_run_output() {
     local command_parts=("${@}")
     
     io_newline
-    tlog debug "🔍 DRY-RUN MODE: Command Preview"
+    log_debug "🔍 DRY-RUN MODE: Command Preview"
     io_printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     
     # Extract endpoint from command for display
@@ -137,13 +137,13 @@ format_dry_run_output() {
     done
     
     if [[ -n "$endpoint" ]]; then
-        tlog debug "🎯 Target Endpoint"
+        log_debug "🎯 Target Endpoint"
         io_printf "   %s\n" "$endpoint"
         io_newline
     fi
     
     # Command section
-    tlog debug "📡 gRPC Command"
+    log_debug "📡 gRPC Command"
     io_printf "   %s" "${command_parts[0]}"
     for arg in "${command_parts[@]:1}"; do
         if [[ "$arg" =~ ^- ]]; then
@@ -157,14 +157,14 @@ format_dry_run_output() {
     
     # Headers section (if any)
     if [[ -n "$headers" ]]; then
-        tlog debug "📋 Request Headers"
+        log_debug "📋 Request Headers"
         echo "$headers" | jq -C . 2>/dev/null || echo "   $headers"
         echo ""
     fi
     
     # Request data section
     if [[ -n "$request" ]]; then
-        tlog debug "📤 Request Data"
+        log_debug "📤 Request Data"
         
         # Check if this is streaming (multiple JSON objects separated by newlines)
         # Count actual JSON objects, not just lines
@@ -176,7 +176,7 @@ format_dry_run_output() {
         done <<< "$request"
         
         if [[ $json_count -gt 1 ]]; then
-    tlog debug "   🔄 Streaming Request (Multiple Messages):"
+    log_debug "   🔄 Streaming Request (Multiple Messages):"
             local msg_num=1
             while IFS= read -r line; do
                 if [[ -n "$line" ]]; then
@@ -210,17 +210,17 @@ format_dry_run_output() {
     
     # Show what would be returned
     if [[ -n "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE:-}" && "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" != "null" ]]; then
-        tlog debug "📥 Expected Response (Simulated)"
+        log_debug "📥 Expected Response (Simulated)"
         echo "${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}" | jq -C . 2>/dev/null || echo "   ${GRPCTESTIFY_DRY_RUN_EXPECTED_RESPONSE}"
         echo ""
     elif [[ "${GRPCTESTIFY_DRY_RUN_EXPECT_ERROR:-false}" == "true" ]]; then
-        tlog debug "⚠️ Expected Error (Simulated)"
+        log_debug "⚠️ Expected Error (Simulated)"
         echo '   {"code": 999, "message": "DRY-RUN: Simulated gRPC error"}'
         echo ""
     fi
     
     # Execution note
-    tlog debug "✨ This command would be executed in normal mode"
+    log_debug "✨ This command would be executed in normal mode"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 }
@@ -278,7 +278,7 @@ run_grpc_call() {
     
     # Only show debug info in verbose mode or non-dots progress mode
     if [[ "${verbose:-false}" == "true" || "${LOG_LEVEL:-info}" == "debug" ]]; then
-    tlog debug "📡 gRPC Command:"
+    log_debug "📡 gRPC Command:"
         # Format command nicely with line breaks for readability
         local formatted_cmd="grpcurl"
         for arg in "${cmd[@]:1}"; do
@@ -293,7 +293,7 @@ run_grpc_call() {
         echo -e "🔍    $formatted_cmd" >&2
         
         if [[ -n "$request" ]]; then
-    tlog debug "📤 Request Payload:"
+    log_debug "📤 Request Payload:"
             # Pretty print JSON if possible, otherwise show as-is
             if command -v jq >/dev/null 2>&1 && echo "$request" | jq . >/dev/null 2>&1; then
                 echo "$request" | jq -C . 2>/dev/null | sed 's/^/🔍    /' >&2
@@ -301,7 +301,7 @@ run_grpc_call() {
                 echo "$request" | sed 's/^/🔍    /' >&2
             fi
         else
-    tlog debug "📤 Request Payload: (empty)"
+    log_debug "📤 Request Payload: (empty)"
         fi
     fi
     
@@ -326,7 +326,7 @@ run_grpc_call_with_retry() {
     
     # Check if retry is disabled
     if is_no_retry; then
-    tlog debug "Retry mechanism disabled, using direct gRPC call"
+    log_debug "Retry mechanism disabled, using direct gRPC call"
         run_grpc_call "$address" "$endpoint" "$request" "$headers" "$proto_file" "$dry_run"
         return $?
     fi
@@ -335,7 +335,7 @@ run_grpc_call_with_retry() {
     local max_retries="$(get_retry_count)"
     local retry_delay="$(get_retry_delay)"
     
-    tlog debug "🔄 Using retry mechanism: max_retries=$max_retries, delay=${retry_delay}s"
+    log_debug "🔄 Using retry mechanism: max_retries=$max_retries, delay=${retry_delay}s"
     
     # Use the retry mechanism from error_recovery.sh
     retry_grpc_call "$address" "$endpoint" "$request" "$headers" "$max_retries" "$dry_run"

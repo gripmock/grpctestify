@@ -90,7 +90,7 @@ kernel_timeout() {
     
     # Validate timeout parameter
     if ! [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || [[ "$timeout_seconds" -eq 0 ]]; then
-        tlog error "kernel_timeout: invalid timeout value: $timeout_seconds"
+        log_error "kernel_timeout: invalid timeout value: $timeout_seconds"
         return 1
     fi
     
@@ -275,7 +275,7 @@ kernel_load_average() {
 # System API initialization
 #######################################
 system_api_init() {
-    tlog debug "Initializing System API v$SYSTEM_API_VERSION"
+    log_debug "Initializing System API v$SYSTEM_API_VERSION"
     
     # Verify critical functions work
     local cpu_count memory_mb
@@ -283,10 +283,10 @@ system_api_init() {
     memory_mb=$(kernel_memory_mb)
     
     if [[ "$cpu_count" -gt 0 && "$memory_mb" -gt 0 ]]; then
-        tlog debug "System API initialized: CPU=$cpu_count cores, Memory=${memory_mb}MB"
+        log_debug "System API initialized: CPU=$cpu_count cores, Memory=${memory_mb}MB"
         return 0
     else
-        tlog error "System API initialization failed"
+        log_error "System API initialization failed"
         return 1
     fi
 }

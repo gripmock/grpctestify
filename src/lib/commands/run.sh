@@ -1,3 +1,16 @@
+# Single-pass extractor for all sections in a .gctf file
+parse_gctf_sections() {
+    local file="$1"
+    awk '
+        BEGIN{sec=""}
+        /^--- [A-Z_]+ ---$/ {
+            sec=$0; gsub(/^--- /, "", sec); gsub(/ ---$/, "", sec); next
+        }
+        /^---/ { sec=""; next }
+        { if (sec!="") print sec "\t" $0 }
+    ' "$file"
+}
+
 #!/bin/bash
 
 # run.sh - Simplified test execution command based on simple_grpc_test_runner.sh
@@ -6,17 +19,17 @@
 
 set -euo pipefail
 
-# Basic logging
+# Basic logging (standard levels: error, warn, info, debug)
 log() {
     local level="$1"
     shift
     local message="$*"
-    
     case "$level" in
         error) echo "❌ $message" >&2 ;;
-        success) echo "✅ $message" ;;
+        warn|warning) echo "⚠️ $message" >&2 ;;
         info) echo "ℹ️ $message" ;;
-        warning) echo "⚠️ $message" >&2 ;;
+        debug) echo "🐛 $message" ;;
+        success) echo "✅ $message" ;;
         *) echo "$message" ;;
     esac
 }
@@ -28,7 +41,7 @@ kernel_timeout() {
     
     # Validate timeout parameter
     if ! [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || [[ "$timeout_seconds" -eq 0 ]]; then
-        log error "kernel_timeout: invalid timeout value: $timeout_seconds"
+        log_error "kernel_timeout: invalid timeout value: $timeout_seconds"
         return 1
     fi
     
@@ -114,44 +127,66 @@ run_single_test() {
     local dry_run="${2:-false}"
     
     if [[ ! -f "$test_file" ]]; then
-        log error "Test file not found: $test_file"
+        log_error "Test file not found: $test_file"
         return 1
     fi
     
-    # Parse test file
-    local address=$(awk '/--- ADDRESS ---/{getline; print; exit}' "$test_file" | xargs)
-    local endpoint=$(awk '/--- ENDPOINT ---/{getline; print; exit}' "$test_file" | xargs)
+    # Parse test file (trace timing via gperf)
+    gperf "parse"
+    local address=""
+    local endpoint=""
     local request=""
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]*# ]]; then
-            continue  # skip comment lines
-        fi
-        processed_line=$(process_line "$line")
-        processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
-        if [[ -n "$processed_line" ]]; then
-            request="$request$processed_line"
-        fi
-    done < <(awk '/--- REQUEST ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
-    
     local expected_response=""
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]*# ]]; then
-            continue  # skip comment lines
-        fi
-        processed_line=$(process_line "$line")
-        processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
-        if [[ -n "$processed_line" ]]; then
-            expected_response="$expected_response$processed_line"
-        fi
-    done < <(awk '/--- RESPONSE ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
-    local expected_error=$(awk '/--- ERROR ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
-    local headers=$(awk '/--- HEADERS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
-    local request_headers=$(awk '/--- REQUEST_HEADERS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
-    local options_section=$(awk '/--- OPTIONS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
-    
-    # Parse TLS and PROTO sections (JSON-like)
-    local tls_section=$(awk '/--- TLS ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
-    local proto_section=$(awk '/--- PROTO ---/{flag=1; next} /^---/{flag=0} flag' "$test_file")
+    local expected_error=""
+    local headers=""
+    local request_headers=""
+    local options_section=""
+    local tls_section=""
+    local proto_section=""
+    while IFS=$'\t' read -r sec line; do
+        case "$sec" in
+            ADDRESS)
+                [[ -z "$address" ]] && address="$(echo "$line" | xargs)"
+                ;;
+            ENDPOINT)
+                [[ -z "$endpoint" ]] && endpoint="$(echo "$line" | xargs)"
+                ;;
+            REQUEST)
+                if [[ ! "$line" =~ ^[[:space:]]*# ]]; then
+                    processed_line=$(process_line "$line")
+                    processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
+                    [[ -n "$processed_line" ]] && request+="$processed_line"
+                fi
+                ;;
+            RESPONSE)
+                if [[ ! "$line" =~ ^[[:space:]]*# ]]; then
+                    processed_line=$(process_line "$line")
+                    processed_line=$(echo "$processed_line" | sed 's/[[:space:]]*$//')
+                    [[ -n "$processed_line" ]] && expected_response+="$processed_line"
+                fi
+                ;;
+            ERROR)
+                expected_error+="$line"$'\n'
+                ;;
+            HEADERS)
+                headers+="$line"$'\n'
+                ;;
+            REQUEST_HEADERS)
+                request_headers+="$line"$'\n'
+                ;;
+            OPTIONS)
+                options_section+="$line"$'\n'
+                ;;
+            TLS)
+                tls_section+="$line"$'\n'
+                ;;
+            PROTO)
+                proto_section+="$line"$'\n'
+                ;;
+        esac
+    done < <(parse_gctf_sections "$test_file")
+    gperf "parse"
+    # parse span ends via gperf below
     
     # Parse inline options from OPTIONS section
     local partial_option="false"
@@ -180,7 +215,7 @@ run_single_test() {
     
     # Warn about deprecated HEADERS section and collect for summary
     if [[ -n "$headers" ]]; then
-        log warning "HEADERS section is deprecated. Use REQUEST_HEADERS instead."
+        log_warn "HEADERS section is deprecated. Use REQUEST_HEADERS instead."
         # Increment global counter for summary (if it exists)
         if [[ -n "${headers_warnings:-}" ]]; then
             headers_warnings=$((headers_warnings + 1))
@@ -188,7 +223,7 @@ run_single_test() {
     fi
     
     if [[ -z "$endpoint" ]]; then
-        log error "No endpoint specified in $test_file"
+        log_error "No endpoint specified in $test_file"
         return 1
     fi
     
@@ -213,7 +248,9 @@ run_single_test() {
     local has_request="0"
     [[ -n "$request" ]] && has_request="1"
     # Call the plugin's build_grpcurl_args
+    gperf "grpc.args_build"
     build_grpcurl_args "$address" "$endpoint" "$tls_section" "$proto_section" header_args "$has_request"
+    gperf "grpc.args_build"
     
     # Dry-run mode check (rich diagnostic output)
     if [[ "$dry_run" == "true" ]]; then
@@ -250,8 +287,9 @@ tolerance: ${tolerance_option}"
         local grpc_status=$?
         local grpc_end_ms=$(($(date +%s%N)/1000000))
         local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
+        perf_add "grpc.exec" "$grpc_duration_ms"
         if [[ $grpc_status -eq 124 ]]; then
-            log error "gRPC call timed out after ${timeout_seconds}s in $test_file"
+            log_error "gRPC call timed out after ${timeout_seconds}s in $test_file"
             return 1
         fi
     else
@@ -260,20 +298,18 @@ tolerance: ${tolerance_option}"
         local grpc_status=$?
         local grpc_end_ms=$(($(date +%s%N)/1000000))
         local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
+        perf_add "grpc.exec" "$grpc_duration_ms"
         if [[ $grpc_status -eq 124 ]]; then
-            log error "gRPC call timed out after ${timeout_seconds}s in $test_file"
+            log_error "gRPC call timed out after ${timeout_seconds}s in $test_file"
             return 1
         fi
     fi
     local grpc_exit_code=$?
-    # record grpc duration if not timeout
-    if [[ $grpc_exit_code -ne 124 ]]; then
-        GRPCTESTIFY_GRPC_DURATIONS+=("${grpc_duration_ms}")
-    fi
+    # Note: gRPC durations tracked via perf aggregates; no legacy accumulation
     
     # Handle timeout specifically
     if [[ $grpc_exit_code -eq 124 ]]; then
-        log error "gRPC call timed out after ${timeout_seconds}s in $test_file"
+        log_error "gRPC call timed out after ${timeout_seconds}s in $test_file"
         return 1  # FAIL
     fi
     
@@ -292,11 +328,12 @@ tolerance: ${tolerance_option}"
     if [[ $is_error -eq 0 ]]; then
         # Success case - check response
         if [[ -n "$expected_error" ]]; then
-            log error "Expected error but got success in $test_file"
+            log_error "Expected error but got success in $test_file"
             return 1  # FAIL
         fi
         
         if [[ -n "$expected_response" ]]; then
+            gperf "compare"
             # Apply inline options for JSON comparison
             local actual_for_comparison="$grpc_output"
             local expected_for_comparison="$expected_response"
@@ -329,6 +366,7 @@ tolerance: ${tolerance_option}"
                     done <<< "$expected_keys"
                     
                     if [[ "$partial_match_failed" == "false" ]]; then
+                        gperf "compare"
                         return 0  # PASS - partial match succeeded
                     fi
                 fi
@@ -339,11 +377,13 @@ tolerance: ${tolerance_option}"
             local clean_actual=$(echo "$actual_for_comparison" | jq -S -c . 2>/dev/null || echo "$actual_for_comparison")
             
             if [[ "$clean_actual" == "$clean_expected" ]]; then
+                gperf "compare"
                 return 0  # PASS
             else
-                log error "Response mismatch in $test_file"
-                log error "Expected: $clean_expected"
-                log error "Actual: $clean_actual"
+                log_error "Response mismatch in $test_file"
+                log_error "Expected: $clean_expected"
+                log_error "Actual: $clean_actual"
+                gperf "compare"
                 return 1  # FAIL
             fi
         else
@@ -352,10 +392,42 @@ tolerance: ${tolerance_option}"
     else
         # Error case - check if error was expected
         if [[ -n "$expected_error" ]]; then
+            # Fast path: if both expected and actual are valid JSON and equal -> PASS
+            local __exp_json_eq __act_json_eq
+            __exp_json_eq=$(echo "$expected_error" | jq -S -c . 2>/dev/null || true)
+            __act_json_eq=$(echo "$grpc_output" | jq -S -c . 2>/dev/null || true)
+            if [[ -n "$__exp_json_eq" && -n "$__act_json_eq" && "$__exp_json_eq" == "$__act_json_eq" ]]; then
+                return 0
+            fi
             # Expected error fields (if JSON)
             local expected_code expected_message
-            expected_code=$(echo "$expected_error" | jq -r '.code // empty' 2>/dev/null || true)
-            expected_message=$(echo "$expected_error" | jq -r '.message // empty' 2>/dev/null || true)
+            # Try to sanitize possible literal tokens like $'\n' and stray quotes
+            local expected_error_norm="$expected_error"
+            # Replace literal $'\n' sequences with real newlines
+            expected_error_norm="${expected_error_norm//\$'\\n'/$'\n'}"
+            # Remove any remaining $' and trailing '
+            expected_error_norm=$(printf "%s" "$expected_error_norm" | sed "s/^\$'//; s/'$//; s/\$'\\n'//g")
+            # Extract structured fields if JSON parses
+            expected_code=$(echo "$expected_error_norm" | jq -r '.code // empty' 2>/dev/null || true)
+            expected_message=$(echo "$expected_error_norm" | jq -r '.message // empty' 2>/dev/null || true)
+            # Regex-based extraction (independent of jq) to handle non-strict JSON formatting
+            if [[ -z "$expected_code" ]]; then
+                expected_code=$(printf "%s" "$expected_error" | tr '\n' ' ' | sed -n 's/.*"code"[^"]*:[^0-9]*\([0-9][0-9]*\).*/\1/p' | head -n1)
+            fi
+            if [[ -z "$expected_message" ]]; then
+                expected_message=$(printf "%s" "$expected_error" | tr '\n' ' ' | sed -n 's/.*"message"[^"]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+            fi
+            # Fallback: robust regex extraction even if there are $'\n' tokens
+            if [[ -z "$expected_code" || -z "$expected_message" ]]; then
+                local expected_flat
+                expected_flat=$(printf "%s" "$expected_error" | tr '\n' ' ' | sed -E "s/\$'\\n'//g; s/\$'//g; s/'//g; s/\\n/ /g; s/[[:space:]]+/ /g")
+                if [[ -z "$expected_code" ]]; then
+                    expected_code=$(echo "$expected_flat" | sed -n 's/.*"code"[^"]*:[^0-9]*\([0-9][0-9]*\).*/\1/p' | head -n1)
+                fi
+                if [[ -z "$expected_message" ]]; then
+                    expected_message=$(echo "$expected_flat" | sed -n 's/.*"message"[^"]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+                fi
+            fi
 
             # Actual error fields (grpcurl -format-error output may be JSON or text)
             local actual_code actual_message
@@ -374,6 +446,14 @@ tolerance: ${tolerance_option}"
             [[ "$expected_message" == "null" ]] && expected_message=""
             [[ "$actual_code" == "null" ]] && actual_code=""
             [[ "$actual_message" == "null" ]] && actual_message=""
+
+            # If both expected and actual are valid JSON objects and equal, accept
+            local expected_json_norm actual_json_norm
+            expected_json_norm=$(echo "$expected_error_norm" | jq -S -c . 2>/dev/null || true)
+            actual_json_norm=$(echo "$grpc_output" | jq -S -c . 2>/dev/null || true)
+            if [[ -n "$expected_json_norm" && -n "$actual_json_norm" && "$expected_json_norm" == "$actual_json_norm" ]]; then
+                return 0
+            fi
 
             local mismatch=false
 
@@ -405,7 +485,11 @@ tolerance: ${tolerance_option}"
 
             # If no structured fields provided in expected_error, fallback to raw contains
             if [[ -z "$expected_code" && -z "$expected_message" ]]; then
-                if [[ "$grpc_output" == *"$expected_error"* ]]; then
+                # Whitespace-tolerant contains check; strip literal $'\n' tokens
+                local actual_flat expected_flat
+                actual_flat=$(echo "$grpc_output" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')
+                expected_flat=$(printf "%s" "$expected_error_norm" | tr '\n' ' ' | sed -E "s/\$'\\n'//g; s/[[:space:]]+/ /g")
+                if [[ "$actual_flat" == *"$expected_flat"* ]]; then
                     mismatch=false
                 else
                     mismatch=true
@@ -416,17 +500,17 @@ tolerance: ${tolerance_option}"
                 return 0
             fi
 
-            log error "Error mismatch in $test_file"
+            log_error "Error mismatch in $test_file"
             if [[ -n "$expected_code" || -n "$expected_message" ]]; then
-                log error "Expected (code/message): ${expected_code:-""} / ${norm_expected_message:-""}"
-                log error "Actual   (code/message): ${actual_code:-""} / ${norm_actual_message:-""}"
+                log_error "Expected (code/message): ${expected_code:-""} / ${norm_expected_message:-""}"
+                log_error "Actual   (code/message): ${actual_code:-""} / ${norm_actual_message:-""}"
             else
-                log error "Expected to contain: $expected_error"
+                log_error "Expected to contain: $expected_error_norm"
             fi
-            log error "Actual error output: $grpc_output"
+            log_error "Actual error output: $grpc_output"
             return 1
         else
-            log error "gRPC call failed for $test_file: $grpc_output"
+            log_error "gRPC call failed for $test_file: $grpc_output"
             return 1  # FAIL
         fi
     fi
@@ -740,14 +824,14 @@ perform_update() {
     
     # Download latest version
     if ! curl -L --connect-timeout 10 --max-time 300 -o "$temp_file" "$download_url" 2>&1; then
-        log error "Failed to download update"
+        log_error "Failed to download update"
         rm -f "$temp_file"
         return 1
     fi
     
     # Verify file was downloaded
     if [[ ! -f "$temp_file" || ! -s "$temp_file" ]]; then
-        log error "Downloaded file is empty or missing"
+        log_error "Downloaded file is empty or missing"
         rm -f "$temp_file"
         return 1
     fi
@@ -766,23 +850,23 @@ perform_update() {
             elif command -v shasum >/dev/null 2>&1; then
                 actual_checksum=$(shasum -a 256 "$temp_file" | cut -d' ' -f1)
             else
-                log warning "No SHA-256 tool available, skipping checksum verification"
+                log_warn "No SHA-256 tool available, skipping checksum verification"
                 actual_checksum="$expected_checksum"  # Skip verification
             fi
             
             if [[ "$actual_checksum" != "$expected_checksum" ]]; then
-                log error "Checksum verification failed"
-                log error "Expected: $expected_checksum"
-                log error "Actual: $actual_checksum"
+                log_error "Checksum verification failed"
+                log_error "Expected: $expected_checksum"
+                log_error "Actual: $actual_checksum"
                 rm -f "$temp_file"
                 return 1
             fi
             echo "✅ Checksum verification passed"
         else
-            log warning "Could not find grpctestify.sh checksum in checksums.txt"
+            log_warn "Could not find grpctestify.sh checksum in checksums.txt"
         fi
     else
-        log warning "Could not fetch checksums.txt, proceeding without verification"
+        log_warn "Could not fetch checksums.txt, proceeding without verification"
     fi
     
     echo "💾 Creating backup..."
@@ -790,7 +874,7 @@ perform_update() {
     # Create backup
     local backup_file="${current_script}.backup.$(date +%Y%m%d_%H%M%S)"
     if ! cp "$current_script" "$backup_file"; then
-        log error "Failed to create backup"
+        log_error "Failed to create backup"
         rm -f "$temp_file"
         return 1
     fi
@@ -799,7 +883,7 @@ perform_update() {
     
     # Replace with new version
     if ! cp "$temp_file" "$current_script"; then
-        log error "Failed to install update"
+        log_error "Failed to install update"
         # Restore backup
         cp "$backup_file" "$current_script"
         rm -f "$temp_file"
@@ -808,7 +892,7 @@ perform_update() {
     
     # Set executable permissions
     if ! chmod +x "$current_script"; then
-        log error "Failed to set executable permissions"
+        log_error "Failed to set executable permissions"
         rm -f "$temp_file"
         return 1
     fi
@@ -976,30 +1060,30 @@ run_tests() {
         
         # Check dependencies
         if ! command -v curl >/dev/null 2>&1; then
-            log error "curl is required for update checking"
+            log_error "curl is required for update checking"
             return 1
         fi
         
         if ! command -v jq >/dev/null 2>&1; then
-            log error "jq is required for update checking"
+            log_error "jq is required for update checking"
             return 1
         fi
         
         # Query GitHub API with timeout
         local response
         if ! response=$(curl -s --connect-timeout 10 --max-time 30 "$api_url" 2>&1); then
-            log error "Failed to check for updates (network error)"
+            log_error "Failed to check for updates (network error)"
             return 1
         fi
         
         # Extract version from response
         if ! latest_version=$(echo "$response" | jq -r '.tag_name // empty' 2>/dev/null); then
-            log error "Failed to parse GitHub API response"
+            log_error "Failed to parse GitHub API response"
             return 1
         fi
         
         if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
-            log error "No version information found in API response"
+            log_error "No version information found in API response"
             return 1
         fi
         
@@ -1054,7 +1138,7 @@ run_tests() {
         echo "⚙️ Creating configuration file: $config_file"
         
         if [[ -f "$config_file" ]]; then
-            log error "Configuration file already exists: $config_file"
+            log_error "Configuration file already exists: $config_file"
             return 1
         fi
         
@@ -1109,7 +1193,7 @@ EOF
     # Validate all test paths
     for test_path in "${test_paths[@]}"; do
         if [[ ! -e "$test_path" ]]; then
-            log error "Test path does not exist: $test_path"
+            log_error "Test path does not exist: $test_path"
             return 1
         fi
     done
@@ -1127,12 +1211,12 @@ EOF
         case "$log_format" in
             "junit"|"json")
                 if [[ -z "$log_output" ]]; then
-                    log error "Error: --log-output is required when using --log-format"
+                    log_error "Error: --log-output is required when using --log-format"
                     return 1
                 fi
                 ;;
             *)
-                log error "Error: Unsupported log format '$log_format'. Supported: junit, json"
+                log_error "Error: Unsupported log format '$log_format'. Supported: junit, json"
                 return 1
                 ;;
         esac
@@ -1141,39 +1225,29 @@ EOF
     # Auto-detect parallel jobs if not specified or set to "auto"
     if [[ -z "$parallel_jobs" || "$parallel_jobs" == "auto" ]]; then
         parallel_jobs=$(auto_detect_parallel_jobs)
-        [[ "$verbose" == "1" ]] && log info "Auto-detected $parallel_jobs CPU cores, using $parallel_jobs parallel jobs"
+        [[ "$verbose" == "1" ]] && log_info "Auto-detected $parallel_jobs CPU cores, using $parallel_jobs parallel jobs"
     fi
     
     # Collect test files from all provided paths
+    gperf "collect"
     local test_files=()
     for test_path in "${test_paths[@]}"; do
         while IFS= read -r file; do
             test_files+=("$file")
         done < <(collect_test_files "$test_path" "$sort_mode")
     done
+    gperf "collect"
     
-    # Deduplicate while preserving order
-    if declare -p BASH_VERSINFO >/dev/null 2>&1; then
-        declare -A _seen
-        local unique_files=()
-        for f in "${test_files[@]}"; do
-            if [[ -z "${_seen[$f]:-}" ]]; then
-                _seen[$f]=1
-                unique_files+=("$f")
-            fi
-        done
-        test_files=("${unique_files[@]}")
-        unset _seen unique_files
-    fi
+    
     
     local total=${#test_files[@]}
     
     if [[ "$total" -eq 0 ]]; then
-        log error "No test files found in any of the specified paths"
+        log_error "No test files found in any of the specified paths"
         return 1
     fi
     
-    [[ "$verbose" == "1" ]] && log info "Auto-selected progress mode: $([ "$verbose" == "1" ] && echo "verbose" || echo "dots") ($total tests, verbose=$verbose)"
+    [[ "$verbose" == "1" ]] && log_info "Auto-selected progress mode: $([ "$verbose" == "1" ] && echo "verbose" || echo "dots") ($total tests, verbose=$verbose)"
     
     # Start timing for detailed statistics (millisecond precision)
     local start_time
@@ -1194,8 +1268,8 @@ EOF
     local passed_tests=()
     local failed_tests=()
     local skipped_tests=()
-    # Aggregated gRPC durations (ms) per call
-    GRPCTESTIFY_GRPC_DURATIONS=()
+    
+    
     # Progress dots counter for line wrapping (80 chars max per line)
     local dots_count=0
     # Global abort flag
@@ -1203,19 +1277,23 @@ EOF
     # Safety cap to ensure we never exceed number of files
     local max_iterations=$total
     local processed=0
+    # Debug accumulators (only meaningful when GRPCTESTIFY_LOG_LEVEL=debug)
+    local PARSE_TOTAL_MS=0
 
     if [[ "$total" -eq 1 ]]; then
-        log info "Running 1 test sequentially..."
-        [[ "$verbose" == "1" ]] && log info "Verbose mode enabled - detailed test information will be shown"
+        log_info "Running 1 test sequentially..."
+        [[ "$verbose" == "1" ]] && log_info "Verbose mode enabled - detailed test information will be shown"
     else
         if [[ "$parallel_jobs" -eq 1 ]]; then
-            log info "Running $total test(s) sequentially..."
+            log_info "Running $total test(s) sequentially..."
         else
-            log info "Running $total test(s) in parallel (jobs: $parallel_jobs)..."
+            log_info "Running $total test(s) in parallel (jobs: $parallel_jobs)..."
         fi
     fi
     
     # Execute tests with pytest-style UI
+    gperf "loop"
+    
     
     # Use indexed loop instead of array expansion (more reliable in generated scripts)
     for (( i=0; i<${#test_files[@]}; i++ )); do
@@ -1245,7 +1323,7 @@ EOF
                     fi
                 done
             fi
-            log error "Global run timeout exceeded: ${elapsed_ms}ms > budget ${budget_ms}ms. Aborting remaining tests."
+            log_error "Global run timeout exceeded: ${elapsed_ms}ms > budget ${budget_ms}ms. Aborting remaining tests."
             break
         fi
         
@@ -1255,6 +1333,9 @@ EOF
         # Start timing for this test
         local test_start_time
         test_start_time=$(($(date +%s%N)/1000000))
+        # Start timing for parse phase
+        local __parse_start_ms
+        __parse_start_ms=$(($(date +%s%N)/1000000))
         
         # Pytest-style UI: verbose vs dots mode
         if [[ "$verbose" == "1" ]]; then
@@ -1361,14 +1442,17 @@ EOF
         processed=$((processed + 1))
     done
     
+    
     # Post-loop guard: if processed exceeded planned total, treat as error
     if [[ $processed -gt $total ]]; then
-        log error "Internal error: processed $processed tests > collected $total"
+        log_error "Internal error: processed $processed tests > collected $total"
         aborted=true
     fi
     
     # Add newline after dots mode
     [[ "$verbose" != "1" ]] && echo
+    # Stop loop perf span after ensuring newline to avoid mixing with progress dots
+    gperf "loop"
     
     # Calculate execution time and advanced statistics (millisecond precision)
     local end_time
@@ -1397,6 +1481,8 @@ EOF
     fi
     
     echo "────────────────────────────────────────────────────────────────────────────────"
+    # Print perf summary (trace-only)
+    perf_summary
     
     # Detailed statistics section
     echo "📊 Execution Statistics:"
@@ -1407,13 +1493,13 @@ EOF
     echo "   • Duration: ${duration_ms}ms"
     echo "   • Average per test: ${avg_per_test_ms}ms"
     
-    # gRPC timing and overhead statistics
-    if [[ ${#GRPCTESTIFY_GRPC_DURATIONS[@]} -gt 0 ]]; then
-        local total_grpc_ms=0
-        for d in "${GRPCTESTIFY_GRPC_DURATIONS[@]}"; do
-            total_grpc_ms=$((total_grpc_ms + d))
-        done
-        local avg_grpc_ms=$(( total_grpc_ms / ${#GRPCTESTIFY_GRPC_DURATIONS[@]} ))
+    # gRPC timing and overhead statistics (from perf aggregates)
+    local __pid="$$"
+    local __grpc_key="${__pid}|grpc.exec"
+    local total_grpc_ms="${PERF_SUM[$__grpc_key]:-0}"
+    local grpc_calls="${PERF_COUNT[$__grpc_key]:-0}"
+    if [[ "$grpc_calls" -gt 0 ]]; then
+        local avg_grpc_ms=$(( total_grpc_ms / grpc_calls ))
         local overhead_ms=$(( duration_ms - total_grpc_ms ))
         local avg_overhead_per_test_ms=0
         if [[ $total -gt 0 ]]; then
@@ -1523,6 +1609,8 @@ EOF
         fi
     fi
     
+    
+
     # Return appropriate exit code (0 only for 100% success in non-dry-run)
     if [[ "$dry_run" == "1" ]]; then
         return 0  # Dry-run always succeeds

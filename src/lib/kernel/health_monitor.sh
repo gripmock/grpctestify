@@ -31,15 +31,15 @@ readonly HEALTH_RECOVERING="recovering"
 health_monitor_init() {
     # Check if already initialized
     if [[ "$HEALTH_MONITOR_INITIALIZED" == "true" ]]; then
-        tlog debug "Health monitoring system already initialized, skipping..."
+        log_debug "Health monitoring system already initialized, skipping..."
         return 0
     fi
     
-    tlog debug "Initializing health monitoring system..."
+    log_debug "Initializing health monitoring system..."
     
     # Ensure required commands are available
     if ! command -v kill >/dev/null 2>&1; then
-    tlog error "Health monitor requires 'kill' command"
+    log_error "Health monitor requires 'kill' command"
         return 1
     fi
     
@@ -48,7 +48,7 @@ health_monitor_init() {
     # Now using unified signal_manager for proper cleanup handling
     
     HEALTH_MONITOR_INITIALIZED=true
-    tlog debug "Health monitoring system initialized successfully"
+    log_debug "Health monitoring system initialized successfully"
     return 0
 }
 
@@ -60,16 +60,16 @@ health_monitor_create() {
     local recovery_policy="${4:-restart}"  # restart|notify|ignore
     
     if [[ -z "$monitor_id" ]]; then
-    tlog error "health_monitor_create: monitor_id required"
+    log_error "health_monitor_create: monitor_id required"
         return 1
     fi
     
         if [[ -n "${HEALTH_MONITORS[$monitor_id]:-}" ]]; then
-	tlog debug "health_monitor_create: monitor '$monitor_id' already exists"
+	log_debug "health_monitor_create: monitor '$monitor_id' already exists"
         return 0
     fi
     
-    tlog debug "Creating health monitor '$monitor_id' (interval: ${check_interval}s, timeout: ${timeout}s, policy: $recovery_policy)"
+    log_debug "Creating health monitor '$monitor_id' (interval: ${check_interval}s, timeout: ${timeout}s, policy: $recovery_policy)"
     
     # Store monitor configuration
     HEALTH_MONITORS["$monitor_id"]="interval:$check_interval,timeout:$timeout,policy:$recovery_policy"
@@ -79,7 +79,7 @@ health_monitor_create() {
     # No automatic background process spawn
     MONITOR_PIDS["$monitor_id"]=""  # Empty until started
     
-    tlog debug "Health monitor '$monitor_id' created successfully (will start on demand)"
+    log_debug "Health monitor '$monitor_id' created successfully (will start on demand)"
     return 0
 }
 
@@ -91,17 +91,17 @@ health_monitor_register() {
     local health_check_cmd="${4:-}"
     
     if [[ -z "$process_id" || -z "$process_pid" ]]; then
-    tlog error "health_monitor_register: process_id and process_pid required"
+    log_error "health_monitor_register: process_id and process_pid required"
         return 1
     fi
     
     # Ensure monitor exists
     if [[ -z "${HEALTH_MONITORS[$monitor_id]:-}" ]]; then
-    tlog debug "Creating default monitor for process registration"
+    log_debug "Creating default monitor for process registration"
         health_monitor_create "$monitor_id"
     fi
     
-    tlog debug "Registering process '$process_id' (PID: $process_pid) with monitor '$monitor_id'"
+    log_debug "Registering process '$process_id' (PID: $process_pid) with monitor '$monitor_id'"
     
     # Register process
     MONITORED_PROCESSES["$process_id"]="monitor:$monitor_id,pid:$process_pid,check_cmd:$health_check_cmd"
@@ -109,7 +109,7 @@ health_monitor_register() {
     PROCESS_LAST_CHECK["$process_id"]=$(date +%s)
     RECOVERY_ATTEMPTS["$process_id"]=0
     
-    tlog debug "Process '$process_id' registered successfully"
+    log_debug "Process '$process_id' registered successfully"
     return 0
 }
 
@@ -118,11 +118,11 @@ health_monitor_unregister() {
     local process_id="$1"
     
     if [[ -z "$process_id" ]]; then
-    tlog error "health_monitor_unregister: process_id required"
+    log_error "health_monitor_unregister: process_id required"
         return 1
     fi
     
-    tlog debug "Unregistering process '$process_id' from health monitoring"
+    log_debug "Unregistering process '$process_id' from health monitoring"
     
     # Remove from tracking
     unset MONITORED_PROCESSES["$process_id"]
@@ -130,7 +130,7 @@ health_monitor_unregister() {
     unset PROCESS_LAST_CHECK["$process_id"]
     unset RECOVERY_ATTEMPTS["$process_id"]
     
-    tlog debug "Process '$process_id' unregistered successfully"
+    log_debug "Process '$process_id' unregistered successfully"
     return 0
 }
 
@@ -139,13 +139,13 @@ health_check_process() {
     local process_id="$1"
     
     if [[ -z "$process_id" ]]; then
-    tlog error "health_check_process: process_id required"
+    log_error "health_check_process: process_id required"
         return 1
     fi
     
     local process_config="${MONITORED_PROCESSES[$process_id]:-}"
     if [[ -z "$process_config" ]]; then
-    tlog error "health_check_process: process '$process_id' not registered"
+    log_error "health_check_process: process '$process_id' not registered"
         return 1
     fi
     
@@ -155,7 +155,7 @@ health_check_process() {
     process_pid=$(echo "$process_config" | sed -n 's/.*pid:\([^,]*\).*/\1/p')
     check_cmd=$(echo "$process_config" | sed -n 's/.*check_cmd:\([^,]*\).*/\1/p')
     
-    tlog debug "Performing health check on process '$process_id' (PID: $process_pid)"
+    log_debug "Performing health check on process '$process_id' (PID: $process_pid)"
     
     local health_status="$HEALTH_HEALTHY"
     local check_time=$(date +%s)
@@ -163,18 +163,18 @@ health_check_process() {
     # Basic PID check
     if ! kill -0 "$process_pid" 2>/dev/null; then
         health_status="$HEALTH_CRITICAL"
-    tlog warning "Process '$process_id' (PID: $process_pid) is not running"
+    log_warn "Process '$process_id' (PID: $process_pid) is not running"
         elif [[ -n "$check_cmd" ]]; then
         # Custom health check command - SECURE: Sanitized execution
         # SECURITY: Validate command before execution to prevent injection
         if [[ "$check_cmd" =~ ^[a-zA-Z0-9_/.-]+(\s+[a-zA-Z0-9_/.-]+)*$ ]]; then
             if ! timeout 5 bash -c "$check_cmd" >/dev/null 2>&1; then
                 health_status="$HEALTH_UNHEALTHY"
-	        tlog warning "Process '$process_id' failed custom health check: $check_cmd"
+	        log_warn "Process '$process_id' failed custom health check: $check_cmd"
             fi
         else
             health_status="$HEALTH_CRITICAL"
-	    tlog error "Process '$process_id' has unsafe health check command: $check_cmd"
+	    log_error "Process '$process_id' has unsafe health check command: $check_cmd"
         fi
     fi
     
@@ -185,7 +185,7 @@ health_check_process() {
     
     # Log health status changes
     if [[ "$previous_health" != "$health_status" ]]; then
-    tlog debug "Process '$process_id' health changed: $previous_health -> $health_status"
+    log_debug "Process '$process_id' health changed: $previous_health -> $health_status"
         
         # Trigger recovery if needed
         if [[ "$health_status" == "$HEALTH_CRITICAL" || "$health_status" == "$HEALTH_UNHEALTHY" ]]; then
@@ -205,13 +205,13 @@ health_trigger_recovery() {
     local process_id="$1"
     
     if [[ -z "$process_id" ]]; then
-    tlog error "health_trigger_recovery: process_id required"
+    log_error "health_trigger_recovery: process_id required"
         return 1
     fi
     
     local process_config="${MONITORED_PROCESSES[$process_id]:-}"
     if [[ -z "$process_config" ]]; then
-    tlog error "health_trigger_recovery: process '$process_id' not registered"
+    log_error "health_trigger_recovery: process '$process_id' not registered"
         return 1
     fi
     
@@ -224,11 +224,11 @@ health_trigger_recovery() {
     
     local attempts="${RECOVERY_ATTEMPTS[$process_id]:-0}"
     
-    tlog warning "Triggering recovery for process '$process_id' (attempt: $((attempts + 1))/$MAX_RECOVERY_ATTEMPTS, policy: $recovery_policy)"
+    log_warn "Triggering recovery for process '$process_id' (attempt: $((attempts + 1))/$MAX_RECOVERY_ATTEMPTS, policy: $recovery_policy)"
     
     # Check if we've exceeded max recovery attempts
     if [[ $attempts -ge $MAX_RECOVERY_ATTEMPTS ]]; then
-    tlog error "Process '$process_id' exceeded max recovery attempts ($MAX_RECOVERY_ATTEMPTS)"
+    log_error "Process '$process_id' exceeded max recovery attempts ($MAX_RECOVERY_ATTEMPTS)"
         PROCESS_HEALTH["$process_id"]="$HEALTH_CRITICAL"
         return 1
     fi
@@ -246,17 +246,17 @@ health_trigger_recovery() {
             health_recovery_notify "$process_id"
             ;;
         "ignore")
-    tlog debug "Recovery policy 'ignore' - no action taken for process '$process_id'"
+    log_debug "Recovery policy 'ignore' - no action taken for process '$process_id'"
             ;;
         *)
-    tlog error "Unknown recovery policy: $recovery_policy"
+    log_error "Unknown recovery policy: $recovery_policy"
             return 1
             ;;
     esac
     
     # Apply exponential backoff
     local backoff_time=$((RECOVERY_BACKOFF_BASE ** attempts))
-    tlog debug "Applying recovery backoff: ${backoff_time}s for process '$process_id'"
+    log_debug "Applying recovery backoff: ${backoff_time}s for process '$process_id'"
     sleep "$backoff_time"
     
     return 0
@@ -266,7 +266,7 @@ health_trigger_recovery() {
 health_recovery_restart() {
     local process_id="$1"
     
-    tlog debug "Attempting to restart process '$process_id'"
+    log_debug "Attempting to restart process '$process_id'"
     
     # This is a placeholder - in real implementation, this would:
     # 1. Extract restart command from process registration
@@ -275,7 +275,7 @@ health_recovery_restart() {
     # 4. Update process PID in monitoring
     
     # For now, just log the action
-    tlog warning "Process restart not implemented - would restart '$process_id'"
+    log_warn "Process restart not implemented - would restart '$process_id'"
     return 0
 }
 
@@ -283,7 +283,7 @@ health_recovery_restart() {
 health_recovery_notify() {
     local process_id="$1"
     
-    tlog debug "Sending failure notification for process '$process_id'"
+    log_debug "Sending failure notification for process '$process_id'"
     
     # This could trigger external notifications:
     # - Send to external monitoring system
@@ -291,7 +291,7 @@ health_recovery_notify() {
     # - Trigger webhook
     
     # For now, just log
-    tlog warning "Process notification not implemented - would notify about '$process_id'"
+    log_warn "Process notification not implemented - would notify about '$process_id'"
     return 0
 }
 
@@ -301,7 +301,7 @@ health_get_status() {
     local format="${2:-status}"  # status|detailed|json
     
     if [[ -z "$process_id" ]]; then
-    tlog error "health_get_status: process_id required"
+    log_error "health_get_status: process_id required"
         return 1
     fi
     
@@ -395,7 +395,7 @@ health_get_stats() {
 health_monitor_start_background() {
     local monitor_id="$1"
     
-    tlog debug "Starting background monitoring for '$monitor_id'"
+    log_debug "Starting background monitoring for '$monitor_id'"
     
     local monitor_config="${HEALTH_MONITORS[$monitor_id]:-}"
     local check_interval
@@ -421,10 +421,10 @@ health_monitor_start_background() {
     done
     
     if [[ $monitor_iterations -ge $max_monitor_iterations ]]; then
-        tlog warning "Health monitor '$monitor_id' reached max iterations ($max_monitor_iterations), stopping"
+        log_warn "Health monitor '$monitor_id' reached max iterations ($max_monitor_iterations), stopping"
     fi
     
-    tlog debug "Background monitoring stopped for '$monitor_id'"
+    log_debug "Background monitoring stopped for '$monitor_id'"
 }
 
 # Stop a health monitor
@@ -432,11 +432,11 @@ health_monitor_stop() {
     local monitor_id="$1"
     
     if [[ -z "$monitor_id" ]]; then
-    tlog error "health_monitor_stop: monitor_id required"
+    log_error "health_monitor_stop: monitor_id required"
         return 1
     fi
     
-    tlog debug "Stopping health monitor '$monitor_id'"
+    log_debug "Stopping health monitor '$monitor_id'"
     
     # Mark monitor as stopped
     MONITOR_STATUS["$monitor_id"]="stopped"
@@ -452,7 +452,7 @@ health_monitor_stop() {
     unset HEALTH_MONITORS["$monitor_id"]
     unset MONITOR_STATUS["$monitor_id"]
     
-    tlog debug "Health monitor '$monitor_id' stopped successfully"
+    log_debug "Health monitor '$monitor_id' stopped successfully"
     return 0
 }
 
@@ -461,12 +461,12 @@ health_monitor_pause() {
     local monitor_id="$1"
     
     if [[ -z "$monitor_id" ]]; then
-    tlog error "health_monitor_pause: monitor_id required"
+    log_error "health_monitor_pause: monitor_id required"
         return 1
     fi
     
     MONITOR_STATUS["$monitor_id"]="paused"
-    tlog debug "Health monitor '$monitor_id' paused"
+    log_debug "Health monitor '$monitor_id' paused"
     return 0
 }
 
@@ -475,18 +475,18 @@ health_monitor_resume() {
     local monitor_id="$1"
     
     if [[ -z "$monitor_id" ]]; then
-    tlog error "health_monitor_resume: monitor_id required"
+    log_error "health_monitor_resume: monitor_id required"
         return 1
     fi
     
     MONITOR_STATUS["$monitor_id"]="active"
-    tlog debug "Health monitor '$monitor_id' resumed"
+    log_debug "Health monitor '$monitor_id' resumed"
     return 0
 }
 
 # Cleanup all health monitors
 health_monitor_cleanup_all() {
-    tlog debug "Cleaning up all health monitors..."
+    log_debug "Cleaning up all health monitors..."
     
     for monitor_id in "${!HEALTH_MONITORS[@]}"; do
         health_monitor_stop "$monitor_id"
@@ -497,7 +497,7 @@ health_monitor_cleanup_all() {
         health_monitor_unregister "$process_id"
     done
     
-    tlog debug "All health monitors cleaned up"
+    log_debug "All health monitors cleaned up"
 }
 
 # Check if a monitor exists
@@ -508,7 +508,7 @@ health_monitor_exists() {
 
 # Force health check on all processes
 health_check_all() {
-    tlog debug "Performing health check on all monitored processes..."
+    log_debug "Performing health check on all monitored processes..."
     
     local checked=0
     for process_id in "${!MONITORED_PROCESSES[@]}"; do
@@ -516,7 +516,7 @@ health_check_all() {
         ((checked++))
     done
     
-    tlog debug "Health check completed on $checked processes"
+    log_debug "Health check completed on $checked processes"
     return 0
 }
 

@@ -19,11 +19,11 @@ TEST_EXECUTOR_MAX_RETRIES="${TEST_EXECUTOR_MAX_RETRIES:-2}"
 
 # Initialize test executor plugin
 test_executor_init() {
-    tlog debug "Initializing test executor plugin..."
+    log_debug "Initializing test executor plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -36,7 +36,7 @@ test_executor_init() {
     # Subscribe to test-related events
     event_subscribe "test_executor" "test.*" "test_executor_event_handler"
     
-    tlog debug "Test executor plugin initialized successfully"
+    log_debug "Test executor plugin initialized successfully"
     return 0
 }
 
@@ -57,7 +57,7 @@ test_executor_handler() {
             test_executor_validate_test "${args[@]}"
             ;;
         *)
-    tlog error "Unknown test executor command: $command"
+    log_error "Unknown test executor command: $command"
             return 1
             ;;
     esac
@@ -69,11 +69,11 @@ test_executor_execute_single() {
     local test_config="${2:-{}}"
     
     if [[ -z "$test_file" || ! -f "$test_file" ]]; then
-    tlog error "test_executor_execute_single: valid test_file required"
+    log_error "test_executor_execute_single: valid test_file required"
         return 1
     fi
     
-    tlog debug "Executing single test: $test_file"
+    log_debug "Executing single test: $test_file"
     
     # Publish test execution start event
     local test_metadata
@@ -96,7 +96,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "test_execution" "$TEST_EXECUTOR_TIMEOUT")
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for test execution: $test_file"
+    log_error "Failed to acquire resource for test execution: $test_file"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -106,7 +106,7 @@ EOF
     local start_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
     
     if execute_test_routine "$test_file" "$test_config"; then
-    tlog debug "Test executed successfully: $test_file"
+    log_debug "Test executed successfully: $test_file"
         local end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
         local duration=$((end_time - start_time))
         
@@ -117,7 +117,7 @@ EOF
         event_publish "test.execution.success" "{\"test_file\":\"$test_file\",\"duration\":$duration}" "$EVENT_PRIORITY_NORMAL" "test_executor"
     else
         execution_result=1
-    tlog error "Test execution failed: $test_file"
+    log_error "Test execution failed: $test_file"
         local end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
         local duration=$((end_time - start_time))
         
@@ -143,7 +143,7 @@ execute_test_routine() {
     local test_config="$2"
     
     # TEMPORARY FIX: Execute directly without routine spawning to prevent fork bomb
-    tlog debug "Executing test directly without routine spawning: $test_file"
+    log_debug "Executing test directly without routine spawning: $test_file"
     
     # Execute test directly
     execute_test_with_monitoring "$test_file" "$test_config"
@@ -154,15 +154,15 @@ execute_test_routine() {
     
     case "$routine_status" in
         "completed")
-    tlog debug "Test routine completed successfully: $test_file"
+    log_debug "Test routine completed successfully: $test_file"
             return 0
             ;;
         "failed"|"killed")
-    tlog error "Test routine failed or was killed: $test_file (status: $routine_status)"
+    log_error "Test routine failed or was killed: $test_file (status: $routine_status)"
             return 1
             ;;
         *)
-    tlog warning "Test routine in unexpected state: $routine_status for $test_file"
+    log_warn "Test routine in unexpected state: $routine_status for $test_file"
             return 1
             ;;
     esac
@@ -180,7 +180,7 @@ execute_test_with_monitoring() {
     
     # Validate test file before execution
     if ! test_executor_validate_test "$test_file"; then
-    tlog error "Test validation failed: $test_file"
+    log_error "Test validation failed: $test_file"
         return 1
     fi
     
@@ -188,7 +188,7 @@ execute_test_with_monitoring() {
     local test_components
     test_components=$(parse_test_file_components "$test_file")
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to parse test file: $test_file"
+    log_error "Failed to parse test file: $test_file"
         return 1
     fi
     
@@ -198,20 +198,20 @@ execute_test_with_monitoring() {
     # 1. Execute gRPC calls
     if ! execute_grpc_calls "$test_file" "$test_components"; then
         components_result=1
-    tlog error "gRPC calls failed for test: $test_file"
+    log_error "gRPC calls failed for test: $test_file"
     fi
     
     # 2. Process assertions (if gRPC calls succeeded)
     if [[ $components_result -eq 0 ]]; then
         if ! execute_test_assertions "$test_file" "$test_components"; then
             components_result=1
-    tlog error "Assertions failed for test: $test_file"
+    log_error "Assertions failed for test: $test_file"
         fi
     fi
     
     # 3. Generate test results
     if ! generate_test_results "$test_file" "$components_result"; then
-    tlog warning "Failed to generate test results for: $test_file"
+    log_warn "Failed to generate test results for: $test_file"
     fi
     
     return $components_result
@@ -241,7 +241,7 @@ execute_grpc_calls() {
         plugin_execute "grpc_client" "execute_calls" "$test_file" "$test_components"
     else
         # Fallback to legacy gRPC execution
-    tlog debug "Using legacy gRPC execution for: $test_file"
+    log_debug "Using legacy gRPC execution for: $test_file"
         # This would call the existing run_single_test or similar
         return 0
     fi
@@ -258,7 +258,7 @@ execute_test_assertions() {
         local responses='[]'  # This would be populated from actual execution
         plugin_execute "grpc_asserts" "$test_file" "$responses" "$test_components"
     else
-    tlog warning "Assertions plugin not available, skipping assertions for: $test_file"
+    log_warn "Assertions plugin not available, skipping assertions for: $test_file"
         return 0
     fi
 }
@@ -300,7 +300,7 @@ test_executor_execute_batch() {
     local completed_tests=0
     local failed_tests=0
     
-    tlog debug "Executing batch of $total_tests tests with batch size $batch_size"
+    log_debug "Executing batch of $total_tests tests with batch size $batch_size"
     
     # Publish batch execution start event
     event_publish "test.batch.start" "{\"total_tests\":$total_tests,\"batch_size\":$batch_size}" "$EVENT_PRIORITY_NORMAL" "test_executor"
@@ -322,7 +322,7 @@ test_executor_execute_batch() {
             if [[ $? -eq 0 ]]; then
                 batch_routines+=("$routine_id")
             else
-    tlog error "Failed to spawn routine for test: $test_file"
+    log_error "Failed to spawn routine for test: $test_file"
                 ((failed_tests++))
             fi
             
@@ -338,7 +338,7 @@ test_executor_execute_batch() {
             fi
         done
         
-    tlog debug "Batch completed: $completed_tests passed, $failed_tests failed"
+    log_debug "Batch completed: $completed_tests passed, $failed_tests failed"
     done
     
     # Publish batch completion event
@@ -362,27 +362,27 @@ test_executor_validate_test() {
     local test_file="$1"
     
     if [[ ! -f "$test_file" ]]; then
-    tlog error "Test file does not exist: $test_file"
+    log_error "Test file does not exist: $test_file"
         return 1
     fi
     
     if [[ ! -r "$test_file" ]]; then
-    tlog error "Test file is not readable: $test_file"
+    log_error "Test file is not readable: $test_file"
         return 1
     fi
     
     # Check file extension
     if [[ ! "$test_file" =~ \.gctf$ ]]; then
-    tlog warning "Test file does not have .gctf extension: $test_file"
+    log_warn "Test file does not have .gctf extension: $test_file"
     fi
     
     # Basic content validation
     if [[ ! -s "$test_file" ]]; then
-    tlog error "Test file is empty: $test_file"
+    log_error "Test file is empty: $test_file"
         return 1
     fi
     
-    tlog debug "Test file validation passed: $test_file"
+    log_debug "Test file validation passed: $test_file"
     return 0
 }
 
@@ -390,7 +390,7 @@ test_executor_validate_test() {
 test_executor_event_handler() {
     local event_message="$1"
     
-    tlog debug "Test executor received event: $event_message"
+    log_debug "Test executor received event: $event_message"
     
     # Handle test-related events
     # This could be used for:

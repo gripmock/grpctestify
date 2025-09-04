@@ -29,11 +29,11 @@ mutex_init() {
     fi
     
     if ! mkdir -p "$GRPCTESTIFY_MUTEX_DIR" 2>/dev/null; then
-        tlog error "Failed to create mutex directory: $GRPCTESTIFY_MUTEX_DIR"
+        log_error "Failed to create mutex directory: $GRPCTESTIFY_MUTEX_DIR"
         return 1
     fi
     
-    tlog debug "Mutex system initialized: $GRPCTESTIFY_MUTEX_DIR"
+    log_debug "Mutex system initialized: $GRPCTESTIFY_MUTEX_DIR"
     return 0
 }
 
@@ -51,7 +51,7 @@ mutex_cleanup() {
         # Force remove all locks before cleanup
         rm -f "$GRPCTESTIFY_MUTEX_DIR"/*.lock 2>/dev/null
         rm -rf "$GRPCTESTIFY_MUTEX_DIR" 2>/dev/null
-        tlog debug "Mutex system cleaned up"
+        log_debug "Mutex system cleaned up"
     fi
     return 0
 }
@@ -91,7 +91,7 @@ _mutex_is_expired() {
     local age=$((current_time - lock_time))
     
     if [[ $age -gt $MUTEX_EXPIRE_TIME ]]; then
-        tlog debug "Lock expired: age=${age}s > ${MUTEX_EXPIRE_TIME}s"
+        log_debug "Lock expired: age=${age}s > ${MUTEX_EXPIRE_TIME}s"
         return 0  # Expired
     else
         return 1  # Still valid
@@ -120,13 +120,13 @@ mutex_acquire() {
     while [[ $retry_count -lt $max_retries ]]; do
         # Clean up expired locks first
         if [[ -f "$lock_file" ]] && _mutex_is_expired "$lock_file"; then
-        tlog debug "Removing expired lock: $(basename "$lock_file")"
+        log_debug "Removing expired lock: $(basename "$lock_file")"
             rm -f "$lock_file" 2>/dev/null
         fi
         
         # Try to acquire lock atomically
         if (set -C; echo "$$:$(date +%s)" > "$lock_file") 2>/dev/null; then
-            tlog debug "Mutex acquired: $(basename "$lock_file")"
+            log_debug "Mutex acquired: $(basename "$lock_file")"
             return 0
         fi
         
@@ -134,12 +134,12 @@ mutex_acquire() {
         local current_time
         current_time=$(date +%s)
         if [[ $current_time -ge $end_time ]]; then
-        tlog warn "Mutex acquisition timeout: $(basename "$lock_file") after ${timeout}s"
+        log_warn "Mutex acquisition timeout: $(basename "$lock_file") after ${timeout}s"
             # Show lock info for debugging
             if [[ -f "$lock_file" ]]; then
                 local lock_content
                 lock_content=$(cat "$lock_file" 2>/dev/null)
-            tlog debug "Lock content: $lock_content"
+            log_debug "Lock content: $lock_content"
             fi
             return 1
         fi
@@ -152,7 +152,7 @@ mutex_acquire() {
             lock_time="${lock_content##*:}"
             
             if [[ -n "$lock_pid" ]] && ! kill -0 "$lock_pid" 2>/dev/null; then
-            tlog debug "Removing stale lock: PID $lock_pid is dead"
+            log_debug "Removing stale lock: PID $lock_pid is dead"
                 rm -f "$lock_file" 2>/dev/null
                 continue
             fi
@@ -164,7 +164,7 @@ mutex_acquire() {
     done
     
     # Failed to acquire lock within timeout
-    tlog error "Failed to acquire lock after $max_retries retries"
+    log_error "Failed to acquire lock after $max_retries retries"
     return 1
 }
 
@@ -179,7 +179,7 @@ mutex_release() {
     local lock_file="$1"
     
     if [[ ! -f "$lock_file" ]]; then
-        tlog debug "Lock file does not exist: $(basename "$lock_file")"
+        log_debug "Lock file does not exist: $(basename "$lock_file")"
         return 0
     fi
     
@@ -190,10 +190,10 @@ mutex_release() {
     # Only remove if we own the lock
     if [[ "$lock_pid" == "$$" ]]; then
         rm -f "$lock_file"
-        tlog debug "Mutex released: $(basename "$lock_file")"
+        log_debug "Mutex released: $(basename "$lock_file")"
         return 0
     else
-        tlog warn "Cannot release lock owned by PID $lock_pid (current: $$)"
+        log_warn "Cannot release lock owned by PID $lock_pid (current: $$)"
         return 1
     fi
 }
@@ -209,7 +209,7 @@ mutex_with_output_lock() {
     local exit_code
     
     if ! mutex_acquire "$GRPCTESTIFY_OUTPUT_MUTEX"; then
-        tlog error "Failed to acquire output mutex"
+        log_error "Failed to acquire output mutex"
         return 1
     fi
     
@@ -232,7 +232,7 @@ mutex_with_state_lock() {
     local exit_code
     
     if ! mutex_acquire "$GRPCTESTIFY_STATE_MUTEX"; then
-        tlog error "Failed to acquire state mutex"
+        log_error "Failed to acquire state mutex"
         return 1
     fi
     
@@ -339,7 +339,7 @@ mutex_cleanup_expired() {
     
     for lock_file in "$GRPCTESTIFY_MUTEX_DIR"/*.lock; do
         if [[ -f "$lock_file" ]] && _mutex_is_expired "$lock_file"; then
-            tlog debug "Force removing expired lock: $(basename "$lock_file")"
+            log_debug "Force removing expired lock: $(basename "$lock_file")"
             rm -f "$lock_file" 2>/dev/null
             ((cleaned++))
         fi
@@ -349,7 +349,7 @@ mutex_cleanup_expired() {
 }
 
 # Cleanup on exit
-# REMOVED: trap 'mutex_cleanup' EXIT
+ 
 # Now using unified signal_manager for proper cleanup handling
 
 # Export functions

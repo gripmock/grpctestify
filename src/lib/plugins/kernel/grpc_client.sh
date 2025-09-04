@@ -20,22 +20,22 @@ GRPC_CLIENT_POOL_SIZE="${GRPC_CLIENT_POOL_SIZE:-4}"
 
 # Initialize gRPC client plugin
 grpc_client_init() {
-    tlog debug "Initializing gRPC client plugin..."
+    log_debug "Initializing gRPC client plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
     # Check required dependencies
     if ! command -v grpcurl >/dev/null 2>&1; then
-    tlog error "grpcurl is required but not installed"
+    log_error "grpcurl is required but not installed"
         return 1
     fi
     
     if ! command -v jq >/dev/null 2>&1; then
-    tlog error "jq is required but not installed"
+    log_error "jq is required but not installed"
         return 1
     fi
     
@@ -48,7 +48,7 @@ grpc_client_init() {
     # Subscribe to gRPC-related events
     event_subscribe "grpc_client" "grpc.*" "grpc_client_event_handler"
     
-    tlog debug "gRPC client plugin initialized successfully"
+    log_debug "gRPC client plugin initialized successfully"
     return 0
 }
 
@@ -75,7 +75,7 @@ grpc_client_handler() {
             grpc_client_describe_service "${args[@]}"
             ;;
         *)
-    tlog error "Unknown gRPC client command: $command"
+    log_error "Unknown gRPC client command: $command"
             return 1
             ;;
     esac
@@ -87,7 +87,7 @@ grpc_client_execute_call() {
     local execution_options="${2:-{}}"
     
     if [[ -z "$call_config" ]]; then
-    tlog error "grpc_client_execute_call: call_config required"
+    log_error "grpc_client_execute_call: call_config required"
         return 1
     fi
     
@@ -116,15 +116,15 @@ grpc_client_execute_call() {
     enable_retry=$(echo "$execution_options" | jq -r '.enable_retry // true')
     
     if [[ -z "$endpoint" ]]; then
-    tlog error "Missing endpoint in gRPC call configuration"
+    log_error "Missing endpoint in gRPC call configuration"
         return 1
     fi
     
-    tlog debug "Executing gRPC call: $endpoint on $address"
+    log_debug "Executing gRPC call: $endpoint on $address"
 
     # Allow override via plugin: plugin_grpc_client_execute(call_config_json, execution_options_json)
     if command -v plugin_grpc_client_execute >/dev/null 2>&1; then
-        tlog debug "Delegating gRPC execution to override plugin"
+        log_debug "Delegating gRPC execution to override plugin"
         local plugin_out
         if plugin_out=$(plugin_grpc_client_execute "$call_config" "$execution_options"); then
             echo "$plugin_out"
@@ -158,7 +158,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "grpc_calls" "$timeout")
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for gRPC call: $endpoint"
+    log_error "Failed to acquire resource for gRPC call: $endpoint"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -183,7 +183,7 @@ EOF
     
     # Record call result
     if [[ $call_result -eq 0 ]]; then
-    tlog debug "gRPC call succeeded: $endpoint (${duration}ms)"
+    log_debug "gRPC call succeeded: $endpoint (${duration}ms)"
         
         # Store successful call
         state_db_atomic "record_grpc_call" "$endpoint" "SUCCESS" "$duration" "$response"
@@ -194,7 +194,7 @@ EOF
         # Output response
         echo "$response"
     else
-    tlog error "gRPC call failed: $endpoint (${duration}ms)"
+    log_error "gRPC call failed: $endpoint (${duration}ms)"
         
         # Store failed call
         state_db_atomic "record_grpc_call" "$endpoint" "FAILED" "$duration" "$response"
@@ -262,9 +262,9 @@ execute_grpc_call() {
         return 0
     fi
     
-    # Execute via shared helper with timeout
+    # Execute via shared helper with timeout (trace timing)
     local out
-    out=$(execute_grpcurl_argv "${timeout:-30}" "$request" "${GRPCTESTIFY_GRPC_DEBUG:+-v}" "${GRPCURL_ARGS[@]}")
+    out=$( execute_grpcurl_argv "${timeout:-30}" "$request" "${GRPCTESTIFY_GRPC_DEBUG:+-v}" "${GRPCURL_ARGS[@]}" )
     local status=$?
     echo "$out"
     return $status
@@ -286,11 +286,11 @@ execute_grpc_call_with_retry() {
     local retry_delay="${GRPC_CLIENT_RETRY_DELAY}"
     local attempt=0
     
-    tlog debug "🔄 Using retry mechanism: max_retries=$max_retries, delay=${retry_delay}s"
+    log_debug "🔄 Using retry mechanism: max_retries=$max_retries, delay=${retry_delay}s"
     
     while [[ $attempt -le $max_retries ]]; do
         if [[ $attempt -gt 0 ]]; then
-    tlog debug "Retry attempt $attempt/$max_retries for $endpoint"
+    log_debug "Retry attempt $attempt/$max_retries for $endpoint"
             sleep "$retry_delay"
             # Exponential backoff
             retry_delay=$((retry_delay * 2))
@@ -305,7 +305,7 @@ execute_grpc_call_with_retry() {
         ((attempt++))
     done
     
-    tlog error "gRPC call failed after $max_retries retries: $endpoint"
+    log_error "gRPC call failed after $max_retries retries: $endpoint"
     return 1
 }
 
@@ -315,7 +315,7 @@ grpc_client_execute_calls() {
     local test_components="$2"
     
     if [[ -z "$test_file" || -z "$test_components" ]]; then
-    tlog error "grpc_client_execute_calls: test_file and test_components required"
+    log_error "grpc_client_execute_calls: test_file and test_components required"
         return 1
     fi
     
@@ -324,7 +324,7 @@ grpc_client_execute_calls() {
     grpc_calls=$(echo "$test_components" | jq -r '.grpc_calls')
     
     if [[ -z "$grpc_calls" || "$grpc_calls" == "null" ]]; then
-    tlog error "No gRPC calls configuration found in test components"
+    log_error "No gRPC calls configuration found in test components"
         return 1
     fi
     
@@ -338,18 +338,18 @@ grpc_client_validate_connection() {
     local timeout="${2:-5}"
     
     if [[ -z "$address" ]]; then
-    tlog error "grpc_client_validate_connection: address required"
+    log_error "grpc_client_validate_connection: address required"
         return 1
     fi
     
-    tlog debug "Validating gRPC connection to: $address"
+    log_debug "Validating gRPC connection to: $address"
     
     # Try to list services as a connection test
     if grpcurl -plaintext -max-time "$timeout" "$address" list >/dev/null 2>&1; then
-    tlog debug "gRPC connection validated successfully: $address"
+    log_debug "gRPC connection validated successfully: $address"
         return 0
     else
-    tlog error "gRPC connection validation failed: $address"
+    log_error "gRPC connection validation failed: $address"
         return 1
     fi
 }
@@ -360,11 +360,11 @@ grpc_client_list_services() {
     local timeout="${2:-10}"
     
     if [[ -z "$address" ]]; then
-    tlog error "grpc_client_list_services: address required"
+    log_error "grpc_client_list_services: address required"
         return 1
     fi
     
-    tlog debug "Listing gRPC services on: $address"
+    log_debug "Listing gRPC services on: $address"
     
     grpcurl -plaintext -max-time "$timeout" "$address" list 2>/dev/null
 }
@@ -376,11 +376,11 @@ grpc_client_describe_service() {
     local timeout="${3:-10}"
     
     if [[ -z "$address" || -z "$service" ]]; then
-    tlog error "grpc_client_describe_service: address and service required"
+    log_error "grpc_client_describe_service: address and service required"
         return 1
     fi
     
-    tlog debug "Describing gRPC service: $service on $address"
+    log_debug "Describing gRPC service: $service on $address"
     
     grpcurl -plaintext -max-time "$timeout" "$address" describe "$service" 2>/dev/null
 }
@@ -447,7 +447,7 @@ format_grpc_debug_output() {
     echo -e "🔍    $formatted_cmd" >&2
     
     if [[ -n "$request" ]]; then
-    tlog debug "📤 Request Payload:"
+    log_debug "📤 Request Payload:"
         # Pretty print JSON if possible, otherwise show as-is
         if command -v jq >/dev/null 2>&1 && echo "$request" | jq . >/dev/null 2>&1; then
             echo "$request" | jq -C . 2>/dev/null | sed 's/^/🔍    /' >&2
@@ -455,7 +455,7 @@ format_grpc_debug_output() {
             echo "$request" | sed 's/^/🔍    /' >&2
         fi
     else
-    tlog debug "📤 Request Payload: (empty)"
+    log_debug "📤 Request Payload: (empty)"
     fi
 }
 
@@ -463,7 +463,7 @@ format_grpc_debug_output() {
 grpc_client_event_handler() {
     local event_message="$1"
     
-    tlog debug "gRPC client received event: $event_message"
+    log_debug "gRPC client received event: $event_message"
     
     # Handle gRPC-related events
     # This could be used for:

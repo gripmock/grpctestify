@@ -156,15 +156,15 @@ create_default_config() {
     local config_file="$1"
     
     if [[ -z "$config_file" ]]; then
-    tlog error "Config file path is required"
+    log_error "Config file path is required"
         return 1
     fi
     
     # Configuration is handled via command line flags only
     
         if [[ -f "$config_file" ]]; then
-	tlog debug "Configuration file already exists: $config_file"
-	tlog info "Use --init-config with a different filename to create a new config file"
+	log_debug "Configuration file already exists: $config_file"
+	log_info "Use --init-config with a different filename to create a new config file"
         return 0
     fi
     
@@ -193,8 +193,8 @@ plugin_path=./plugins
 default_address=localhost:4770
 EOF
     
-    tlog info "Configuration file created: $config_file"
-    tlog info "You can edit this file to customize your settings"
+    log_info "Configuration file created: $config_file"
+    log_info "You can edit this file to customize your settings"
 }
 
 # Install shell completion
@@ -209,8 +209,8 @@ install_completion() {
             install_zsh_completion
             ;;
         *)
-    tlog error "Unsupported shell type: $shell_type"
-    tlog info "Supported shells: bash, zsh, all"
+    log_error "Unsupported shell type: $shell_type"
+    log_info "Supported shells: bash, zsh, all"
             return 1
             ;;
     esac
@@ -254,8 +254,8 @@ _grpctestify() {
 complete -F _grpctestify grpctestify
 EOF
     
-    tlog info "Bash completion installed for user"
-    tlog info "Add 'source ~/.local/share/bash-completion/completions/grpctestify' to your ~/.bashrc"
+    log_info "Bash completion installed for user"
+    log_info "Add 'source ~/.local/share/bash-completion/completions/grpctestify' to your ~/.bashrc"
 }
 
 # Install zsh completion
@@ -299,8 +299,8 @@ _grpctestify() {
 _grpctestify "$@"
 EOF
     
-    tlog info "Zsh completion installed to fpath"
-    tlog info "Add '/Users/babichev/.local/share/zsh/site-functions' to your fpath in ~/.zshrc"
+    log_info "Zsh completion installed to fpath"
+    log_info "Add '/Users/babichev/.local/share/zsh/site-functions' to your fpath in ~/.zshrc"
 }
 
 # Export functions

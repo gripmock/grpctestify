@@ -54,7 +54,7 @@ test_state_init() {
     GRPCTESTIFY_TEST_RESULTS=()
     GRPCTESTIFY_FAILED_DETAILS=()
     
-    tlog debug "Test state initialized: $total_tests tests, $execution_mode mode"
+    log_debug "Test state initialized: $total_tests tests, $execution_mode mode"
 }
 
 # Finalize test execution
@@ -66,7 +66,7 @@ test_state_finalize() {
     GRPCTESTIFY_STATE[executed_tests]="$executed"
     GRPCTESTIFY_STATE[skipped_tests]=$((GRPCTESTIFY_STATE[total_tests] - executed))
     
-    tlog debug "Test state finalized: ${GRPCTESTIFY_STATE[executed_tests]}/${GRPCTESTIFY_STATE[total_tests]} executed"
+    log_debug "Test state finalized: ${GRPCTESTIFY_STATE[executed_tests]}/${GRPCTESTIFY_STATE[total_tests]} executed"
 }
 
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -83,7 +83,7 @@ test_state_record_result() {
     
     # Validate parameters
     if [[ -z "$test_name" || -z "$status" ]]; then
-    tlog error "test_state_record_result: test_name and status are required"
+    log_error "test_state_record_result: test_name and status are required"
         return 1
     fi
     
@@ -114,11 +114,11 @@ test_state_record_result() {
             ((GRPCTESTIFY_STATE[skipped_tests]++))
             ;;
         *)
-    tlog warning "Unknown test status: $status for test $normalized_name"
+    log_warn "Unknown test status: $status for test $normalized_name"
             ;;
     esac
     
-    tlog debug "Recorded result: $normalized_name = $status (${duration_ms}ms)"
+    log_debug "Recorded result: $normalized_name = $status (${duration_ms}ms)"
 }
 
 # Record detailed failure information
@@ -385,14 +385,14 @@ test_state_set_plugin_metadata() {
     local value="$3"
     
     if [[ -z "$plugin_name" || -z "$key" ]]; then
-    tlog error "test_state_set_plugin_metadata: plugin_name and key are required"
+    log_error "test_state_set_plugin_metadata: plugin_name and key are required"
         return 1
     fi
     
     local metadata_key="${plugin_name}:${key}"
     GRPCTESTIFY_PLUGIN_METADATA["$metadata_key"]="$value"
     
-    tlog debug "Plugin metadata stored: $metadata_key = $value"
+    log_debug "Plugin metadata stored: $metadata_key = $value"
 }
 
 # Allow plugins to retrieve global metadata
@@ -401,7 +401,7 @@ test_state_get_plugin_metadata() {
     local key="$2"
     
     if [[ -z "$plugin_name" || -z "$key" ]]; then
-    tlog error "test_state_get_plugin_metadata: plugin_name and key are required"
+    log_error "test_state_get_plugin_metadata: plugin_name and key are required"
         return 1
     fi
     
@@ -417,14 +417,14 @@ test_state_set_test_metadata() {
     local value="$4"
     
     if [[ -z "$test_name" || -z "$plugin_name" || -z "$key" ]]; then
-    tlog error "test_state_set_test_metadata: test_name, plugin_name and key are required"
+    log_error "test_state_set_test_metadata: test_name, plugin_name and key are required"
         return 1
     fi
     
     local metadata_key="${test_name}:${plugin_name}:${key}"
     GRPCTESTIFY_TEST_METADATA["$metadata_key"]="$value"
     
-    tlog debug "Test metadata stored: $metadata_key = $value"
+    log_debug "Test metadata stored: $metadata_key = $value"
 }
 
 # Allow plugins to retrieve per-test metadata
@@ -434,7 +434,7 @@ test_state_get_test_metadata() {
     local key="$3"
     
     if [[ -z "$test_name" || -z "$plugin_name" || -z "$key" ]]; then
-    tlog error "test_state_get_test_metadata: test_name, plugin_name and key are required"
+    log_error "test_state_get_test_metadata: test_name, plugin_name and key are required"
         return 1
     fi
     
@@ -449,22 +449,22 @@ test_state_update() {
     local plugin_name="${3:-unknown}"
     
     if [[ -z "$key" ]]; then
-    tlog error "test_state_update: key is required"
+    log_error "test_state_update: key is required"
         return 1
     fi
     
     # Validate that key exists and is modifiable
     case "$key" in
         "total_tests"|"start_time"|"execution_mode")
-    tlog warning "Plugin $plugin_name attempted to modify read-only state: $key"
+    log_warn "Plugin $plugin_name attempted to modify read-only state: $key"
             return 1
             ;;
         "passed_tests"|"failed_tests"|"skipped_tests"|"executed_tests"|"end_time"|"parallel_jobs"|"dry_run")
             GRPCTESTIFY_STATE["$key"]="$value"
-    tlog debug "Plugin $plugin_name updated state: $key = $value"
+    log_debug "Plugin $plugin_name updated state: $key = $value"
             ;;
         *)
-    tlog warning "Plugin $plugin_name attempted to set unknown state: $key"
+    log_warn "Plugin $plugin_name attempted to set unknown state: $key"
             return 1
             ;;
     esac
@@ -480,10 +480,10 @@ test_state_increment() {
         "passed_tests"|"failed_tests"|"skipped_tests"|"executed_tests")
             local current="${GRPCTESTIFY_STATE[$counter]}"
             GRPCTESTIFY_STATE["$counter"]=$((current + amount))
-    tlog debug "Plugin $plugin_name incremented $counter by $amount (now: ${GRPCTESTIFY_STATE[$counter]})"
+    log_debug "Plugin $plugin_name incremented $counter by $amount (now: ${GRPCTESTIFY_STATE[$counter]})"
             ;;
         *)
-    tlog error "test_state_increment: invalid counter $counter"
+    log_error "test_state_increment: invalid counter $counter"
             return 1
             ;;
     esac
@@ -505,7 +505,7 @@ test_state_add_test_result() {
     
     test_state_record_result "$test_name" "$status" "$duration_ms" "${error_message}${attribution}" "$(get_current_time_ms)"
     
-    tlog debug "Plugin $plugin_name added test result: $test_name = $status"
+    log_debug "Plugin $plugin_name added test result: $test_name = $status"
 }
 
 # Get all plugin metadata as JSON

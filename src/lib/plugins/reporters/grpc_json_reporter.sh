@@ -14,11 +14,11 @@ readonly PLUGIN_JSON_REPORTER_TYPE="reporter"
 
 # Initialize JSON reporter plugin
 grpc_json_reporter_init() {
-    tlog debug "Initializing JSON reporter plugin..."
+    log_debug "Initializing JSON reporter plugin..."
     
     # Ensure plugin integration is available
     if ! command -v plugin_register >/dev/null 2>&1; then
-    tlog warning "Plugin integration system not available, skipping plugin registration"
+    log_warn "Plugin integration system not available, skipping plugin registration"
         return 1
     fi
     
@@ -31,7 +31,7 @@ grpc_json_reporter_init() {
     # Subscribe to reporting events
     event_subscribe "json_reporter" "report.*" "grpc_json_reporter_event_handler"
     
-    tlog debug "JSON reporter plugin initialized successfully"
+    log_debug "JSON reporter plugin initialized successfully"
     return 0
 }
 
@@ -52,7 +52,7 @@ grpc_json_reporter_handler() {
             grpc_json_reporter_validate_output "${args[@]}"
             ;;
         *)
-    tlog error "Unknown JSON reporter command: $command"
+    log_error "Unknown JSON reporter command: $command"
             return 1
             ;;
     esac
@@ -64,11 +64,11 @@ grpc_json_reporter_generate() {
     local report_config="${2:-{}}"
     
     if [[ -z "$output_file" ]]; then
-    tlog error "grpc_json_reporter_generate: output_file required"
+    log_error "grpc_json_reporter_generate: output_file required"
         return 1
     fi
     
-    tlog debug "Generating JSON report: $output_file"
+    log_debug "Generating JSON report: $output_file"
     
     # Publish report generation start event
     local report_metadata
@@ -91,7 +91,7 @@ EOF
     local resource_token
     resource_token=$(pool_acquire "json_reporting" 30)
     if [[ $? -ne 0 ]]; then
-    tlog error "Failed to acquire resource for JSON report generation"
+    log_error "Failed to acquire resource for JSON report generation"
         state_db_rollback_transaction "$tx_id"
         return 1
     fi
@@ -101,7 +101,7 @@ EOF
     local start_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
     
     if generate_json_report_from_state "$output_file" "$report_config"; then
-    tlog info "📊 JSON report generated successfully: $output_file"
+    log_info "📊 JSON report generated successfully: $output_file"
         local end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
         local duration=$((end_time - start_time))
         
@@ -112,7 +112,7 @@ EOF
         event_publish "report.generation.success" "{\"output_file\":\"$output_file\",\"duration\":$duration}" "$EVENT_PRIORITY_NORMAL" "json_reporter"
     else
         generation_result=1
-    tlog error "JSON report generation failed: $output_file"
+    log_error "JSON report generation failed: $output_file"
         local end_time=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
         local duration=$((end_time - start_time))
         
@@ -243,10 +243,10 @@ generate_json_report_from_state() {
     fi
     
     if [[ $? -eq 0 ]]; then
-    tlog debug "JSON report written to: $output_file"
+    log_debug "JSON report written to: $output_file"
         return 0
     else
-    tlog error "Failed to write JSON report to: $output_file"
+    log_error "Failed to write JSON report to: $output_file"
         return 1
     fi
 }
@@ -289,13 +289,13 @@ grpc_json_reporter_validate_output() {
     local output_file="$1"
     
     if [[ ! -f "$output_file" ]]; then
-    tlog error "Report file does not exist: $output_file"
+    log_error "Report file does not exist: $output_file"
         return 1
     fi
     
     # Validate JSON structure
     if ! jq . "$output_file" >/dev/null 2>&1; then
-    tlog error "Invalid JSON in report file: $output_file"
+    log_error "Invalid JSON in report file: $output_file"
         return 1
     fi
     
@@ -303,12 +303,12 @@ grpc_json_reporter_validate_output() {
     local required_fields=("report" "summary" "test_results")
     for field in "${required_fields[@]}"; do
         if ! jq -e ".$field" "$output_file" >/dev/null 2>&1; then
-    tlog error "Missing required field '$field' in report: $output_file"
+    log_error "Missing required field '$field' in report: $output_file"
             return 1
         fi
     done
     
-    tlog debug "JSON report validation passed: $output_file"
+    log_debug "JSON report validation passed: $output_file"
     return 0
 }
 
@@ -316,7 +316,7 @@ grpc_json_reporter_validate_output() {
 grpc_json_reporter_event_handler() {
     local event_message="$1"
     
-    tlog debug "JSON reporter received event: $event_message"
+    log_debug "JSON reporter received event: $event_message"
     
     # Handle reporting events
     # This could be used for:
@@ -342,10 +342,10 @@ record_report_generation() {
     return 0
 }
 
-# Legacy functions removed - use grpc_json_reporter_generate directly
+ 
 
 # Export functions
 export -f grpc_json_reporter_init grpc_json_reporter_handler grpc_json_reporter_generate
 export -f generate_json_report_from_state grpc_json_reporter_format_results grpc_json_reporter_validate_output
 export -f grpc_json_reporter_event_handler record_report_generation
-# Legacy function exports removed
+ 

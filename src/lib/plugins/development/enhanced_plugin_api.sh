@@ -32,7 +32,7 @@ plugin_register_enhanced() {
     # Register capabilities
     if [[ -n "$capabilities" ]]; then
         PLUGIN_CAPABILITIES["$plugin_name"]="$capabilities"
-    tlog debug "Plugin '$plugin_name' registered with capabilities: $capabilities"
+    log_debug "Plugin '$plugin_name' registered with capabilities: $capabilities"
     fi
     
     # Register hooks if provided
@@ -66,7 +66,7 @@ plugin_hook_register() {
         PLUGIN_HOOKS["$hook_name"]="${PLUGIN_HOOKS[$hook_name]},$plugin_name"
     fi
     
-    tlog debug "Plugin '$plugin_name' registered for hook '$hook_name' with priority $priority"
+    log_debug "Plugin '$plugin_name' registered for hook '$hook_name' with priority $priority"
 }
 
 # Execute Hook with Data Pipeline
@@ -86,7 +86,7 @@ plugin_hook_execute() {
         return 0
     fi
     
-    tlog debug "Executing hook '$hook_name' ($hook_type) with ${#hook_plugins[@]} plugins"
+    log_debug "Executing hook '$hook_name' ($hook_type) with ${#hook_plugins[@]} plugins"
     
     local current_data="$hook_data"
     local plugin_result
@@ -100,7 +100,7 @@ plugin_hook_execute() {
                     if plugin_result=$(plugin_execute "$plugin_name" "hook:$hook_name" "$current_data"); then
                         current_data="$plugin_result"
                     else
-    tlog warning "Plugin '$plugin_name' failed in hook '$hook_name'"
+    log_warn "Plugin '$plugin_name' failed in hook '$hook_name'"
                     fi
                     ;;
                 "$HOOK_TYPE_ACTION")

@@ -25,17 +25,17 @@ export ROUTINE_CLEANUP_INTERVAL="${ROUTINE_CLEANUP_INTERVAL:-10}"     # seconds
 
 # Initialize routine manager
 routine_manager_init() {
-    tlog debug "Initializing routine manager..."
+    log_debug "Initializing routine manager..."
     
     # Ensure required dependencies are available
     if ! command -v jobs >/dev/null 2>&1; then
-        tlog error "Routine manager requires 'jobs' command (bash built-in)"
+        log_error "Routine manager requires 'jobs' command (bash built-in)"
         return 1
     fi
     
     # Initialize unified process manager first
     if ! process_manager_init; then
-        tlog error "Failed to initialize process manager"
+        log_error "Failed to initialize process manager"
         return 1
     fi
     
@@ -44,7 +44,7 @@ routine_manager_init() {
     
     # LAZY INITIALIZATION: Don't start monitor immediately!
     # Monitor will be started only when first routine is spawned
-    tlog debug "Routine manager initialized successfully (monitor will start on demand)"
+    log_debug "Routine manager initialized successfully (monitor will start on demand)"
     return 0
 }
 
@@ -55,7 +55,7 @@ routine_manager_start_monitor_if_needed() {
         return 0  # Monitor already running
     fi
     
-    tlog debug "Starting routine monitor on demand..."
+    log_debug "Starting routine monitor on demand..."
     
     # Start the monitor worker
     local monitor_pid
@@ -64,7 +64,7 @@ routine_manager_start_monitor_if_needed() {
     # Store monitor PID for future checks
     ROUTINE_MONITOR_PID="$monitor_pid"
     
-    tlog debug "Routine monitor started with PID: $monitor_pid"
+    log_debug "Routine monitor started with PID: $monitor_pid"
 }
 
 # Spawn a new routine (background process)
@@ -73,18 +73,18 @@ routine_spawn() {
     local routine_id="${2:-routine_$((++ROUTINE_COUNTER))}"
     
     if [[ -z "$command" ]]; then
-    tlog error "routine_spawn: command required"
+    log_error "routine_spawn: command required"
         return 1
     fi
     
     # SECURITY: Basic validation to prevent obvious injection attacks
     # Allow internal function calls and safe command patterns
     if [[ ! "$command" =~ ^[a-zA-Z_][a-zA-Z0-9_]*.*$ ]] && [[ ! "$command" =~ ^[a-zA-Z0-9_/.-]+(\s+[a-zA-Z0-9_/.-]+)*$ ]]; then
-    tlog error "Invalid command pattern for security: $command"
+    log_error "Invalid command pattern for security: $command"
         return 1
     fi
     
-    tlog debug "Spawning routine '$routine_id': $command"
+    log_debug "Spawning routine '$routine_id': $command"
     
     # LAZY INITIALIZATION: Start monitor on first routine spawn
     routine_manager_start_monitor_if_needed
@@ -118,7 +118,7 @@ WRAPPER_EOF
     
     # Verify the process actually started
     if ! kill -0 "$pid" 2>/dev/null; then
-        tlog error "Failed to spawn routine '$routine_id': process not found"
+        log_error "Failed to spawn routine '$routine_id': process not found"
         return 1
     fi
     
@@ -129,7 +129,7 @@ WRAPPER_EOF
     ROUTINE_COMMANDS["$routine_id"]="$command"
     ROUTINE_HEARTBEAT["$routine_id"]=$start_time
     
-    tlog debug "Routine '$routine_id' spawned with PID $pid"
+    log_debug "Routine '$routine_id' spawned with PID $pid"
     echo "$routine_id"
     return 0
 }
@@ -198,7 +198,7 @@ routine_heartbeat_worker() {
         ((heartbeat_count++))
     done
     
-    tlog debug "Heartbeat worker for routine '$routine_id' completed after $heartbeat_count beats"
+    log_debug "Heartbeat worker for routine '$routine_id' completed after $heartbeat_count beats"
 }
 
 # Monitor worker - replaces the old infinite loop monitor
@@ -217,7 +217,7 @@ routine_manager_monitor_worker() {
         ((monitor_iterations++))
     done
     
-    tlog debug "Routine monitor worker completed after $monitor_iterations iterations"
+    log_debug "Routine monitor worker completed after $monitor_iterations iterations"
 }
 
 # Check for stale routines (extracted from old monitor)
@@ -234,7 +234,7 @@ routine_manager_check_stale_routines() {
         # Check lifetime limit
         local lifetime=$((current_time - start_time))
         if [[ $lifetime -gt $ROUTINE_MAX_LIFETIME ]]; then
-            tlog warning "Routine '$routine_id' exceeded max lifetime (${lifetime}s), killing..."
+            log_warn "Routine '$routine_id' exceeded max lifetime (${lifetime}s), killing..."
             routine_kill "$routine_id" "KILL"
             continue
         fi
@@ -246,7 +246,7 @@ routine_manager_check_stale_routines() {
             local heartbeat_age=$((current_time - last_heartbeat))
             
             if [[ $heartbeat_age -gt $((ROUTINE_HEARTBEAT_INTERVAL * 3)) ]]; then
-                tlog warning "Routine '$routine_id' heartbeat stale (${heartbeat_age}s), checking..."
+                log_warn "Routine '$routine_id' heartbeat stale (${heartbeat_age}s), checking..."
                 routine_update_status "$routine_id"
             fi
         fi
@@ -259,17 +259,17 @@ routine_kill() {
     local signal="${2:-TERM}"
     
     if [[ -z "$routine_id" ]]; then
-    tlog error "routine_kill: routine_id required"
+    log_error "routine_kill: routine_id required"
         return 1
     fi
     
     local pid="${ROUTINE_PIDS[$routine_id]:-}"
     if [[ -z "$pid" ]]; then
-    tlog warning "routine_kill: routine '$routine_id' not found"
+    log_warn "routine_kill: routine '$routine_id' not found"
         return 1
     fi
     
-    tlog debug "Killing routine '$routine_id' (PID $pid) with signal $signal"
+    log_debug "Killing routine '$routine_id' (PID $pid) with signal $signal"
     
     # Kill process group to ensure all child processes are terminated
     if kill -$signal -$pid 2>/dev/null; then
@@ -280,10 +280,10 @@ routine_kill() {
         rm -f "/tmp/grpctestify_heartbeat_${routine_id}" 2>/dev/null
         rm -f "/tmp/grpctestify_routine_result_${routine_id}" 2>/dev/null
         
-    tlog debug "Routine '$routine_id' killed successfully"
+    log_debug "Routine '$routine_id' killed successfully"
         return 0
     else
-    tlog error "Failed to kill routine '$routine_id' (PID $pid)"
+    log_error "Failed to kill routine '$routine_id' (PID $pid)"
         return 1
     fi
 }
@@ -294,17 +294,17 @@ routine_wait() {
     local timeout="${2:-0}"  # 0 = no timeout
     
     if [[ -z "$routine_id" ]]; then
-    tlog error "routine_wait: routine_id required"
+    log_error "routine_wait: routine_id required"
         return 1
     fi
     
     local pid="${ROUTINE_PIDS[$routine_id]:-}"
     if [[ -z "$pid" ]]; then
-    tlog warning "routine_wait: routine '$routine_id' not found"
+    log_warn "routine_wait: routine '$routine_id' not found"
         return 1
     fi
     
-    tlog debug "Waiting for routine '$routine_id' (PID $pid)${timeout:+ with timeout $timeout s}"
+    log_debug "Waiting for routine '$routine_id' (PID $pid)${timeout:+ with timeout $timeout s}"
     
     if [[ $timeout -gt 0 ]]; then
         # Wait with timeout
@@ -319,7 +319,7 @@ routine_wait() {
         
         # Check if still running after timeout
         if kill -0 "$pid" 2>/dev/null; then
-    tlog warning "routine_wait: timeout waiting for routine '$routine_id'"
+    log_warn "routine_wait: timeout waiting for routine '$routine_id'"
             return 124  # timeout exit code
         fi
     else
@@ -331,7 +331,7 @@ routine_wait() {
     routine_update_status "$routine_id"
     
     local status="${ROUTINE_STATUS[$routine_id]}"
-    tlog debug "Routine '$routine_id' wait completed with status: $status"
+    log_debug "Routine '$routine_id' wait completed with status: $status"
     
     [[ "$status" == "completed" ]]
 }
@@ -381,7 +381,7 @@ routine_status() {
     local format="${2:-status}"  # status|full|json
     
     if [[ -z "$routine_id" ]]; then
-    tlog error "routine_status: routine_id required"
+    log_error "routine_status: routine_id required"
         return 1
     fi
     
@@ -478,7 +478,7 @@ routine_list() {
 routine_cleanup() {
     local force="${1:-false}"  # Force cleanup of all routines
     
-    tlog debug "Cleaning up routines (force: $force)..."
+    log_debug "Cleaning up routines (force: $force)..."
     
     local cleaned=0
     for routine_id in "${!ROUTINE_PIDS[@]}"; do
@@ -491,7 +491,7 @@ routine_cleanup() {
         
         # Cleanup completed/failed routines or force cleanup
         if [[ "$force" == "true" || "$status" == "completed" || "$status" == "failed" || "$status" == "killed" ]]; then
-    tlog debug "Cleaning up routine '$routine_id' (status: $status)"
+    log_debug "Cleaning up routine '$routine_id' (status: $status)"
             
             # Remove from tracking
             unset ROUTINE_PIDS["$routine_id"]
@@ -509,13 +509,13 @@ routine_cleanup() {
         fi
     done
     
-    tlog debug "Cleaned up $cleaned routines"
+    log_debug "Cleaned up $cleaned routines"
     return 0
 }
 
 # Emergency stop all routines
 routine_manager_emergency_stop() {
-    tlog warning "Emergency stop: killing all routines..."
+    log_warn "Emergency stop: killing all routines..."
     
     for routine_id in "${!ROUTINE_PIDS[@]}"; do
         routine_kill "$routine_id" "KILL"
@@ -559,7 +559,7 @@ routine_update_status() {
                     ROUTINE_STATUS["$routine_id"]="failed"
                 fi
                 
-    tlog debug "Routine '$routine_id' finished with exit code $exit_code"
+    log_debug "Routine '$routine_id' finished with exit code $exit_code"
             else
                 ROUTINE_STATUS["$routine_id"]="failed"
                 ROUTINE_END_TIME["$routine_id"]=$(date +%s)
@@ -574,7 +574,7 @@ routine_update_status() {
 
 # Full cleanup on exit
 routine_manager_cleanup() {
-    tlog debug "Routine manager cleanup..."
+    log_debug "Routine manager cleanup..."
     routine_cleanup true
     
     # Clean up any remaining files

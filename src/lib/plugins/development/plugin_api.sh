@@ -29,9 +29,9 @@ register_plugin() {
     
     # Debug output in dev mode
     if [[ "$PLUGIN_DEV_MODE" == "true" ]]; then
-	tlog debug "Registered plugin: $plugin_name -> $plugin_function ($plugin_type)"
+	log_debug "Registered plugin: $plugin_name -> $plugin_function ($plugin_type)"
         if [[ -n "$dependencies" ]]; then
-	    tlog debug "  Dependencies: $dependencies"
+	    log_debug "  Dependencies: $dependencies"
         fi
     fi
 }
@@ -52,7 +52,7 @@ auto_load_execution_plugins() {
         "test_orchestrator:Test orchestration:execution:grpc_client,failure_reporter,json_comparator"
     )
     
-    tlog debug "Auto-loading execution plugins..."
+    log_debug "Auto-loading execution plugins..."
     
     for plugin_info in "${execution_plugins[@]}"; do
         IFS=':' read -r name desc type deps <<< "$plugin_info"
@@ -61,10 +61,10 @@ auto_load_execution_plugins() {
         register_plugin "$name" "auto_loaded" "$desc" "$type" "$deps"
         
         # The actual loading is handled by bashly plugin system
-        tlog debug "  Registered: $name (deps: ${deps:-none})"
+        log_debug "  Registered: $name (deps: ${deps:-none})"
     done
     
-    tlog debug "Execution plugins auto-loading completed"
+    log_debug "Execution plugins auto-loading completed"
 }
 
 # Plugin template generation
@@ -81,13 +81,13 @@ create_plugin_template() {
     fi
     
     if [[ -z "$plugin_name" ]]; then
-    tlog error "Plugin name is required"
+    log_error "Plugin name is required"
         return 1
     fi
     
     # Validate plugin name
     if [[ ! "$plugin_name" =~ ^[a-z][a-z0-9_]*$ ]]; then
-    tlog error "Plugin name must start with lowercase letter and contain only lowercase letters, numbers, and underscores"
+    log_error "Plugin name must start with lowercase letter and contain only lowercase letters, numbers, and underscores"
         return 1
     fi
     
@@ -98,7 +98,7 @@ create_plugin_template() {
     # Create output directory
     mkdir -p "$output_dir"
     
-    tlog debug "Creating plugin template: $plugin_name"
+    log_debug "Creating plugin template: $plugin_name"
     
     # Generate main plugin file
     generate_plugin_source "$plugin_name" "$plugin_type" > "$plugin_file"
@@ -113,18 +113,18 @@ create_plugin_template() {
     chmod +x "$plugin_file"
     chmod +x "$test_file"
     
-    tlog debug "Plugin template created successfully:"
-    tlog debug "  Source: $plugin_file"
-    tlog debug "  Tests:  $test_file"
-    tlog debug "  Docs:   $docs_file"
+    log_debug "Plugin template created successfully:"
+    log_debug "  Source: $plugin_file"
+    log_debug "  Tests:  $test_file"
+    log_debug "  Docs:   $docs_file"
     
-    tlog debug ""
-    tlog debug "Next steps:"
-    tlog debug "1. Edit $plugin_file to implement your plugin logic"
-    tlog debug "2. Update tests in $test_file"
-    tlog debug "3. Run tests: bats $test_file"
-    tlog debug "4. Update documentation in $docs_file"
-    tlog debug "5. Register plugin in plugin_system_enhanced.sh"
+    log_debug ""
+    log_debug "Next steps:"
+    log_debug "1. Edit $plugin_file to implement your plugin logic"
+    log_debug "2. Update tests in $test_file"
+    log_debug "3. Run tests: bats $test_file"
+    log_debug "4. Update documentation in $docs_file"
+    log_debug "5. Register plugin in plugin_system_enhanced.sh"
 }
 
 # Generate plugin source template
@@ -161,32 +161,32 @@ assert_${plugin_name}() {
     
     # Validate inputs
     if [[ -z "\$response" ]]; then
-    tlog error "${plugin_name^} plugin: Empty response"
+    log_error "${plugin_name^} plugin: Empty response"
         return 1
     fi
     
     if [[ -z "\$parameter" ]]; then
-    tlog error "${plugin_name^} plugin: Parameter is required"
+    log_error "${plugin_name^} plugin: Parameter is required"
         return 1
     fi
     
     # Validate parameter name (security check)
     if [[ ! "\$parameter" =~ ^[a-zA-Z0-9._-]+$ ]]; then
-    tlog error "${plugin_name^} plugin: Invalid parameter name '\$parameter'"
+    log_error "${plugin_name^} plugin: Invalid parameter name '\$parameter'"
         return 1
     fi
     
     # Validate response is valid JSON (basic check)
     if [[ "\$response" != "{}" ]] && ! echo "\$response" | jq empty >/dev/null 2>&1; then
-    tlog error "${plugin_name^} plugin: Invalid JSON response"
+    log_error "${plugin_name^} plugin: Invalid JSON response"
         return 1
     fi
     
     # Debug logging
     if [[ "\${PLUGIN_${plugin_name^^}_CONFIG[debug]}" == "true" ]]; then
-    tlog debug "${plugin_name^} plugin: Processing parameter '\$parameter'"
-    tlog debug "${plugin_name^} plugin: Expected value '\$expected_value'"
-    tlog debug "${plugin_name^} plugin: Operation type '\$operation_type'"
+    log_debug "${plugin_name^} plugin: Processing parameter '\$parameter'"
+    log_debug "${plugin_name^} plugin: Expected value '\$expected_value'"
+    log_debug "${plugin_name^} plugin: Operation type '\$operation_type'"
     fi
     
     # Extract value from response
@@ -199,13 +199,13 @@ assert_${plugin_name}() {
             actual_value=\$(extract_${plugin_name}_value "\$response" "\$parameter")
             ;;
         *)
-    tlog error "${plugin_name^} plugin: Unknown operation type '\$operation_type'"
+    log_error "${plugin_name^} plugin: Unknown operation type '\$operation_type'"
             return 1
             ;;
     esac
     
     if [[ -z "\$actual_value" ]]; then
-    tlog error "${plugin_name^} plugin: Could not extract value for parameter '\$parameter'"
+    log_error "${plugin_name^} plugin: Could not extract value for parameter '\$parameter'"
         return 1
     fi
     
@@ -213,19 +213,19 @@ assert_${plugin_name}() {
     case "\$operation_type" in
         "equals"|"legacy")
             if [[ "\$actual_value" == "\$expected_value" ]]; then
-    tlog debug "${plugin_name^} assertion passed: '\$parameter' == '\$expected_value'"
+    log_debug "${plugin_name^} assertion passed: '\$parameter' == '\$expected_value'"
                 return 0
             else
-    tlog error "${plugin_name^} assertion failed: '\$parameter' expected '\$expected_value', got '\$actual_value'"
+    log_error "${plugin_name^} assertion failed: '\$parameter' expected '\$expected_value', got '\$actual_value'"
                 return 1
             fi
             ;;
         "test")
             if echo "\$actual_value" | grep -qE "\$expected_value"; then
-    tlog debug "${plugin_name^} test assertion passed: '\$parameter' matches pattern '\$expected_value'"
+    log_debug "${plugin_name^} test assertion passed: '\$parameter' matches pattern '\$expected_value'"
                 return 0
             else
-    tlog error "${plugin_name^} test assertion failed: '\$parameter' value '\$actual_value' does not match pattern '\$expected_value'"
+    log_error "${plugin_name^} test assertion failed: '\$parameter' value '\$actual_value' does not match pattern '\$expected_value'"
                 return 1
             fi
             ;;
@@ -262,19 +262,19 @@ set_${plugin_name}_config() {
     local value="\$2"
     
     if [[ -z "\$key" ]]; then
-    tlog error "${plugin_name^} plugin: Configuration key is required"
+    log_error "${plugin_name^} plugin: Configuration key is required"
         return 1
     fi
     
     PLUGIN_${plugin_name^^}_CONFIG["\$key"]="\$value"
-    tlog debug "${plugin_name^} plugin: Configuration '\$key' set to '\$value'"
+    log_debug "${plugin_name^} plugin: Configuration '\$key' set to '\$value'"
 }
 
 get_${plugin_name}_config() {
     local key="\$1"
     
     if [[ -z "\$key" ]]; then
-    tlog error "${plugin_name^} plugin: Configuration key is required"
+    log_error "${plugin_name^} plugin: Configuration key is required"
         return 1
     fi
     
@@ -305,14 +305,14 @@ validate_${plugin_name}_plugin() {
     
     # Report issues
     if [[ \${#issues[@]} -gt 0 ]]; then
-    tlog error "${plugin_name^} plugin validation failed:"
+    log_error "${plugin_name^} plugin validation failed:"
         for issue in "\${issues[@]}"; do
-    tlog error "  - \$issue"
+    log_error "  - \$issue"
         done
         return 1
     fi
     
-    tlog debug "${plugin_name^} plugin validation passed"
+    log_debug "${plugin_name^} plugin validation passed"
     return 0
 }
 
@@ -320,14 +320,14 @@ validate_${plugin_name}_plugin() {
 register_${plugin_name}_plugin() {
     # Validate plugin before registration
     if ! validate_${plugin_name}_plugin; then
-    tlog error "Cannot register ${plugin_name} plugin: validation failed"
+    log_error "Cannot register ${plugin_name} plugin: validation failed"
         return 1
     fi
     
     # Register with plugin system
     register_plugin "${plugin_name}" "assert_${plugin_name}" "\${PLUGIN_${plugin_name^^}_DESCRIPTION}" "external"
     
-    tlog debug "${plugin_name^} plugin registered successfully (version \${PLUGIN_${plugin_name^^}_VERSION})"
+    log_debug "${plugin_name^} plugin registered successfully (version \${PLUGIN_${plugin_name^^}_VERSION})"
 }
 
 # Plugin help function
@@ -657,18 +657,18 @@ validate_plugin_api() {
     local plugin_file="$1"
     
     if [[ ! -f "$plugin_file" ]]; then
-    tlog error "Plugin file not found: $plugin_file"
+    log_error "Plugin file not found: $plugin_file"
         return 1
     fi
     
     local plugin_name
     plugin_name=$(basename "$plugin_file" .sh | sed 's/^grpc_//')
     
-    tlog debug "Validating plugin: $plugin_name"
+    log_debug "Validating plugin: $plugin_name"
     
     # Source the plugin
     if ! source "$plugin_file"; then
-    tlog error "Failed to source plugin file: $plugin_file"
+    log_error "Failed to source plugin file: $plugin_file"
         return 1
     fi
     
@@ -700,14 +700,14 @@ validate_plugin_api() {
     
     # Report validation results
     if [[ ${#validation_errors[@]} -gt 0 ]]; then
-    tlog error "Plugin validation failed:"
+    log_error "Plugin validation failed:"
         for error in "${validation_errors[@]}"; do
-    tlog error "  - $error"
+    log_error "  - $error"
         done
         return 1
     fi
     
-    tlog debug "Plugin validation passed: $plugin_name"
+    log_debug "Plugin validation passed: $plugin_name"
     return 0
 }
 
@@ -716,23 +716,23 @@ test_plugin_api() {
     local plugin_file="$1"
     
     if [[ ! -f "$plugin_file" ]]; then
-    tlog error "Plugin file not found: $plugin_file"
+    log_error "Plugin file not found: $plugin_file"
         return 1
     fi
     
     local test_file="${plugin_file%.sh}.bats"
     
     if [[ ! -f "$test_file" ]]; then
-    tlog warning "No test file found: $test_file"
+    log_warn "No test file found: $test_file"
         return 1
     fi
     
-    tlog debug "Running plugin tests: $test_file"
+    log_debug "Running plugin tests: $test_file"
     
     if command -v bats >/dev/null 2>&1; then
         bats "$test_file"
     else
-    tlog error "bats not found. Install bats to run plugin tests."
+    log_error "bats not found. Install bats to run plugin tests."
         return 1
     fi
 }
@@ -743,13 +743,13 @@ install_plugin_api() {
     local install_dir="${2:-~/.grpctestify/plugins}"
     
     if [[ ! -f "$plugin_file" ]]; then
-    tlog error "Plugin file not found: $plugin_file"
+    log_error "Plugin file not found: $plugin_file"
         return 1
     fi
     
     # Validate plugin first
     if ! validate_plugin_api "$plugin_file"; then
-    tlog error "Plugin validation failed. Cannot install."
+    log_error "Plugin validation failed. Cannot install."
         return 1
     fi
     
@@ -762,9 +762,9 @@ install_plugin_api() {
     
     if cp "$plugin_file" "$dest_file"; then
         chmod +x "$dest_file"
-        tlog debug "Plugin installed: $dest_file"
+        log_debug "Plugin installed: $dest_file"
     else
-    tlog error "Failed to install plugin: $plugin_file"
+    log_error "Failed to install plugin: $plugin_file"
         return 1
     fi
     
@@ -774,7 +774,7 @@ install_plugin_api() {
         local dest_test="$install_dir/$(basename "$test_file")"
         if cp "$test_file" "$dest_test"; then
             chmod +x "$dest_test"
-    tlog debug "Plugin tests installed: $dest_test"
+    log_debug "Plugin tests installed: $dest_test"
         fi
     fi
     

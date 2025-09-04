@@ -124,8 +124,8 @@ create_plugin_command() {
     plugin_name=$(echo "$plugin_name" | tr '[:upper:]' '[:lower:]')
     
     if [[ ! "$plugin_name" =~ ^[a-z][a-z0-9_]*$ ]]; then
-    tlog error "Invalid plugin name: $plugin_name"
-    tlog error "Plugin name must start with lowercase letter and contain only lowercase letters, numbers, and underscores"
+    log_error "Invalid plugin name: $plugin_name"
+    log_error "Plugin name must start with lowercase letter and contain only lowercase letters, numbers, and underscores"
         return 1
     fi
     
@@ -135,7 +135,7 @@ create_plugin_command() {
     ensure_directory "$plugin_dir"
     
     # Use official Plugin API to create template
-    tlog debug "Creating plugin template using Plugin API..."
+    log_debug "Creating plugin template using Plugin API..."
     create_plugin_template "$plugin_name" "assertion" "$plugin_dir"
 }
 
@@ -145,7 +145,7 @@ test_plugin_command() {
     local assertion_args="$2"
     
     if [[ -z "$plugin_name" || -z "$assertion_args" ]]; then
-    tlog error "Plugin name and assertion arguments are required"
+    log_error "Plugin name and assertion arguments are required"
         return 1
     fi
     
@@ -154,23 +154,23 @@ test_plugin_command() {
     
     # Check if plugin exists
     if [[ -z "${PLUGIN_REGISTRY[$plugin_name]:-}" ]]; then
-    tlog error "Plugin not found: $plugin_name"
-    tlog info "Available plugins: $(list_plugin_names)"
+    log_error "Plugin not found: $plugin_name"
+    log_info "Available plugins: $(list_plugin_names)"
         return 1
     fi
     
     # Create a test response
     local test_response='{"test": "data", "_grpc_status": "0", "_response_time": "100"}'
     
-    tlog debug "Testing plugin: $plugin_name"
-    tlog debug "Arguments: $assertion_args"
-    tlog debug "Test response: $test_response"
+    log_debug "Testing plugin: $plugin_name"
+    log_debug "Arguments: $assertion_args"
+    log_debug "Test response: $test_response"
     
     if execute_plugin_assertion "$plugin_name" "$test_response" "$assertion_args"; then
-        tlog debug "Plugin assertion passed"
+        log_debug "Plugin assertion passed"
         return 0
     else
-    tlog error "Plugin assertion failed"
+    log_error "Plugin assertion failed"
         return 1
     fi
 }
