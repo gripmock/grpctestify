@@ -5,35 +5,35 @@
 
 # Validate parallel jobs count
 validate_parallel_jobs() {
-    local jobs="$1"
-    if [[ ! "$jobs" =~ ^[0-9]+$ ]] || [[ "$jobs" -lt 1 ]] || [[ "$jobs" -gt 100 ]]; then
-        echo "Error: Invalid parallel jobs count: $jobs (must be 1-100)" >&2
-        return 1
-    fi
-    return 0
+	local jobs="$1"
+	if [[ ! "$jobs" =~ ^[0-9]+$ ]] || [[ "$jobs" -lt 1 ]] || [[ "$jobs" -gt 100 ]]; then
+		echo "Error: Invalid parallel jobs count: $jobs (must be 1-100)" >&2
+		return 1
+	fi
+	return 0
 }
 
 # Report manager stubs
 report_manager_init() {
-    # Stub: do nothing
-    return 0
+	# Stub: do nothing
+	return 0
 }
 
 init_report_data() {
-    # Stub: do nothing
-    return 0
+	# Stub: do nothing
+	return 0
 }
 
 add_test_result() {
-    # Stub: do nothing
-    return 0
+	# Stub: do nothing
+	return 0
 }
 
 # log() function is provided by run.sh
 
 show_summary() {
-    # Stub: do nothing
-    return 0
+	# Stub: do nothing
+	return 0
 }
 
 # run_single_test() - removed stub, using real implementation from run.sh

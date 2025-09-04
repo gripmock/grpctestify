@@ -5,14 +5,14 @@
 
 # Initialize application
 initialize_app() {
-    # Load configuration file first (highest priority)
-    if declare -f load_configuration >/dev/null 2>&1; then
-        load_configuration
-    fi
-    
-    # Colors are now handled by the colors plugin automatically
-    # Dependencies are automatically checked by bashly
-    # Don't show initialization message to match original behavior
+	# Load configuration file first (highest priority)
+	if declare -f load_configuration >/dev/null 2>&1; then
+		load_configuration
+	fi
+
+	# Colors are now handled by the colors plugin automatically
+	# Dependencies are automatically checked by bashly
+	# Don't show initialization message to match original behavior
 }
 
 # All other functions have been moved to their respective command files

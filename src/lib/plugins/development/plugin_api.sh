@@ -17,122 +17,122 @@ declare -A PLUGIN_LOAD_ORDER
 
 # Register a plugin in the system with dependency support
 register_plugin() {
-    local plugin_name="$1"
-    local plugin_function="$2"
-    local description="$3"
-    local plugin_type="${4:-internal}"
-    local dependencies="${5:-}"
-    
-    # Store plugin information
-    REGISTERED_PLUGINS["$plugin_name"]="$plugin_function:$description:$plugin_type"
-    PLUGIN_DEPENDENCIES["$plugin_name"]="$dependencies"
-    
-    # Debug output in dev mode
-    if [[ "$PLUGIN_DEV_MODE" == "true" ]]; then
-	log_debug "Registered plugin: $plugin_name -> $plugin_function ($plugin_type)"
-        if [[ -n "$dependencies" ]]; then
-	    log_debug "  Dependencies: $dependencies"
-        fi
-    fi
+	local plugin_name="$1"
+	local plugin_function="$2"
+	local description="$3"
+	local plugin_type="${4:-internal}"
+	local dependencies="${5:-}"
+
+	# Store plugin information
+	REGISTERED_PLUGINS["$plugin_name"]="$plugin_function:$description:$plugin_type"
+	PLUGIN_DEPENDENCIES["$plugin_name"]="$dependencies"
+
+	# Debug output in dev mode
+	if [[ "$PLUGIN_DEV_MODE" == "true" ]]; then
+		log_debug "Registered plugin: $plugin_name -> $plugin_function ($plugin_type)"
+		if [[ -n "$dependencies" ]]; then
+			log_debug "  Dependencies: $dependencies"
+		fi
+	fi
 }
 
 #######################################
 # Auto-load execution plugins in correct order
 # Loads specialized execution plugins:
 # - grpc_client.sh
-# - failure_reporter.sh  
+# - failure_reporter.sh
 # - json_comparator.sh
 # - test_orchestrator.sh
 #######################################
 auto_load_execution_plugins() {
-    local execution_plugins=(
-        "grpc_client:gRPC client functionality:execution"
-        "failure_reporter:Test failure reporting:execution"
-        "json_comparator:JSON comparison utilities:execution"  
-        "test_orchestrator:Test orchestration:execution:grpc_client,failure_reporter,json_comparator"
-    )
-    
-    log_debug "Auto-loading execution plugins..."
-    
-    for plugin_info in "${execution_plugins[@]}"; do
-        IFS=':' read -r name desc type deps <<< "$plugin_info"
-        
-        # Register plugin with dependencies
-        register_plugin "$name" "auto_loaded" "$desc" "$type" "$deps"
-        
-        # The actual loading is handled by bashly plugin system
-        log_debug "  Registered: $name (deps: ${deps:-none})"
-    done
-    
-    log_debug "Execution plugins auto-loading completed"
+	local execution_plugins=(
+		"grpc_client:gRPC client functionality:execution"
+		"failure_reporter:Test failure reporting:execution"
+		"json_comparator:JSON comparison utilities:execution"
+		"test_orchestrator:Test orchestration:execution:grpc_client,failure_reporter,json_comparator"
+	)
+
+	log_debug "Auto-loading execution plugins..."
+
+	for plugin_info in "${execution_plugins[@]}"; do
+		IFS=':' read -r name desc type deps <<<"$plugin_info"
+
+		# Register plugin with dependencies
+		register_plugin "$name" "auto_loaded" "$desc" "$type" "$deps"
+
+		# The actual loading is handled by bashly plugin system
+		log_debug "  Registered: $name (deps: ${deps:-none})"
+	done
+
+	log_debug "Execution plugins auto-loading completed"
 }
 
 # Plugin template generation
 create_plugin_template() {
-    local plugin_name="$1"
-    local plugin_type="${2:-assertion}"  # assertion, validation, utility
-    local output_dir="${3:-plugins}"
-    
-    # Load configuration if not already loaded
-    if [[ -z "${PLUGIN_API_VERSION:-}" ]]; then
-        if [[ -f "${BASH_SOURCE[0]%/*}/../../kernel/config.sh" ]]; then
-            source "${BASH_SOURCE[0]%/*}/../../kernel/config.sh"
-        fi
-    fi
-    
-    if [[ -z "$plugin_name" ]]; then
-    log_error "Plugin name is required"
-        return 1
-    fi
-    
-    # Validate plugin name
-    if [[ ! "$plugin_name" =~ ^[a-z][a-z0-9_]*$ ]]; then
-    log_error "Plugin name must start with lowercase letter and contain only lowercase letters, numbers, and underscores"
-        return 1
-    fi
-    
-    local plugin_file="${output_dir}/grpc_${plugin_name}.sh"
-    local test_file="${output_dir}/grpc_${plugin_name}.bats"
-    local docs_file="${output_dir}/grpc_${plugin_name}.md"
-    
-    # Create output directory
-    mkdir -p "$output_dir"
-    
-    log_debug "Creating plugin template: $plugin_name"
-    
-    # Generate main plugin file
-    generate_plugin_source "$plugin_name" "$plugin_type" > "$plugin_file"
-    
-    # Generate test file
-    generate_plugin_tests "$plugin_name" "$plugin_type" > "$test_file"
-    
-    # Generate documentation
-    generate_plugin_docs "$plugin_name" "$plugin_type" > "$docs_file"
-    
-    # Make plugin executable
-    chmod +x "$plugin_file"
-    chmod +x "$test_file"
-    
-    log_debug "Plugin template created successfully:"
-    log_debug "  Source: $plugin_file"
-    log_debug "  Tests:  $test_file"
-    log_debug "  Docs:   $docs_file"
-    
-    log_debug ""
-    log_debug "Next steps:"
-    log_debug "1. Edit $plugin_file to implement your plugin logic"
-    log_debug "2. Update tests in $test_file"
-    log_debug "3. Run tests: bats $test_file"
-    log_debug "4. Update documentation in $docs_file"
-    log_debug "5. Register plugin in plugin_system_enhanced.sh"
+	local plugin_name="$1"
+	local plugin_type="${2:-assertion}" # assertion, validation, utility
+	local output_dir="${3:-plugins}"
+
+	# Load configuration if not already loaded
+	if [[ -z "${PLUGIN_API_VERSION:-}" ]]; then
+		if [[ -f "${BASH_SOURCE[0]%/*}/../../kernel/config.sh" ]]; then
+			source "${BASH_SOURCE[0]%/*}/../../kernel/config.sh"
+		fi
+	fi
+
+	if [[ -z "$plugin_name" ]]; then
+		log_error "Plugin name is required"
+		return 1
+	fi
+
+	# Validate plugin name
+	if [[ ! "$plugin_name" =~ ^[a-z][a-z0-9_]*$ ]]; then
+		log_error "Plugin name must start with lowercase letter and contain only lowercase letters, numbers, and underscores"
+		return 1
+	fi
+
+	local plugin_file="${output_dir}/grpc_${plugin_name}.sh"
+	local test_file="${output_dir}/grpc_${plugin_name}.bats"
+	local docs_file="${output_dir}/grpc_${plugin_name}.md"
+
+	# Create output directory
+	mkdir -p "$output_dir"
+
+	log_debug "Creating plugin template: $plugin_name"
+
+	# Generate main plugin file
+	generate_plugin_source "$plugin_name" "$plugin_type" >"$plugin_file"
+
+	# Generate test file
+	generate_plugin_tests "$plugin_name" "$plugin_type" >"$test_file"
+
+	# Generate documentation
+	generate_plugin_docs "$plugin_name" "$plugin_type" >"$docs_file"
+
+	# Make plugin executable
+	chmod +x "$plugin_file"
+	chmod +x "$test_file"
+
+	log_debug "Plugin template created successfully:"
+	log_debug "  Source: $plugin_file"
+	log_debug "  Tests:  $test_file"
+	log_debug "  Docs:   $docs_file"
+
+	log_debug ""
+	log_debug "Next steps:"
+	log_debug "1. Edit $plugin_file to implement your plugin logic"
+	log_debug "2. Update tests in $test_file"
+	log_debug "3. Run tests: bats $test_file"
+	log_debug "4. Update documentation in $docs_file"
+	log_debug "5. Register plugin in plugin_system_enhanced.sh"
 }
 
 # Generate plugin source template
 generate_plugin_source() {
-    local plugin_name="$1"
-    local plugin_type="$2"
-    
-    cat << EOF
+	local plugin_name="$1"
+	local plugin_type="$2"
+
+	cat <<EOF
 #!/bin/bash
 
 # grpc_${plugin_name}.sh - ${plugin_name^} plugin for gRPC Testify
@@ -346,8 +346,8 @@ Configuration:
 
 Available configuration options:
 $(for key in \${!PLUGIN_${plugin_name^^}_CONFIG[@]}; do
-    printf "  %-20s %s\n" "\$key:" "\${PLUGIN_${plugin_name^^}_CONFIG[\$key]}"
-done)
+		printf "  %-20s %s\n" "\$key:" "\${PLUGIN_${plugin_name^^}_CONFIG[\$key]}"
+	done)
 
 Examples:
   # Basic assertion
@@ -377,10 +377,10 @@ EOF
 
 # Generate plugin test template
 generate_plugin_tests() {
-    local plugin_name="$1"
-    local plugin_type="$2"
-    
-    cat << EOF
+	local plugin_name="$1"
+	local plugin_type="$2"
+
+	cat <<EOF
 #!/usr/bin/env bats
 
 # grpc_${plugin_name}.bats - Tests for ${plugin_name} plugin
@@ -496,10 +496,10 @@ EOF
 
 # Generate plugin documentation template
 generate_plugin_docs() {
-    local plugin_name="$1"
-    local plugin_type="$2"
-    
-    cat << EOF
+	local plugin_name="$1"
+	local plugin_type="$2"
+
+	cat <<EOF
 # ${plugin_name^} Plugin
 
 Plugin for gRPC Testify that provides ${plugin_name} validation functionality.
@@ -654,136 +654,136 @@ EOF
 
 # Plugin validation API
 validate_plugin_api() {
-    local plugin_file="$1"
-    
-    if [[ ! -f "$plugin_file" ]]; then
-    log_error "Plugin file not found: $plugin_file"
-        return 1
-    fi
-    
-    local plugin_name
-    plugin_name=$(basename "$plugin_file" .sh | sed 's/^grpc_//')
-    
-    log_debug "Validating plugin: $plugin_name"
-    
-    # Source the plugin
-    if ! source "$plugin_file"; then
-    log_error "Failed to source plugin file: $plugin_file"
-        return 1
-    fi
-    
-    # Check required functions
-    local required_functions=(
-        "assert_${plugin_name}"
-        "register_${plugin_name}_plugin"
-    )
-    
-    local validation_errors=()
-    
-    for func in "${required_functions[@]}"; do
-        if ! declare -f "$func" >/dev/null; then
-            validation_errors+=("Missing required function: $func")
-        fi
-    done
-    
-    # Check metadata variables
-    local version_var="PLUGIN_${plugin_name^^}_VERSION"
-    local desc_var="PLUGIN_${plugin_name^^}_DESCRIPTION"
-    
-    if [[ -z "${!version_var}" ]]; then
-        validation_errors+=("Missing version variable: $version_var")
-    fi
-    
-    if [[ -z "${!desc_var}" ]]; then
-        validation_errors+=("Missing description variable: $desc_var")
-    fi
-    
-    # Report validation results
-    if [[ ${#validation_errors[@]} -gt 0 ]]; then
-    log_error "Plugin validation failed:"
-        for error in "${validation_errors[@]}"; do
-    log_error "  - $error"
-        done
-        return 1
-    fi
-    
-    log_debug "Plugin validation passed: $plugin_name"
-    return 0
+	local plugin_file="$1"
+
+	if [[ ! -f "$plugin_file" ]]; then
+		log_error "Plugin file not found: $plugin_file"
+		return 1
+	fi
+
+	local plugin_name
+	plugin_name=$(basename "$plugin_file" .sh | sed 's/^grpc_//')
+
+	log_debug "Validating plugin: $plugin_name"
+
+	# Source the plugin
+	if ! source "$plugin_file"; then
+		log_error "Failed to source plugin file: $plugin_file"
+		return 1
+	fi
+
+	# Check required functions
+	local required_functions=(
+		"assert_${plugin_name}"
+		"register_${plugin_name}_plugin"
+	)
+
+	local validation_errors=()
+
+	for func in "${required_functions[@]}"; do
+		if ! declare -f "$func" >/dev/null; then
+			validation_errors+=("Missing required function: $func")
+		fi
+	done
+
+	# Check metadata variables
+	local version_var="PLUGIN_${plugin_name^^}_VERSION"
+	local desc_var="PLUGIN_${plugin_name^^}_DESCRIPTION"
+
+	if [[ -z "${!version_var}" ]]; then
+		validation_errors+=("Missing version variable: $version_var")
+	fi
+
+	if [[ -z "${!desc_var}" ]]; then
+		validation_errors+=("Missing description variable: $desc_var")
+	fi
+
+	# Report validation results
+	if [[ ${#validation_errors[@]} -gt 0 ]]; then
+		log_error "Plugin validation failed:"
+		for error in "${validation_errors[@]}"; do
+			log_error "  - $error"
+		done
+		return 1
+	fi
+
+	log_debug "Plugin validation passed: $plugin_name"
+	return 0
 }
 
 # Plugin testing API
 test_plugin_api() {
-    local plugin_file="$1"
-    
-    if [[ ! -f "$plugin_file" ]]; then
-    log_error "Plugin file not found: $plugin_file"
-        return 1
-    fi
-    
-    local test_file="${plugin_file%.sh}.bats"
-    
-    if [[ ! -f "$test_file" ]]; then
-    log_warn "No test file found: $test_file"
-        return 1
-    fi
-    
-    log_debug "Running plugin tests: $test_file"
-    
-    if command -v bats >/dev/null 2>&1; then
-        bats "$test_file"
-    else
-    log_error "bats not found. Install bats to run plugin tests."
-        return 1
-    fi
+	local plugin_file="$1"
+
+	if [[ ! -f "$plugin_file" ]]; then
+		log_error "Plugin file not found: $plugin_file"
+		return 1
+	fi
+
+	local test_file="${plugin_file%.sh}.bats"
+
+	if [[ ! -f "$test_file" ]]; then
+		log_warn "No test file found: $test_file"
+		return 1
+	fi
+
+	log_debug "Running plugin tests: $test_file"
+
+	if command -v bats >/dev/null 2>&1; then
+		bats "$test_file"
+	else
+		log_error "bats not found. Install bats to run plugin tests."
+		return 1
+	fi
 }
 
 # Plugin installation API
 install_plugin_api() {
-    local plugin_file="$1"
-    local install_dir="${2:-~/.grpctestify/plugins}"
-    
-    if [[ ! -f "$plugin_file" ]]; then
-    log_error "Plugin file not found: $plugin_file"
-        return 1
-    fi
-    
-    # Validate plugin first
-    if ! validate_plugin_api "$plugin_file"; then
-    log_error "Plugin validation failed. Cannot install."
-        return 1
-    fi
-    
-    # Copy to installation directory
-    local plugin_name
-    plugin_name=$(basename "$plugin_file")
-    local dest_file="$install_dir/$plugin_name"
-    
-    mkdir -p "$install_dir"
-    
-    if cp "$plugin_file" "$dest_file"; then
-        chmod +x "$dest_file"
-        log_debug "Plugin installed: $dest_file"
-    else
-    log_error "Failed to install plugin: $plugin_file"
-        return 1
-    fi
-    
-    # Copy tests if they exist
-    local test_file="${plugin_file%.sh}.bats"
-    if [[ -f "$test_file" ]]; then
-        local dest_test="$install_dir/$(basename "$test_file")"
-        if cp "$test_file" "$dest_test"; then
-            chmod +x "$dest_test"
-    log_debug "Plugin tests installed: $dest_test"
-        fi
-    fi
-    
-    return 0
+	local plugin_file="$1"
+	local install_dir="${2:-~/.grpctestify/plugins}"
+
+	if [[ ! -f "$plugin_file" ]]; then
+		log_error "Plugin file not found: $plugin_file"
+		return 1
+	fi
+
+	# Validate plugin first
+	if ! validate_plugin_api "$plugin_file"; then
+		log_error "Plugin validation failed. Cannot install."
+		return 1
+	fi
+
+	# Copy to installation directory
+	local plugin_name
+	plugin_name=$(basename "$plugin_file")
+	local dest_file="$install_dir/$plugin_name"
+
+	mkdir -p "$install_dir"
+
+	if cp "$plugin_file" "$dest_file"; then
+		chmod +x "$dest_file"
+		log_debug "Plugin installed: $dest_file"
+	else
+		log_error "Failed to install plugin: $plugin_file"
+		return 1
+	fi
+
+	# Copy tests if they exist
+	local test_file="${plugin_file%.sh}.bats"
+	if [[ -f "$test_file" ]]; then
+		local dest_test="$install_dir/$(basename "$test_file")"
+		if cp "$test_file" "$dest_test"; then
+			chmod +x "$dest_test"
+			log_debug "Plugin tests installed: $dest_test"
+		fi
+	fi
+
+	return 0
 }
 
 # Plugin development help
 show_plugin_api_help() {
-    cat << 'EOF'
+	cat <<'EOF'
 gRPC Testify Plugin Development API
 ==================================
 
