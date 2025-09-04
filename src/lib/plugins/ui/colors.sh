@@ -158,26 +158,11 @@ setup_colors() {
     colors_plugin_init
 }
 
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    
-    # Use safe printf to avoid conflicts
-    case "$level" in
-        error) printf "❌ %s\n" "$message" ;;
-        success) printf "✅ %s\n" "$message" ;;
-        info) printf "ℹ️ %s\n" "$message" ;;
-        warning) printf "⚠️ %s\n" "$message" ;;
-        debug) [[ "${verbose:-}" == "true" ]] && printf "🔍 %s\n" "$message" ;;
-        section) printf "───[ %s ]───\n" "$message" ;;
-        *) printf "%s\n" "$message" ;;
-    esac
-}
+# log() function is provided by run.sh
 
 # Export functions
 export -f colors_plugin_init colors_plugin_handler colors_format_message colors_format_error
-export -f colorize get_color setup_colors log
+export -f colorize get_color setup_colors
 
 # Export color constants
 export RED GREEN YELLOW BLUE MAGENTA CYAN WHITE BOLD RESET

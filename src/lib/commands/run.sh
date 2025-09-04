@@ -838,14 +838,15 @@ perform_update() {
 
 # Main test execution function (renamed for bashly)
 run_tests() {
-    local test_path="${args[test_path]:-${1:-}}"
+    # Accept multiple test paths as arguments
+    local test_paths=("$@")
     
     # Handle version flag
     if [[ "${args[--version]:-0}" == "1" ]]; then
         echo "grpctestify v1.0.0"
         return 0
     fi
-
+    
     # Handle list-plugins flag
     if [[ "${args[--list-plugins]:-0}" == "1" ]]; then
         echo "Available plugins:"
@@ -901,7 +902,7 @@ run_tests() {
         fi
         return 0
     fi
-
+    
     # Handle config flag
     if [[ "${args[--config]:-0}" == "1" ]]; then
         echo "Current grpctestify.sh configuration:"
@@ -928,7 +929,7 @@ run_tests() {
         fi
         return 0
     fi
-
+    
     # Handle update flag
     if [[ "${args[--update]:-0}" == "1" ]]; then
         # Use the proper update implementation from update.sh
@@ -995,7 +996,7 @@ run_tests() {
         
         return 0
     fi
-
+    
     # Handle create-plugin flag
     if [[ -n "${args[--create-plugin]:-}" ]]; then
         local plugin_name="${args[--create-plugin]}"
@@ -1013,7 +1014,7 @@ run_tests() {
         
         return 0
     fi
-
+    
     # Handle init-config flag
     if [[ -n "${args[--init-config]:-}" ]]; then
         local config_file="${args[--init-config]}"
@@ -1048,7 +1049,7 @@ EOF
         
         return 0
     fi
-
+    
     # Handle completion flag
     if [[ -n "${args[--completion]:-}" ]]; then
         local shell_type="${args[--completion]}"
@@ -1067,18 +1068,20 @@ EOF
         return 0
     fi
     
-    # Show help if no test path provided
-    if [[ -z "$test_path" ]]; then
+    # If no test paths provided, show help (unless flags handled above)
+    if [[ ${#test_paths[@]} -eq 0 ]]; then
         grpctestify.sh_usage
         return 0
     fi
-
-    # Validate test path
-    if [[ ! -e "$test_path" ]]; then
-        log error "Test path does not exist: $test_path"
-        return 1
-    fi
-
+    
+    # Validate all test paths
+    for test_path in "${test_paths[@]}"; do
+        if [[ ! -e "$test_path" ]]; then
+            log error "Test path does not exist: $test_path"
+            return 1
+        fi
+    done
+    
     # Get options from bashly args
     local parallel_jobs="${args[--parallel]:-}"
     local dry_run="${args[--dry-run]:-0}"
@@ -1109,19 +1112,21 @@ EOF
         [[ "$verbose" == "1" ]] && log info "Auto-detected $parallel_jobs CPU cores, using $parallel_jobs parallel jobs"
     fi
     
-    # Collect test files
+    # Collect test files from all provided paths
     local test_files=()
-    while IFS= read -r file; do
-        test_files+=("$file")
-    done < <(collect_test_files "$test_path" "$sort_mode")
+    for test_path in "${test_paths[@]}"; do
+        while IFS= read -r file; do
+            test_files+=("$file")
+        done < <(collect_test_files "$test_path" "$sort_mode")
+    done
     
     local total=${#test_files[@]}
     
     if [[ "$total" -eq 0 ]]; then
-        log error "No test files found in: $test_path"
+        log error "No test files found in any of the specified paths"
         return 1
     fi
-
+    
     [[ "$verbose" == "1" ]] && log info "Auto-selected progress mode: $([ "$verbose" == "1" ] && echo "verbose" || echo "dots") ($total tests, verbose=$verbose)"
     
     # Start timing for detailed statistics (millisecond precision)
@@ -1140,7 +1145,9 @@ EOF
     local skipped_tests=()
     # Aggregated gRPC durations (ms) per call
     GRPCTESTIFY_GRPC_DURATIONS=()
-    
+    # Progress dots counter for line wrapping (80 chars max per line)
+    local dots_count=0
+
     if [[ "$total" -eq 1 ]]; then
         log info "Running 1 test sequentially..."
         [[ "$verbose" == "1" ]] && log info "Verbose mode enabled - detailed test information will be shown"
@@ -1221,7 +1228,9 @@ EOF
                     passed_tests+=("$test_file|$test_duration")
                     ;;
                 3)
-                    printf "S"
+                    if [[ "$dry_run" != "1" ]]; then
+                        printf "S"
+                    fi
                     skipped=$((skipped + 1))
                     skipped_tests+=("$test_file|$test_duration")
                     ;;
@@ -1231,6 +1240,12 @@ EOF
                     failed_tests+=("$test_file|$test_duration|Test execution failed")
                     ;;
             esac
+            
+            # Line wrapping for progress dots (80 chars per line like other test tools)
+            dots_count=$((dots_count + 1))
+            if [[ $((dots_count % 80)) -eq 0 ]]; then
+                echo ""
+            fi
         fi
     done
     

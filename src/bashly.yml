@@ -1,7 +1,6 @@
 name: grpctestify.sh
 help: gRPC Server Testing Tool
 version: v1.0.0
-filename: commands/root_command.sh
 
 # Dependencies - external commands required by the script
 dependencies:
@@ -100,5 +99,6 @@ flags:
 
 # Arguments - main functionality (direct file argument like original)
 args:
-  - name: test_path
-    help: Test file or directory
+  - name: test_paths
+    help: Test files or directories (can specify multiple)
+    repeatable: true
