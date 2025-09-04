@@ -377,47 +377,16 @@ tolerance: ${tolerance_option}"
             if [[ -n "$__exp_json_eq" && -n "$__act_json_eq" && "$__exp_json_eq" == "$__act_json_eq" ]]; then
                 return 0
             fi
-            # Expected error fields (if JSON)
+            # Expected error fields (JSON format from grpcurl)
             local expected_code expected_message
-            # Try to sanitize possible literal tokens like $'\n' and stray quotes
-            local expected_error_norm="$expected_error"
-            # Replace literal $'\n' sequences with real newlines
-            expected_error_norm="${expected_error_norm//\$'\\n'/$'\n'}"
-            # Remove any remaining $' and trailing '
-            expected_error_norm=$(printf "%s" "$expected_error_norm" | sed "s/^\$'//; s/'$//; s/\$'\\n'//g")
-            # Extract structured fields if JSON parses
-            expected_code=$(echo "$expected_error_norm" | jq -r '.code // empty' 2>/dev/null || true)
-            expected_message=$(echo "$expected_error_norm" | jq -r '.message // empty' 2>/dev/null || true)
-            # Regex-based extraction (independent of jq) to handle non-strict JSON formatting
-            if [[ -z "$expected_code" ]]; then
-                expected_code=$(printf "%s" "$expected_error" | tr '\n' ' ' | sed -n 's/.*"code"[^"]*:[^0-9]*\([0-9][0-9]*\).*/\1/p' | head -n1)
-            fi
-            if [[ -z "$expected_message" ]]; then
-                expected_message=$(printf "%s" "$expected_error" | tr '\n' ' ' | sed -n 's/.*"message"[^"]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
-            fi
-            # Fallback: robust regex extraction even if there are $'\n' tokens
-            if [[ -z "$expected_code" || -z "$expected_message" ]]; then
-                local expected_flat
-                expected_flat=$(printf "%s" "$expected_error" | tr '\n' ' ' | sed -E "s/\$'\\n'//g; s/\$'//g; s/'//g; s/\\n/ /g; s/[[:space:]]+/ /g")
-                if [[ -z "$expected_code" ]]; then
-                    expected_code=$(echo "$expected_flat" | sed -n 's/.*"code"[^"]*:[^0-9]*\([0-9][0-9]*\).*/\1/p' | head -n1)
-                fi
-                if [[ -z "$expected_message" ]]; then
-                    expected_message=$(echo "$expected_flat" | sed -n 's/.*"message"[^"]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
-                fi
-            fi
+            # Extract structured fields using jq (grpcurl always returns JSON)
+            expected_code=$(echo "$expected_error" | jq -r '.code // empty' 2>/dev/null || true)
+            expected_message=$(echo "$expected_error" | jq -r '.message // empty' 2>/dev/null || true)
 
-            # Actual error fields (grpcurl -format-error output may be JSON or text)
+            # Actual error fields (grpcurl always returns JSON)
             local actual_code actual_message
             actual_code=$(echo "$grpc_output" | jq -r '.code // empty' 2>/dev/null || true)
             actual_message=$(echo "$grpc_output" | jq -r '.message // empty' 2>/dev/null || true)
-            # Fallback: parse textual pattern "code = N desc = ..."
-            if [[ -z "$actual_code" ]]; then
-                actual_code=$(echo "$grpc_output" | sed -n 's/.*code = \([0-9][0-9]*\).*/\1/p' | head -n1)
-            fi
-            if [[ -z "$actual_message" ]]; then
-                actual_message=$(echo "$grpc_output" | sed -n 's/.*desc = \(.*\)$/\1/p' | head -n1)
-            fi
 
             # Normalize nulls
             [[ "$expected_code" == "null" ]] && expected_code=""
@@ -427,7 +396,7 @@ tolerance: ${tolerance_option}"
 
             # If both expected and actual are valid JSON objects and equal, accept
             local expected_json_norm actual_json_norm
-            expected_json_norm=$(echo "$expected_error_norm" | jq -S -c . 2>/dev/null || true)
+            expected_json_norm=$(echo "$expected_error" | jq -S -c . 2>/dev/null || true)
             actual_json_norm=$(echo "$grpc_output" | jq -S -c . 2>/dev/null || true)
             if [[ -n "$expected_json_norm" && -n "$actual_json_norm" && "$expected_json_norm" == "$actual_json_norm" ]]; then
                 return 0
@@ -442,10 +411,12 @@ tolerance: ${tolerance_option}"
                 fi
             fi
 
-            # Normalize messages (collapse whitespace)
+            # Normalize messages (JSON strings don't have newlines, just trim whitespace)
             local norm_expected_message norm_actual_message
-            norm_expected_message=$(echo "$expected_message" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -e 's/^ *//' -e 's/ *$//')
-            norm_actual_message=$(echo "$actual_message" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -e 's/^ *//' -e 's/ *$//')
+            norm_expected_message="${expected_message#"${expected_message%%[![:space:]]*}"}"  # ltrim
+            norm_expected_message="${norm_expected_message%"${norm_expected_message##*[![:space:]]}"}"  # rtrim
+            norm_actual_message="${actual_message#"${actual_message%%[![:space:]]*}"}"  # ltrim
+            norm_actual_message="${norm_actual_message%"${norm_actual_message##*[![:space:]]}"}"  # rtrim
 
             # Compare message (substring match on normalized text) if provided
             if [[ -n "$expected_message" ]]; then
@@ -454,8 +425,8 @@ tolerance: ${tolerance_option}"
                         mismatch=true
                     fi
                 else
-                    # Fallback: search in full output text
-                    if [[ "$(echo "$grpc_output" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')" != *"$norm_expected_message"* ]]; then
+                    # Fallback: search in full output text (JSON doesn't have newlines)
+                    if [[ "$grpc_output" != *"$norm_expected_message"* ]]; then
                         mismatch=true
                     fi
                 fi
@@ -463,11 +434,8 @@ tolerance: ${tolerance_option}"
 
             # If no structured fields provided in expected_error, fallback to raw contains
             if [[ -z "$expected_code" && -z "$expected_message" ]]; then
-                # Whitespace-tolerant contains check; strip literal $'\n' tokens
-                local actual_flat expected_flat
-                actual_flat=$(echo "$grpc_output" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')
-                expected_flat=$(printf "%s" "$expected_error_norm" | tr '\n' ' ' | sed -E "s/\$'\\n'//g; s/[[:space:]]+/ /g")
-                if [[ "$actual_flat" == *"$expected_flat"* ]]; then
+                # Simple contains check (JSON doesn't have newlines)
+                if [[ "$grpc_output" == *"$expected_error"* ]]; then
                     mismatch=false
                 else
                     mismatch=true
@@ -717,7 +685,8 @@ run_tests() {
             local external_count=0
             while IFS= read -r -d '' plugin; do
                 if [[ -f "$plugin" ]]; then
-                    plugin_name=$(basename "$plugin" .sh)
+                    plugin_name="${plugin##*/}"  # Remove path, keep filename
+                plugin_name="${plugin_name%.sh}"  # Remove .sh extension
                     echo "  • $plugin_name (external)"
                     ((external_count++))
                 fi
@@ -1021,10 +990,10 @@ EOF
             # Keep UI consistent: print 'E' for each remaining in dots mode
             if [[ "$verbose" != "1" ]]; then
                 for (( r=0; r<remaining; r++ )); do
-                    printf "E"
+                    echo -n "E"
                     dots_count=$((dots_count + 1))
                     if [[ $((dots_count % 80)) -eq 0 ]]; then
-                        echo ""
+                        echo ""  # Force flush and newline
                     fi
                 done
             fi
@@ -1033,11 +1002,11 @@ EOF
         fi
         
         local test_file="${test_files[$i]}"
-        local test_name=$(basename "$test_file" .gctf)
+        local test_name="${test_file##*/}"  # Remove path, keep filename
+        test_name="${test_name%.gctf}"      # Remove .gctf extension
         
-        # Start timing for this test
-        local test_start_time
-        test_start_time=$(($(date +%s%N)/1000000))
+        # Start timing for this test (reuse now_ms for efficiency)
+        local test_start_time="$now_ms"
         
         # Pytest-style UI: verbose vs dots mode
         if [[ "$verbose" == "1" ]]; then
@@ -1053,9 +1022,7 @@ EOF
                 test_duration=$(calculate_test_duration "$test_start_time")
                 skipped=$((skipped + 1))
                 skipped_tests+=("$test_file|$test_duration")
-                echo ""
-                echo "----"
-                echo ""
+                printf "\n----\n\n"
             else
                 printf "Testing %s ... " "$test_name"
                 if run_single_test "$test_file" "false"; then
@@ -1093,9 +1060,7 @@ EOF
                     local exit_code=$?
                 fi
                 # For dry-run, show a simple separator between requests and skip progress symbols
-                echo ""
-                echo "----"
-                echo ""
+                printf "\n----\n\n"
             else
                 if run_single_test "$test_file" "false" >/dev/null 2>&1; then
                     local exit_code=$?
@@ -1110,19 +1075,19 @@ EOF
             
             case $exit_code in
                 0)
-                    if [[ "$dry_run" != "1" ]]; then printf "."; fi
+                    if [[ "$dry_run" != "1" ]]; then echo -n "."; fi
                     passed=$((passed + 1))
                     passed_tests+=("$test_file|$test_duration")
                     ;;
                 3)
                     if [[ "$dry_run" != "1" ]]; then
-                        printf "S"
+                        echo -n "S"
                     fi
                     skipped=$((skipped + 1))
                     skipped_tests+=("$test_file|$test_duration")
                     ;;
                 *)
-                    if [[ "$dry_run" != "1" ]]; then printf "E"; fi
+                    if [[ "$dry_run" != "1" ]]; then echo -n "E"; fi
                     failed=$((failed + 1))
                     failed_tests+=("$test_file|$test_duration|Test execution failed")
                     ;;
@@ -1132,7 +1097,7 @@ EOF
             if [[ "$dry_run" != "1" ]]; then
                 dots_count=$((dots_count + 1))
                 if [[ $((dots_count % 80)) -eq 0 ]]; then
-                    echo ""
+                    echo ""  # Force flush and newline
                 fi
             fi
         fi
