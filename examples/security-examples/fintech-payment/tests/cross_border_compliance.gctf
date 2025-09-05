@@ -1,5 +1,5 @@
 --- ADDRESS ---
-localhost:50053
+localhost:50055
 
 --- TLS ---
 ca_cert: ./../server/tls/ca-cert.pem

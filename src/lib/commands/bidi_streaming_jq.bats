@@ -12,9 +12,9 @@ setup() {
     # Load the run.sh functions
     source "$BATS_TEST_DIRNAME/run.sh"
     
-    # Create a temporary test file
-    TEST_FILE=$(mktemp)
-    MULTI_RESPONSE_FILE=$(mktemp)
+    # Create temporary files for testing
+    TEST_FILE="/tmp/grpctestify_bidi_test_$$.gctf"
+    MULTI_RESPONSE_FILE="/tmp/grpctestify_multi_response_$$.gctf"
     
     # Single response test file
     cat > "$TEST_FILE" << 'EOF'

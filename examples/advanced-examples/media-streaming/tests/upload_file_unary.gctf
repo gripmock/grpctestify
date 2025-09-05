@@ -1,5 +1,5 @@
 --- ADDRESS ---
-localhost:50055
+localhost:50057
 
 --- ENDPOINT ---
 media.MediaStreamingService/UploadFile

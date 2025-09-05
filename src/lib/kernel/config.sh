@@ -6,14 +6,14 @@
 # Application metadata
 # shellcheck disable=SC2034  # Used by help system and future features
 readonly APP_NAME="grpctestify"
-# shellcheck disable=SC2034  # Used by version command and future features  
+# shellcheck disable=SC2034  # Used by version command and future features
 readonly APP_VERSION="v1.0.0"
 # shellcheck disable=SC2034  # Used for config compatibility checks
 readonly CONFIG_VERSION="1.0.0"
 
 # Default values
 readonly DEFAULT_TIMEOUT=30
-# DEFAULT_ADDRESS removed - use GRPCTESTIFY_ADDRESS instead
+
 # shellcheck disable=SC2034  # Used in future versions
 readonly DEFAULT_CACHE_TTL=3600
 # shellcheck disable=SC2034  # Used in future versions
@@ -23,62 +23,54 @@ readonly DEFAULT_RETRY_DELAY=1
 # readonly DEFAULT_PARALLEL_JOBS=1  # OLD: static value
 
 #######################################
-# Auto-detect optimal number of parallel jobs based on CPU cores
-# Uses multiple detection methods for cross-platform compatibility:
-# - nproc (Linux)
-# - sysctl hw.ncpu (macOS/BSD)
-# - /proc/cpuinfo (fallback Linux)
-# - reasonable default (fallback)
-# Returns:
-#   Optimal number of parallel jobs (typically CPU cores)
+# Get optimal CPU count for parallel execution
+# Returns: Number of CPU cores to use
 #######################################
-auto_detect_parallel_jobs() {
-    # Use portable CPU detection if available
-    if command -v portable_cpu_count >/dev/null 2>&1; then
-        portable_cpu_count
-    else
-        # Fallback to legacy detection
-        local cpu_count
-        
-        # Method 1: nproc (Linux, modern systems)
-        if command -v nproc >/dev/null 2>&1; then
-            cpu_count=$(nproc 2>/dev/null)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
-        fi
-        
-        # Method 2: sysctl (macOS, BSD)
-        if command -v sysctl >/dev/null 2>&1; then
-            cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
-        fi
-        
-        # Method 3: /proc/cpuinfo (Linux fallback)
-        if [ -f /proc/cpuinfo ]; then
-            cpu_count=$(grep -c "^processor" /proc/cpuinfo 2>/dev/null)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
-        fi
-        
-        # Method 4: Native shell fallback
-        if command -v native_cpu_count >/dev/null 2>&1; then
-            cpu_count=$(native_cpu_count)
-            if [ -n "$cpu_count" ] && [ "$cpu_count" -gt 0 ] 2>/dev/null; then
-                echo "$cpu_count"
-                return 0
-            fi
-        fi
-        
-        # Fallback: reasonable default
-        echo "4"
-    fi
+get_optimal_cpu_count() {
+	local cpu_count=1
+
+	# Method 1: Use portable CPU count function
+	if is_utility_available "portable_cpu_count"; then
+		cpu_count=$(portable_cpu_count)
+		if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+			echo "$cpu_count"
+			return 0
+		fi
+	fi
+
+	# Method 2: Direct nproc check
+	if is_utility_available "nproc"; then
+		cpu_count=$(nproc 2>/dev/null)
+		if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+			echo "$cpu_count"
+			return 0
+		fi
+	fi
+
+	# Method 3: sysctl on BSD systems
+	if is_utility_available "sysctl"; then
+		case "$(uname -s)" in
+		"Darwin" | "FreeBSD" | "OpenBSD" | "NetBSD")
+			cpu_count=$(sysctl -n hw.ncpu 2>/dev/null)
+			if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+				echo "$cpu_count"
+				return 0
+			fi
+			;;
+		esac
+	fi
+
+	# Method 4: Native shell detection
+	if is_utility_available "native_cpu_count"; then
+		cpu_count=$(native_cpu_count)
+		if [[ -n "$cpu_count" && "$cpu_count" -gt 0 ]]; then
+			echo "$cpu_count"
+			return 0
+		fi
+	fi
+
+	# Fallback: conservative default
+	echo "1"
 }
 
 #######################################
@@ -86,12 +78,12 @@ auto_detect_parallel_jobs() {
 # Returns optimal number based on auto-detection unless overridden
 #######################################
 get_default_parallel_jobs() {
-    # Use environment variable if set, otherwise auto-detect
-    if [[ -n "${PARALLEL_JOBS:-}" ]]; then
-        echo "${PARALLEL_JOBS}"
-    else
-        auto_detect_parallel_jobs
-    fi
+	# Use environment variable if set, otherwise auto-detect
+	if [[ -n "${PARALLEL_JOBS:-}" ]]; then
+		echo "${PARALLEL_JOBS}"
+	else
+		get_optimal_cpu_count
+	fi
 }
 # shellcheck disable=SC2034  # Used in future versions
 readonly DEFAULT_PORT_START=50051
@@ -103,7 +95,7 @@ readonly DEFAULT_AUTHOR="Babichev Maxim"
 readonly DEFAULT_EMAIL="info@babichev.net"
 
 # Export functions for use in other modules
-export -f auto_detect_parallel_jobs get_default_parallel_jobs
+export -f get_optimal_cpu_count get_default_parallel_jobs
 
 # File paths and directories (SECURITY: safe defaults)
 # shellcheck disable=SC2034  # Used by plugin system
@@ -125,8 +117,8 @@ readonly STARTUP_TIMEOUT=10
 # Security settings
 readonly ALLOW_INSECURE_CONNECTIONS=false
 readonly VALIDATE_SSL_CERTIFICATES=true
-readonly MAX_REQUEST_SIZE=1048576  # 1MB
-readonly MAX_RESPONSE_SIZE=10485760  # 10MB
+readonly MAX_REQUEST_SIZE=1048576   # 1MB
+readonly MAX_RESPONSE_SIZE=10485760 # 10MB
 
 # Output formatting
 readonly PROGRESS_LINE_LENGTH=80
@@ -136,15 +128,15 @@ readonly COLOR_ERROR='\033[0;31m'
 
 # Retry configuration helper functions
 is_no_retry() {
-    [[ "${RETRY_COUNT:-$DEFAULT_RETRY_ATTEMPTS}" -eq 0 ]]
+	[[ "${RETRY_COUNT:-$DEFAULT_RETRY_ATTEMPTS}" -eq 0 ]]
 }
 
 get_retry_count() {
-    echo "${RETRY_COUNT:-$DEFAULT_RETRY_ATTEMPTS}"
+	echo "${RETRY_COUNT:-$DEFAULT_RETRY_ATTEMPTS}"
 }
 
 get_retry_delay() {
-    echo "${RETRY_DELAY:-$DEFAULT_RETRY_DELAY}"
+	echo "${RETRY_DELAY:-$DEFAULT_RETRY_DELAY}"
 }
 readonly COLOR_WARNING='\033[1;33m'
 readonly COLOR_INFO='\033[0;34m'
@@ -176,8 +168,7 @@ readonly ERROR_CONFIGURATION=12
 
 # Environment variable names
 readonly ENV_ADDRESS="GRPCTESTIFY_ADDRESS"
-# ENV variables for flags removed - use flags directly
-readonly ENV_NO_COLOR="GRPCTESTIFY_NO_COLOR"
+
 readonly ENV_PLUGIN_PATH="GRPCTESTIFY_PLUGIN_PATH"
 readonly ENV_CACHE_DIR="GRPCTESTIFY_CACHE_DIR"
 
@@ -188,76 +179,74 @@ readonly FEATURE_PARALLEL_ENABLED=true
 readonly FEATURE_PROGRESS_ENABLED=true
 readonly FEATURE_RECOVERY_ENABLED=true
 
-
-
 # Secure path validation (SECURITY: prevent path traversal)
 validate_plugin_path() {
-    local plugin_path="$1"
-    
-    # Ensure path is absolute and within safe directories
-    case "$plugin_path" in
-        "$HOME/.grpctestify/plugins"*) 
-            # Allow only in user's grpctestify directory
-            if [[ "$plugin_path" != *".."* && "$plugin_path" == *.sh ]]; then
-                return 0
-            fi
-            ;;
-        *)
-    tlog error "Plugin path not allowed: $plugin_path"
-            return 1
-            ;;
-    esac
-    
-    tlog error "Invalid plugin path: $plugin_path"
-    return 1
+	local plugin_path="$1"
+
+	# Ensure path is absolute and within safe directories
+	case "$plugin_path" in
+	"$HOME/.grpctestify/plugins"*)
+		# Allow only in user's grpctestify directory
+		if [[ "$plugin_path" != *".."* && "$plugin_path" == *.sh ]]; then
+			return 0
+		fi
+		;;
+	*)
+		log_error "Plugin path not allowed: $plugin_path"
+		return 1
+		;;
+	esac
+
+	log_error "Invalid plugin path: $plugin_path"
+	return 1
 }
 
 # Validate configuration value
 validate_config() {
-    local key="$1"
-    local value="$2"
-    
-    case "$key" in
-        "timeout"|"cache_ttl"|"retry_delay"|"parallel_jobs")
-            if [[ ! "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 ]]; then
-                return 1
-            fi
-            ;;
-        "strict_mode"|"debug"|"caching_enabled")
-            if [[ ! "$value" =~ ^(true|false)$ ]]; then
-                return 1
-            fi
-            ;;
-        "address")
-            if [[ ! "$value" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
-                return 1
-            fi
-            ;;
-        "email")
-            if [[ ! "$value" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-                return 1
-            fi
-            ;;
-    esac
-    
-    return 0
+	local key="$1"
+	local value="$2"
+
+	case "$key" in
+	"timeout" | "cache_ttl" | "retry_delay" | "parallel_jobs")
+		if [[ ! "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 ]]; then
+			return 1
+		fi
+		;;
+	"strict_mode" | "debug" | "caching_enabled")
+		if [[ ! "$value" =~ ^(true|false)$ ]]; then
+			return 1
+		fi
+		;;
+	"address")
+		if [[ ! "$value" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
+			return 1
+		fi
+		;;
+	"email")
+		if [[ ! "$value" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+			return 1
+		fi
+		;;
+	esac
+
+	return 0
 }
 
 # Initialize configuration
 init_config() {
-    # Set global variables from configuration
-    # Only address uses ENV fallback (no flag equivalent)
-    GRPCTESTIFY_ADDRESS=$(get_config "address" "localhost:4770" "$ENV_ADDRESS")
-    GRPCTESTIFY_CACHE_DIR=$(get_config "cache_dir" "$DEFAULT_CACHE_DIR" "$ENV_CACHE_DIR")
-    
-    # Validation moved to flag processing in run.sh
-    
-    if ! validate_config "address" "$GRPCTESTIFY_ADDRESS"; then
-        echo "Error: Invalid address format: $GRPCTESTIFY_ADDRESS" >&2
-        return 1
-    fi
-    
-    return 0
+	# Set global variables from configuration
+	# Only address uses ENV fallback (no flag equivalent)
+	GRPCTESTIFY_ADDRESS=$(get_config "address" "localhost:4770" "$ENV_ADDRESS")
+	GRPCTESTIFY_CACHE_DIR=$(get_config "cache_dir" "$DEFAULT_CACHE_DIR" "$ENV_CACHE_DIR")
+
+	# Validation moved to flag processing in run.sh
+
+	if ! validate_config "address" "$GRPCTESTIFY_ADDRESS"; then
+		echo "Error: Invalid address format: $GRPCTESTIFY_ADDRESS" >&2
+		return 1
+	fi
+
+	return 0
 }
 
 # Export configuration functions

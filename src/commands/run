@@ -1,0 +1,174 @@
+#!/bin/bash
+
+# Get test paths from bashly args
+test_paths=("${args[test_paths]}")
+
+if [[ ${#test_paths[@]} -eq 0 ]]; then
+    echo "❌ Error: No test paths specified"
+    echo "Usage: ./grpctestify.sh run <test_path1> [test_path2] ... [OPTIONS]"
+    echo "Example: ./grpctestify.sh run /tmp/gripmock/examples --verbose --dry-run"
+    exit 1
+fi
+
+# Start timing
+start_time=""
+if command -v gdate >/dev/null 2>&1; then
+    start_time=$(gdate +%s%3N)
+else
+    start_time=$(date +%s)000
+fi
+
+echo "🚀 Starting gRPC Test Execution"
+echo "════════════════════════════════════════════════════════════════════════════════"
+
+# Process multiple test paths
+total=0
+passed=0
+failed=0
+skipped=0
+
+for test_path in "${test_paths[@]}"; do
+    echo "📁 Test Source: $test_path"
+    
+    if [[ -f "$test_path" ]]; then
+        echo "📄 Single test file: $test_path"
+        total=$((total + 1))
+        
+        if [[ "${args[--dry-run]}" == "1" ]]; then
+            skipped=$((skipped + 1))
+            echo "⏭️ Test skipped (dry-run mode)"
+        else
+            # TODO: Implement real test execution
+            failed=$((failed + 1))
+            echo "❌ Test failed (real execution not implemented yet)"
+        fi
+    elif [[ -d "$test_path" ]]; then
+        echo "📁 Test directory: $test_path"
+        dir_tests=$(find "$test_path" -name "*.gctf" | wc -l)
+        total=$((total + dir_tests))
+        
+        if [[ "${args[--dry-run]}" == "1" ]]; then
+            skipped=$((skipped + dir_tests))
+            echo "⏭️ All $dir_tests tests skipped (dry-run mode)"
+        else
+            # TODO: Implement real test execution
+            failed=$((failed + dir_tests))
+            echo "❌ All $dir_tests tests failed (real execution not implemented yet)"
+        fi
+    else
+        echo "❌ Test path not found: $test_path"
+        failed=$((failed + 1))
+    fi
+    
+    echo "────────────────────────────────────────────────────────────────────────────────"
+done
+
+# End timing
+end_time=""
+if command -v gdate >/dev/null 2>&1; then
+    end_time=$(gdate +%s%3N)
+else
+    end_time=$(date +%s)000
+fi
+
+duration_ms=$((end_time - start_time))
+avg_per_test_ms=0
+if [[ $total -gt 0 ]]; then
+    avg_per_test_ms=$((duration_ms / total))
+fi
+
+echo
+echo "════════════════════════════════════════════════════════════════════════════════"
+
+# Test results line with professional formatting
+if [[ $failed -gt 0 ]]; then
+    echo "❌ FAILED ($failed failed, $passed passed$([ "$skipped" -gt 0 ] && echo ", $skipped skipped" || echo "") in ${duration_ms}ms)"
+elif [[ $skipped -gt 0 ]]; then
+    echo "🔍 PASSED ($passed passed, $skipped skipped in ${duration_ms}ms)"
+else
+    echo "✅ PASSED ($passed passed in ${duration_ms}ms)"
+fi
+
+echo "────────────────────────────────────────────────────────────────────────────────"
+
+# Failed tests section (full file paths)
+if [[ $failed -gt 0 ]]; then
+    echo "❌ Failed Tests:" 
+    for test_path in "${test_paths[@]}"; do
+        if [[ -f "$test_path" ]]; then
+            echo "   • $test_path (real execution not implemented yet)"
+        elif [[ -d "$test_path" ]]; then
+            dir_tests=$(find "$test_path" -name "*.gctf" | wc -l)
+            echo "   • All $dir_tests tests in $test_path (real execution not implemented yet)"
+        fi
+    done
+fi
+
+# Skipped tests section
+if [[ $skipped -gt 0 ]]; then
+    echo "⏭️ Skipped Tests:"
+    for test_path in "${test_paths[@]}"; do
+        if [[ -f "$test_path" ]]; then
+            echo "   • $test_path (dry-run mode)"
+        elif [[ -d "$test_path" ]]; then
+            dir_tests=$(find "$test_path" -name "*.gctf" | wc -l)
+            echo "   • All $dir_tests tests in $test_path (dry-run mode)"
+        fi
+    done
+fi
+
+# Detailed statistics section
+echo "📊 Execution Statistics:"
+echo "   • Total tests: $total"
+echo "   • Passed: $passed"
+echo "   • Failed: $failed"
+echo "   • Skipped: $skipped"
+echo "   • Duration: ${duration_ms}ms"
+echo "   • Average per test: ${avg_per_test_ms}ms"
+
+# Execution mode information
+parallel_jobs=1
+if [[ "${args[--parallel]}" == "auto" ]]; then
+    parallel_jobs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+elif [[ -n "${args[--parallel]}" ]]; then
+    parallel_jobs="${args[--parallel]}"
+fi
+
+if [[ "$parallel_jobs" -eq 1 ]]; then
+    echo "   • Mode: Sequential (1 thread)"
+else
+    echo "   • Mode: Parallel ($parallel_jobs threads)"
+fi
+
+echo "════════════════════════════════════════════════════════════════════════════════"
+
+# Environment info
+echo "🔧 Environment:"
+echo "   • gRPC Address: ${GRPCTESTIFY_ADDRESS:-localhost:4770}"
+echo "   • Sort Mode: ${args[--sort]:-path}"
+
+# Warnings section
+has_warnings="false"
+if [[ "$failed" -gt 0 ]]; then
+    has_warnings="true"
+fi
+
+if [[ "$has_warnings" == "false" ]]; then
+    echo "✨ No warnings detected"
+fi
+
+echo "════════════════════════════════════════════════════════════════════════════════"
+
+    # Generate reports if requested
+    if [[ -n "${args[--log-format]:-}" && -n "${args[--log-output]:-}" ]]; then
+        echo
+        echo "📋 Generating ${args[--log-format]:-} report..."
+        echo "✅ Report would be saved: ${args[--log-output]:-} (placeholder)"
+    fi
+
+# Return appropriate exit code
+if [[ "${args[--dry-run]}" == "1" ]]; then
+    return 0  # Dry-run always succeeds
+else
+    return $([[ $failed -eq 0 ]] && echo 0 || echo 1)
+fi
