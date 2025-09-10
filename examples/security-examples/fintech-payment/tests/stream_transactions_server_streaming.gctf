@@ -25,5 +25,31 @@ payment.PaymentService/StreamTransactions
 .metadata.merchant == "Sample Merchant"
 .metadata.category == "retail"
 
+--- ASSERTS ---
+.transaction_id | test("txn_.*")
+.account_id == "acc_001"
+.transaction_type == "payment"
+.amount >= 50.0
+.amount <= 1000.0
+.currency == "USD"
+.status == "approved"
+.risk_assessment.risk_level == "low"
+.risk_assessment.risk_score < 0.5
+.metadata.merchant == "Sample Merchant"
+.metadata.category == "retail"
+
+--- ASSERTS ---
+.transaction_id | test("txn_.*")
+.account_id == "acc_001"
+.transaction_type == "payment"
+.amount >= 50.0
+.amount <= 1000.0
+.currency == "USD"
+.status == "approved"
+.risk_assessment.risk_level == "low"
+.risk_assessment.risk_score < 0.5
+.metadata.merchant == "Sample Merchant"
+.metadata.category == "retail"
+
 --- OPTIONS ---
 timeout: 15

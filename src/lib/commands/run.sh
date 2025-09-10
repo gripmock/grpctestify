@@ -111,14 +111,19 @@ auto_detect_parallel_jobs() {
 run_single_test() {
 	local test_file="$1"
 	local dry_run="${2:-false}"
+	local verbose="${3:-false}"
 
 	if [[ ! -f "$test_file" ]]; then
 		log_error "Test file not found: $test_file"
 		return 1
 	fi
 
+	# Verbose logging: start of test execution
+	log_verbose "Starting test execution for: $test_file"
+
 	# Parse test file (trace timing via gperf)
 	gperf "parse"
+	log_verbose "Parsing GCTF file sections..."
 	local address=""
 	local endpoint=""
 	local request=""
@@ -128,6 +133,8 @@ run_single_test() {
 	local request_headers=""
 	local options_section=""
 	local asserts_section=""
+	local asserts_sections=()  # Array to store individual ASSERTS sections
+	local current_asserts_section=""  # Current ASSERTS section being built
 	local tls_section=""
 	local proto_section=""
 	while IFS=$'\t' read -r sec line; do
@@ -182,11 +189,134 @@ run_single_test() {
 	gperf "parse"
 	# parse span ends via gperf below
 
+	# Verbose logging: show parsed sections
+	log_verbose "Parsed sections - ADDRESS: ${address:-"not set"}, ENDPOINT: ${endpoint:-"not set"}"
+	log_verbose "Request length: ${#request} chars, Response length: ${#expected_response} chars"
+	log_verbose "Options: ${options_section:-"none"}"
+	
+	# Show asserts information in a structured way
+	if [[ -n "$asserts_section" ]]; then
+		local total_asserts=$(echo "$asserts_section" | grep -c '^[^[:space:]]' 2>/dev/null || echo "0")
+		local asserts_sections_count=$(grep -c "^--- ASSERTS ---" "$test_file" 2>/dev/null || echo "0")
+		if [[ "$asserts_sections_count" -eq 0 && -n "$asserts_section" ]]; then
+			asserts_sections_count=1
+		fi
+		log_verbose "Asserts: $total_asserts conditions in $asserts_sections_count section(s)"
+		
+		# Show detailed asserts in a structured format (will be shown after parsing)
+		log_verbose "  (Detailed asserts will be shown after parsing)"
+	else
+		log_verbose "Asserts: none"
+	fi
+	
+	# Count expected messages based on RESPONSE and ASSERTS sections
+	local expected_messages=0
+	
+	# Count RESPONSE sections (based on JSON objects in response)
+	local response_sections=0
+	if [[ -n "$expected_response" ]]; then
+		# Count JSON objects in expected response (each {} is a separate message)
+		response_sections=$(echo "$expected_response" | grep -c '^{' 2>/dev/null || echo "0")
+		# Clean up any newlines
+		response_sections=$(echo "$response_sections" | tr -d '\n' | head -1)
+		if [[ "$response_sections" -eq 0 ]]; then
+			# Fallback: if no complete JSON objects, count as 1 message
+			response_sections=1
+		fi
+	fi
+	
+	# Parse ASSERTS sections directly from the original file
+	local asserts_sections=0
+	local asserts_sections_array=()
+	if [[ -n "$asserts_section" ]]; then
+		# Count ASSERTS sections by looking for the header pattern in the original file
+		asserts_sections=$(grep -c "^--- ASSERTS ---" "$test_file" 2>/dev/null || echo "0")
+		# Clean up any newlines
+		asserts_sections=$(echo "$asserts_sections" | tr -d '\n' | head -1)
+		# If no headers found but we have content, assume 1 section
+		if [[ "$asserts_sections" -eq 0 && -n "$asserts_section" ]]; then
+			asserts_sections=1
+		fi
+		
+		# Parse individual ASSERTS sections
+		local section_index=0
+		local current_section=""
+		local in_asserts_section=false
+		
+		while IFS= read -r line; do
+			if [[ "$line" =~ ^---[[:space:]]+ASSERTS[[:space:]]+---$ ]]; then
+				# Start of new ASSERTS section
+				if [[ -n "$current_section" ]]; then
+					asserts_sections_array+=("$current_section")
+				fi
+				current_section=""
+				in_asserts_section=true
+			elif [[ "$line" =~ ^---[[:space:]]+[A-Z_]+[[:space:]]+---$ ]]; then
+				# Start of different section
+				if [[ -n "$current_section" ]]; then
+					asserts_sections_array+=("$current_section")
+				fi
+				current_section=""
+				in_asserts_section=false
+			elif [[ "$in_asserts_section" == true ]]; then
+				# Add line to current ASSERTS section
+				current_section+="$line"$'\n'
+			fi
+		done < "$test_file"
+		
+		# Add the last section if it exists
+		if [[ -n "$current_section" ]]; then
+			asserts_sections_array+=("$current_section")
+		fi
+		
+		# Show detailed asserts in a structured format
+		if [[ ${#asserts_sections_array[@]} -gt 0 ]]; then
+			log_verbose "Detailed asserts structure:"
+			for section_index in "${!asserts_sections_array[@]}"; do
+				local section_number=$((section_index + 1))
+				local section_content="${asserts_sections_array[$section_index]}"
+				local section_asserts_count=$(echo "$section_content" | grep -c '^[^[:space:]]' 2>/dev/null || echo "0")
+				
+				log_verbose "  Section $section_number ($section_asserts_count conditions):"
+				while IFS= read -r assertion_line; do
+					if [[ -n "$assertion_line" && ! "$assertion_line" =~ ^[[:space:]]*$ ]]; then
+						log_verbose "    • $assertion_line"
+					fi
+				done <<<"$section_content"
+			done
+		fi
+	fi
+	
+	# Calculate expected messages based on with_asserts option
+	if [[ "${with_asserts_option:-false}" == "true" ]]; then
+		# With with_asserts: RESPONSE and ASSERTS are paired (same message)
+		expected_messages=$((response_sections + asserts_sections))
+		# Apply count multiplier (ensure it's a number)
+		local count_val="${count_option:-1}"
+		if ! [[ "$count_val" =~ ^[0-9]+$ ]]; then
+			count_val=1
+		fi
+		expected_messages=$((expected_messages * count_val))
+		log_verbose "Expected messages: $expected_messages (with_asserts=true, count=$count_val, response_sections=$response_sections, asserts_sections=$asserts_sections)"
+	else
+		# Without with_asserts: RESPONSE and ASSERTS are separate messages
+		expected_messages=$((response_sections + asserts_sections))
+		# Apply count multiplier (ensure it's a number)
+		local count_val="${count_option:-1}"
+		if ! [[ "$count_val" =~ ^[0-9]+$ ]]; then
+			count_val=1
+		fi
+		expected_messages=$((expected_messages * count_val))
+		log_verbose "Expected messages: $expected_messages (with_asserts=false, count=$count_val, response_sections=$response_sections, asserts_sections=$asserts_sections)"
+	fi
+
 	# Parse inline options from OPTIONS section
 	local partial_option="false"
 	local tolerance_option=""
 	local redact_option=""
 	local timeout_option=""
+	local with_asserts_option="false"
+	local count_option="1"
 
 	if [[ -n "$options_section" ]]; then
 		while IFS= read -r option_line; do
@@ -198,6 +328,10 @@ run_single_test() {
 				redact_option="${BASH_REMATCH[1]}"
 			elif [[ "$option_line" =~ ^timeout:[[:space:]]*(.+)$ ]]; then
 				timeout_option="${BASH_REMATCH[1]// /}"
+			elif [[ "$option_line" =~ ^with_asserts:[[:space:]]*(.+)$ ]]; then
+				with_asserts_option="${BASH_REMATCH[1]// /}"
+			elif [[ "$option_line" =~ ^count:[[:space:]]*(.+)$ ]]; then
+				count_option="${BASH_REMATCH[1]// /}"
 			fi
 		done <<<"$options_section"
 	fi
@@ -278,24 +412,44 @@ tolerance: ${tolerance_option}"
 
 	# Execute real grpc call using shared helper
 	local timeout_seconds="${timeout_option:-${args[--timeout]:-30}}" # per-file OPTIONS override, fallback to CLI --timeout, then 30
+	log_verbose "Executing gRPC call to $address/$endpoint with timeout ${timeout_seconds}s"
+	
+	# Count sent messages based on JSON objects in REQUEST section
+	local sent_messages=0
 	if [[ -n "$request" ]]; then
+		# Count JSON objects in request (each {} is a separate message)
+		sent_messages=$(echo "$request" | grep -c '^{' 2>/dev/null || echo "0")
+		# Clean up any newlines
+		sent_messages=$(echo "$sent_messages" | tr -d '\n' | head -1)
+		if [[ "$sent_messages" -eq 0 ]]; then
+			# Fallback: if no complete JSON objects, count as 1 message
+			sent_messages=1
+		fi
+		log_verbose "Request content: '$request'"
+		log_verbose "Request length: ${#request} characters"
+		log_verbose "Messages sent: $sent_messages"
 		local grpc_start_ms=$(($(date +%s%N) / 1000000))
 		grpc_output=$(execute_grpcurl_argv "$timeout_seconds" "$request" "${GRPCURL_ARGS[@]}")
 		local grpc_status=$?
 		local grpc_end_ms=$(($(date +%s%N) / 1000000))
 		local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
 		perf_add "grpc.exec" "$grpc_duration_ms"
+		log_verbose "gRPC call completed in ${grpc_duration_ms}ms with status: $grpc_status"
 		if [[ $grpc_status -eq 124 ]]; then
 			log_error "gRPC call timed out after ${timeout_seconds}s in $test_file"
 			return 1
 		fi
 	else
+		log_verbose "Executing gRPC call without request body"
+		sent_messages=1  # No request body means 1 empty message
+		log_verbose "Messages sent: $sent_messages"
 		local grpc_start_ms=$(($(date +%s%N) / 1000000))
 		grpc_output=$(execute_grpcurl_argv "$timeout_seconds" "" "${GRPCURL_ARGS[@]}")
 		local grpc_status=$?
 		local grpc_end_ms=$(($(date +%s%N) / 1000000))
 		local grpc_duration_ms=$((grpc_end_ms - grpc_start_ms))
 		perf_add "grpc.exec" "$grpc_duration_ms"
+		log_verbose "gRPC call completed in ${grpc_duration_ms}ms with status: $grpc_status"
 		if [[ $grpc_status -eq 124 ]]; then
 			log_error "gRPC call timed out after ${timeout_seconds}s in $test_file"
 			return 1
@@ -303,6 +457,25 @@ tolerance: ${tolerance_option}"
 	fi
 	local grpc_exit_code=$?
 	# Note: gRPC durations tracked via perf aggregates; no legacy accumulation
+	
+	# Verbose logging: show gRPC response details
+	log_verbose "gRPC response received: '$grpc_output'"
+	log_verbose "Response length: ${#grpc_output} characters"
+	
+	# Count received messages (JSON objects in response)
+	local received_messages=0
+	if [[ -n "$grpc_output" ]]; then
+		# Count complete JSON objects by counting opening braces that start a line
+		received_messages=$(echo "$grpc_output" | grep -c '^{' 2>/dev/null || echo "0")
+		# Remove any newlines and ensure we have a clean number
+		received_messages=$(echo "$received_messages" | tr -d '\n' | head -1)
+		if [[ "$received_messages" -eq 0 ]]; then
+			# Fallback: if no complete JSON objects, count as 1 message
+			received_messages=1
+		fi
+	fi
+	log_verbose "Messages received: $received_messages"
+	log_verbose "Messages sent: $sent_messages, Messages received: $received_messages"
 
 	# Handle timeout specifically
 	if [[ $grpc_exit_code -eq 124 ]]; then
@@ -331,12 +504,15 @@ tolerance: ${tolerance_option}"
 
 		if [[ -n "$expected_response" ]]; then
 			gperf "compare"
+			log_verbose "Validating response against expected content"
+			log_verbose "Comparing $received_messages received messages with expected response"
 			# Apply inline options for JSON comparison
 			local actual_for_comparison="$grpc_output"
 			local expected_for_comparison="$expected_response"
 
 			# Apply redact option (remove specified fields)
 			if [[ -n "$redact_option" ]]; then
+				log_verbose "Applying redact option: $redact_option"
 				# Convert comma-separated list to jq array format using pure Bash (strip brackets/quotes, then join)
 				local redact_fields_raw="$redact_option"
 				redact_fields_raw=${redact_fields_raw//[/}
@@ -352,6 +528,8 @@ tolerance: ${tolerance_option}"
 
 			# Apply partial matching if enabled
 			if [[ "$partial_option" == "true" ]]; then
+				log_verbose "Applying partial matching mode"
+				log_verbose "Partial matching: checking if all expected fields exist in $received_messages received messages"
 				# For partial matching, check if all expected fields exist in actual
 				local expected_keys=$(echo "$expected_for_comparison" | jq -c 'paths(scalars) as $p | {"path": $p, "value": getpath($p)}' 2>/dev/null || echo "")
 				if [[ -n "$expected_keys" ]]; then
@@ -377,13 +555,17 @@ tolerance: ${tolerance_option}"
 			fi
 
 			# Standard exact comparison
+			log_verbose "Performing exact JSON comparison"
+			log_verbose "Exact comparison: comparing $received_messages received messages with expected response"
 			local clean_expected=$(echo "$expected_for_comparison" | jq -S -c . 2>/dev/null || echo "$expected_for_comparison")
 			local clean_actual=$(echo "$actual_for_comparison" | jq -S -c . 2>/dev/null || echo "$actual_for_comparison")
 
 			if [[ "$clean_actual" == "$clean_expected" ]]; then
+				log_verbose "Response validation PASSED - exact match for all $received_messages messages"
 				gperf "compare"
 				return 0 # PASS
 			else
+				log_verbose "Response validation FAILED - mismatch detected in $received_messages messages"
 				log_error "Response mismatch in $test_file"
 				log_error "Expected: $clean_expected"
 				log_error "Actual: $clean_actual"
@@ -391,16 +573,72 @@ tolerance: ${tolerance_option}"
 				return 1 # FAIL
 			fi
 		else
-			return 0 # PASS (no response validation)
+					# Check if we have assertions to validate
+		if [[ ${#asserts_sections_array[@]} -gt 0 ]]; then
+			log_verbose "Validating assertions against gRPC response"
+			log_verbose "Assertions to validate: ${#asserts_sections_array[@]} sections"
+			
+			# Process each assertion section
+			local assertion_count=0
+			local passed_assertions=0
+			local failed_assertions=0
+			
+			for section_index in "${!asserts_sections_array[@]}"; do
+				local section_number=$((section_index + 1))
+				local section_content="${asserts_sections_array[$section_index]}"
+				
+				log_verbose "Processing ASSERTS section $section_number:"
+				
+				while IFS= read -r assertion_line; do
+					if [[ -n "$assertion_line" && ! "$assertion_line" =~ ^[[:space:]]*$ ]]; then
+						((assertion_count++))
+						log_verbose "Assertion $assertion_count (section $section_number): $assertion_line"
+						
+						# Real validation using jq
+						local assertion_result
+						if assertion_result=$(echo "$grpc_output" | jq -r "$assertion_line" 2>/dev/null); then
+							# Check if the result is true
+							if [[ "$assertion_result" == "true" ]]; then
+								((passed_assertions++))
+								log_verbose "  ✅ PASS: $assertion_line"
+							else
+								((failed_assertions++))
+								log_verbose "  ❌ FAIL: $assertion_line (result: $assertion_result)"
+							fi
+						else
+							# jq failed to parse or execute the assertion
+							((failed_assertions++))
+							log_verbose "  ❌ ERROR: $assertion_line (jq parsing failed)"
+						fi
+					fi
+				done <<<"$section_content"
+			done
+			
+			log_verbose "Assertions summary: $passed_assertions passed, $failed_assertions failed out of $assertion_count total"
+			
+			if [[ $failed_assertions -gt 0 ]]; then
+				log_verbose "Test FAILED - $failed_assertions assertions failed"
+				return 1
+			else
+				log_verbose "Test PASSED - all $passed_assertions assertions passed"
+				return 0
+			fi
+		else
+			log_verbose "No assertions to validate - test PASSED"
+			return 0 # PASS (no assertions)
+		fi
 		fi
 	else
 		# Error case - check if error was expected
+		log_verbose "gRPC call returned error - checking if error was expected"
 		if [[ -n "$expected_error" ]]; then
+			log_verbose "Expected error found - validating error response"
 			# Fast path: if both expected and actual are valid JSON and equal -> PASS
 			local __exp_json_eq __act_json_eq
 			__exp_json_eq=$(echo "$expected_error" | jq -S -c . 2>/dev/null || true)
 			__act_json_eq=$(echo "$grpc_output" | jq -S -c . 2>/dev/null || true)
 			if [[ -n "$__exp_json_eq" && -n "$__act_json_eq" && "$__exp_json_eq" == "$__act_json_eq" ]]; then
+				log_verbose "Error validation PASSED - exact match"
 				return 0
 			fi
 			# Expected error fields (JSON format from grpcurl)
@@ -482,6 +720,7 @@ tolerance: ${tolerance_option}"
 			log_error "Actual error output: $grpc_output"
 			return 1
 		else
+			log_verbose "Unexpected error - no expected error defined"
 			log_error "gRPC call failed for $test_file: $grpc_output"
 			return 1 # FAIL
 		fi
@@ -996,7 +1235,7 @@ EOF
 		if [[ "$verbose" == "1" ]]; then
 			if [[ "$dry_run" == "1" ]]; then
 				# Dry-run: let run_single_test print the formatted preview, then separate
-				run_single_test "$test_file" "true"
+				run_single_test "$test_file" "true" "$verbose"
 				# Duration for stats
 				local test_duration
 				test_duration=$(calculate_test_duration "$test_start_time")
@@ -1005,7 +1244,7 @@ EOF
 				printf "\n----\n\n"
 			else
 				printf "Testing %s ... " "$test_name"
-				if run_single_test "$test_file" "false"; then
+				if run_single_test "$test_file" "false" "$verbose"; then
 					echo "✅ PASS"
 					passed=$((passed + 1))
 
@@ -1034,11 +1273,11 @@ EOF
 		else
 			# Dots mode (pytest-style)
 			if [[ "$dry_run" == "1" ]]; then
-				run_single_test "$test_file" "true"
+				run_single_test "$test_file" "true" "$verbose"
 				# For dry-run, show a simple separator between requests and skip progress symbols
 				printf "\n----\n\n"
 			else
-				if run_single_test "$test_file" "false" >/dev/null 2>&1; then
+				if run_single_test "$test_file" "false" "$verbose" >/dev/null 2>&1; then
 					local exit_code=$?
 				else
 					local exit_code=$?

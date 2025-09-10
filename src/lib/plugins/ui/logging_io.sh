@@ -101,6 +101,12 @@ log_warn() { io_glog warn "$@"; }
 log_info() { io_glog info "$@"; }
 log_debug() { io_glog debug "$@"; }
 log_trace() { io_glog trace "$@"; }
+log_verbose() { 
+	# Only output if verbose flag is set
+	if [[ "${args[--verbose]:-0}" == "1" ]]; then
+		echo "🔍 $*"
+	fi
+}
 
 #######################################
 # Specialized logging functions for better semantics
@@ -294,7 +300,7 @@ export -f init_logging_io io_glog log_test_event log_system
 export -f log_performance log_network log_plugin
 export -f restore_original_log is_io_logging_active
 export -f get_log_level set_log_level log_batch log_context
-export -f log_error log_warn log_info log_debug log_trace
+export -f log_error log_warn log_info log_debug log_trace log_verbose
 
 #######################################
 # Perf API (trace-only, concurrency-safe by PID)
