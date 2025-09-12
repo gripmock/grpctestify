@@ -513,4 +513,4 @@ end
 
 - **[Data Validation](data-validation)** - Learn basic testing patterns
 - **[Error Testing](error-testing)** - Test error conditions
-- **[Real Examples](../guides/examples/advanced/shopflow-ecommerce)** - See assertion patterns in action
+- **[Real Examples](../guides/examples/basic/real-time-chat)** - See assertion patterns in action

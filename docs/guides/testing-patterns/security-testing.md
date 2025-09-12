@@ -570,4 +570,4 @@ x-role: guest
 
 - **[Performance Testing](performance-testing)** - Test security under load
 - **[Assertion Patterns](assertion-patterns)** - Master security validation techniques
-- **[Real Examples](../guides/examples/security/fintech-payment)** - See security testing in action
+- **[Real Examples](../guides/examples/basic/real-time-chat)** - See security testing in action

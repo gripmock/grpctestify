@@ -6,22 +6,16 @@ gRPC Testify features a powerful plugin architecture that allows you to extend f
 
 The plugin system is built around several key APIs:
 
-- **[Plugin API](development/plugin-api.md)** - Core plugin interface and lifecycle
+- **[Plugin Development](development/)** - Core plugin interface and lifecycle
 - **[State API](development/state-api.md)** - Access to centralized test state
-- **[IO API](development/io-api.md)** - Synchronized output and logging
-- **[Testing Framework](development/testing.md)** - Tools for testing plugins
 
 ## 🏗️ Plugin Categories
 
 ### Built-in Plugins
-- **[Assertion Plugins](built-in/assertions.md)** - Custom test assertions
-- **[Validation Plugins](built-in/validation.md)** - Data validation and type checking
-- **[Report Plugins](built-in/reporting.md)** - Custom report formats
-- **[Utility Plugins](built-in/utils.md)** - Helper functions and tools
+- **[Built-in Plugins](../reference/api/)** - Available assertion, validation, and reporting plugins
 
 ### Community Plugins
-- **[Plugin Catalog](community/catalog.md)** - Browse available community plugins
-- **[Contributing Plugins](community/contributing.md)** - How to share your plugins
+- **[Plugin Development](development/)** - Learn to create custom plugins
 
 ## 🚀 Getting Started with Plugins
 
@@ -51,10 +45,9 @@ grpctestify --create-plugin my_custom_assertion
 
 ### Plugin Development Quick Start
 
-1. **[Read the Plugin API](development/plugin-api.md)** - Understand the interfaces
+1. **[Read the Development Guide](development/)** - Understand the interfaces
 2. **[Follow Development Guide](development/)** - Step-by-step plugin creation
-3. **[See Examples](../guides/examples/advanced/)** - Real plugin implementations
-4. **[Test Your Plugin](development/testing.md)** - Ensure quality and reliability
+3. **[See Examples](../guides/examples/basic/real-time-chat)** - Real plugin implementations
 
 ## 🎯 Common Plugin Use Cases
 

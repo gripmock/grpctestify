@@ -344,12 +344,9 @@ echo "Location: $INSTALL_DIR/$PLUGIN_NAME.sh"
 
 ## 🔗 Next Steps
 
-1. **[Study the Plugin API](plugin-api.md)** - Learn the interfaces
-2. **[Explore State Management](state-api.md)** - Understand test state
-3. **[Master IO Integration](io-api.md)** - Handle output properly
-4. **[Write Comprehensive Tests](testing.md)** - Ensure quality
-5. **[Share Your Plugin](publishing.md)** - Help the community
+1. **[Explore State Management](state-api.md)** - Understand test state
+2. **[Study Plugin Development](state-api.md)** - Learn the interfaces
 
-Ready to build? Check out our [Plugin Examples](../../guides/examples/advanced/) for inspiration!
+Ready to build? Check out our [Plugin Examples](../../guides/examples/basic/real-time-chat) for inspiration!
 
 

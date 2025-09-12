@@ -46,27 +46,19 @@ gRPC supports four main communication patterns. Each requires different testing 
 
 ## 🏗️ Real-World Examples
 
-- **[E-commerce Testing](real-world-examples/ecommerce)** - Complex business workflows
-- **[IoT Device Testing](real-world-examples/iot)** - Device management and monitoring
-- **[Financial Services](real-world-examples/fintech)** - Secure payment processing
+- **[Real-time Chat Testing](examples/basic/real-time-chat)** - Messaging patterns and real-time communication
 
 ## 🔒 Security Testing
 
-- **[Authentication Testing](security-testing/auth)** - JWT, OAuth, API keys
-- **[TLS Configuration](security-testing/tls)** - Certificate validation
-- **[Access Control](security-testing/access-control)** - Permission testing
+- **[Security Testing Patterns](testing-patterns/security-testing)** - Authentication, TLS, and access control
 
 ## 🔄 CI/CD Integration
 
-- **[GitHub Actions](ci-cd/github-actions)** - Automated testing workflows
-- **[Jenkins Integration](ci-cd/jenkins)** - Enterprise CI/CD setup
-- **[Docker Testing](ci-cd/docker)** - Containerized testing environments
+- **[GitHub Workflows](../.github/workflows/)** - Automated testing with GitHub Actions
 
 ## 📊 Reporting & Monitoring
 
-- **[Test Reports](reporting/test-reports)** - Understanding test results
-- **[Performance Metrics](reporting/performance)** - Test execution analytics
-- **[Coverage Analysis](reporting/coverage)** - Test coverage insights
+- **[Report Formats](reference/api/report-formats)** - JUnit XML and JSON output formats
 
 ## 🛠️ Troubleshooting
 
