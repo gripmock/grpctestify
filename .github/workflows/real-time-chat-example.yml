@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           cd examples/basic-examples/real-time-chat
-          grpctestify tests/
+          grpctestify tests/ --verbose
           echo "Real-time chat example test completed successfully"
 
       - name: Cleanup GripMock server
