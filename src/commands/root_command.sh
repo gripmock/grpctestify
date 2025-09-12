@@ -1,4 +1,10 @@
 #!/bin/bash
-# Call the enhanced test execution function with microkernel integration
-# All modules are automatically loaded by bashly
-run_tests
+
+# Call the existing implementation
+source "$(dirname "$0")/../lib/commands/run.sh"
+
+# Get test paths from bashly args
+test_paths=("${args[test_paths]}")
+
+# Call the main function from run.sh
+run_tests "${test_paths[@]}"

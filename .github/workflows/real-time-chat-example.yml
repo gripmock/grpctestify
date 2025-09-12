@@ -1,0 +1,81 @@
+name: Real-time Chat Example Testing
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master, v1-dev]
+  workflow_dispatch:
+
+jobs:
+  test-example:
+    name: Test Real-time Chat Example
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          grpcurl --version
+
+      - name: Install bashly and generate grpctestify
+        run: |
+          set -euo pipefail
+          gem install bashly
+          make generate
+          mkdir -p $HOME/bin
+          cp grpctestify.sh $HOME/bin/grpctestify
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Verify grpctestify installation
+        run: |
+          set -euo pipefail
+          grpctestify --version
+
+      - name: Start GripMock server
+        run: |
+          set -euo pipefail
+          go install github.com/bavix/gripmock/v3@latest
+          cd examples/basic-examples/real-time-chat
+          gripmock -s stubs/ server/ &
+          echo $! > gripmock.pid
+          
+          # Wait for server to start and verify it's ready
+          gripmock check -t 10s
+
+      - name: Test grpctestify with real-time-chat example
+        run: |
+          set -euo pipefail
+          cd examples/basic-examples/real-time-chat
+          grpctestify tests/ --verbose
+          echo "Real-time chat example test completed successfully"
+
+      - name: Cleanup GripMock server
+        if: always()
+        run: |
+          set -euo pipefail
+          cd examples/basic-examples/real-time-chat || exit 0
+          if [ -f gripmock.pid ]; then
+            pid=$(cat gripmock.pid)
+            if kill -0 "$pid" 2>/dev/null; then
+              kill "$pid"
+            fi
+            rm -f gripmock.pid
+          fi

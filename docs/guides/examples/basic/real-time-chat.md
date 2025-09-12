@@ -137,8 +137,8 @@ chat.ChatService/SendMessage
 # Navigate to the example
 cd examples/basic-examples/real-time-chat
 
-# Start the server
-make start
+# Start GripMock server with stubs
+gripmock -s stubs/ &
 
 # Run all tests
 ../../grpctestify.sh tests/*.gctf
@@ -146,8 +146,8 @@ make start
 # Run specific test
 ../../grpctestify.sh tests/send_message.gctf
 
-# Stop the server
-make stop
+# Stop GripMock server
+pkill gripmock
 ```
 
 ## 📊 Test Coverage
@@ -169,8 +169,8 @@ This example demonstrates:
 4. **Validation** - Message structure and content validation
 5. **Real-time Concepts** - Timestamp and ordering patterns
 
-## 🔗 Related Examples
+## 🔗 Related Documentation
 
-- **[User Management](user-management.md)** - User authentication
-- **[IoT Monitoring](iot-monitoring.md)** - Real-time data streaming
-- **[AI Chat](../advanced/ai-chat.md)** - Advanced conversation patterns
+- **[Testing Patterns](../testing-patterns/)** - Learn advanced testing techniques
+- **[Plugin Development](../plugins/)** - Extend functionality with custom plugins
+- **[API Reference](../reference/)** - Complete command and format reference

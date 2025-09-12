@@ -1,0 +1,37 @@
+---
+service: chat.ChatService
+method: SendMessage
+input:
+  equals:
+    message:
+      user_id: comprehensive_test_user
+      room_id: test_room
+      content: "Testing ALL grpctestify capabilities: asserts, response validation, options, timeout, partial matching, and verbose output!"
+      message_type: text
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: comprehensive_functionality
+        features_tested: all
+        assertion_types: "equality,regex,contains,length"
+        response_modes: "with_asserts,exact_match"
+        options_tested: "timeout,partial"
+output:
+  data:
+    message:
+      id: msg_comprehensive_test_12345
+      user_id: comprehensive_test_user
+      room_id: test_room
+      content: "Testing ALL grpctestify capabilities: asserts, response validation, options, timeout, partial matching, and verbose output!"
+      message_type: text
+      timestamp: "2024-01-15T10:30:00Z"
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: comprehensive_functionality
+        features_tested: all
+        assertion_types: "equality,regex,contains,length"
+        response_modes: "with_asserts,exact_match"
+        options_tested: "timeout,partial"
+        additional_server_field: server_added_this
+    success: true

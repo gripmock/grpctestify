@@ -65,13 +65,13 @@ grpctestify v1.0.0
 ./grpctestify.sh test_case.gctf
 
 # Directory mode (recursive)
-./grpctestify.sh examples/scenarios/
+./grpctestify.sh examples/basic-examples/real-time-chat/tests/
 
 # Parallel execution with progress
-./grpctestify.sh examples/scenarios/ --parallel 4 --progress=dots
+./grpctestify.sh examples/basic-examples/real-time-chat/tests/ --parallel 4 --progress=dots
 
 # Verbose output
-./grpctestify.sh --verbose examples/scenarios/
+./grpctestify.sh --verbose examples/basic-examples/real-time-chat/tests/
 
 # Disable colors
 ./grpctestify.sh --no-color test_case.gctf
@@ -292,18 +292,18 @@ grpctestify/
 ├── bashly.yml                   # Build configuration
 ├── Makefile                     # Build and test automation
 ├── src/                         # Modular source code
-│   ├── lib/                     # Core libraries
-│   ├── core/                    # Application logic
+│   ├── lib/                     # Core libraries and plugins
 │   ├── commands/                # Command implementations
-│   └── test/                    # Test framework
+│   └── root_command.sh          # CLI root command
 ├── examples/                    # Test data and examples
-│   ├── scenarios/               # .gctf test files organized by type
-│   ├── contracts/               # Protocol buffer definitions
-│   ├── fixtures/                # Proto files and stubs
-│   ├── servers/                 # Test server implementations
-│   └── benchmarks/              # Performance benchmarks
-
-└── index.html                   # Web-based .gctf generator
+│   └── basic-examples/          # Basic example categories
+│       └── real-time-chat/      # Real-time chat example
+│           ├── server/          # Proto definitions and stubs
+│           ├── stubs/           # YAML stub files for gripmock
+│           └── tests/           # .gctf test files (9 comprehensive tests)
+├── docs/                        # Documentation
+├── plugins/                     # Built-in plugins
+└── tests/                       # Test framework and helpers
 ```
 
 ## 🛠️ Development
@@ -417,12 +417,13 @@ Features:
 
 ## 📚 Examples
 
-Check out the comprehensive examples in `examples/scenarios/`:
+Check out the comprehensive examples in `examples/basic-examples/real-time-chat/tests/`:
 
-- **Basic tests**: Simple unary calls
-- **Stream tests**: All streaming patterns
-- **Edge cases**: Error handling and validation
-- **New features**: Latest functionality demonstrations
+- **Basic tests**: Simple unary calls with message sending
+- **Response validation**: Exact matching and partial responses
+- **Advanced assertions**: jq-based validation with regex, contains, length
+- **Options testing**: Timeout, partial matching, and dry-run functionality
+- **Comprehensive testing**: All grpctestify capabilities in one example
 
 ## 🤝 Contributing
 

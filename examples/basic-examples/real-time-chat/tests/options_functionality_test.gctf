@@ -1,0 +1,46 @@
+# Options Functionality Test
+# Tests various OPTIONS including partial=true, timeout, etc.
+
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
+
+--- REQUEST ---
+{
+  "message": {
+    "user_id": "options_test_user",
+    "room_id": "test_room",
+    "content": "Testing OPTIONS functionality in grpctestify!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify_test",
+      "version": "1.0.0",
+      "test_type": "options_functionality",
+      "extra_field": "should_be_ignored_in_partial_mode"
+    }
+  }
+}
+
+--- RESPONSE partial=true ---
+{
+  "message": {
+    "id": "msg_options_test_12345",
+    "userId": "options_test_user",
+    "roomId": "test_room",
+    "content": "Testing OPTIONS functionality in grpctestify!",
+    "messageType": "text"
+  },
+  "success": true
+}
+
+--- ASSERTS ---
+.message.id | test("msg_.*")
+.message.content == "Testing OPTIONS functionality in grpctestify!"
+.message.userId == "options_test_user"
+.success == true
+
+--- OPTIONS ---
+timeout: 15
+partial: true

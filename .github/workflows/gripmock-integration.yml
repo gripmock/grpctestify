@@ -83,7 +83,7 @@ jobs:
           cd /tmp/gripmock
           
           # Run grpctestify tests (v1.0.0 with smart defaults)
-          grpctestify examples
+          grpctestify examples --verbose
           
           echo "GripMock integration test completed successfully"
 

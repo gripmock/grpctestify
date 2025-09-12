@@ -1,0 +1,33 @@
+# Dry Run Test
+# Tests dry-run functionality without actual gRPC calls
+
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
+
+--- REQUEST ---
+{
+  "message": {
+    "user_id": "dry_run_test_user",
+    "room_id": "test_room",
+    "content": "Testing dry-run functionality!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify_test",
+      "version": "1.0.0",
+      "test_type": "dry_run_test"
+    }
+  }
+}
+
+--- ASSERTS ---
+.message.id | test("msg_.*")
+.message.content == "Testing dry-run functionality!"
+.message.userId == "dry_run_test_user"
+.success == true
+
+--- OPTIONS ---
+timeout: 30
+partial: false

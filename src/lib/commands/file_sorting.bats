@@ -13,7 +13,8 @@ setup() {
     source "$BATS_TEST_DIRNAME/run.sh"
     
     # Create a temporary directory with test files
-    TEST_DIR=$(mktemp -d)
+    TEST_DIR="/tmp/grpctestify_test_$$"
+    mkdir -p "$TEST_DIR"
     
     # Create test files in specific order
     touch "$TEST_DIR/a_first.gctf"

@@ -167,12 +167,13 @@ generate_performance_report() {
 test_state_get_tests_by_directory "detailed"
 
 # Example output:
-# Directory: /path/to/user-management/tests
-#   Total: 8, Passed: 7, Failed: 1, Skipped: 0
+# Directory: /path/to/real-time-chat/tests
+#   Total: 9, Passed: 9, Failed: 0, Skipped: 0
 #   Tests:
-#     user_creation: PASS
-#     user_update: PASS
-#     user_deletion: FAIL
+#     send_message: PASS
+#     get_messages: PASS
+#     asserts_functionality_test: PASS
+#     comprehensive_functionality_test: PASS
 #     ...
 ```
 
@@ -198,10 +199,10 @@ test_state_get_test_info "user_creation" "human"
 
 # Example output:
 # Test Information:
-#   Full Path: /path/to/user-management/tests/user_creation.gctf
-#   Short Name: user_creation
-#   Relative Path: examples/user-management/tests/user_creation.gctf
-#   Directory: /path/to/user-management/tests
+#   Full Path: /path/to/real-time-chat/tests/send_message.gctf
+#   Short Name: send_message
+#   Relative Path: examples/basic-examples/real-time-chat/tests/send_message.gctf
+#   Directory: /path/to/real-time-chat/tests
 #   Status: PASS
 #   Duration: 150ms
 #   Execution Time: 1640995200150

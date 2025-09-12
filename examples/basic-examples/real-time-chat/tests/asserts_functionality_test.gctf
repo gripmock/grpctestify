@@ -1,0 +1,43 @@
+# Asserts Functionality Test
+# Tests various types of assertions in grpctestify
+
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
+
+--- REQUEST ---
+{
+  "message": {
+    "user_id": "assert_test_user",
+    "room_id": "test_room",
+    "content": "Testing various assertion types in grpctestify!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify_test",
+      "version": "1.0.0",
+      "test_type": "asserts_functionality"
+    }
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.message.content == "Testing various assertion types in grpctestify!"
+.message.userId == "assert_test_user"
+.message.roomId == "test_room"
+.message.messageType == "text"
+.message.id | test("msg_.*")
+.message.timestamp | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
+.message.content | contains("assertion")
+.message.content | contains("grpctestify")
+.message.metadata.client == "grpctestify_test"
+.message.metadata.version == "1.0.0"
+.message.metadata.test_type == "asserts_functionality"
+.message.content | length > 20
+.message.metadata | length >= 3
+
+--- OPTIONS ---
+timeout: 30
+partial: false

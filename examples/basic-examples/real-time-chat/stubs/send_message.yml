@@ -1,0 +1,26 @@
+---
+service: chat.ChatService
+method: SendMessage
+input:
+  equals:
+    message:
+      user_id: user1
+      room_id: room1
+      content: "Hello from gRPC Testify!"
+      message_type: text
+      metadata:
+        client: grpctestify
+        version: "1.0.0"
+output:
+  data:
+    message:
+      id: msg_123456789
+      user_id: user1
+      room_id: room1
+      content: "Hello from gRPC Testify!"
+      message_type: text
+      timestamp: "2024-01-15T10:30:00Z"
+      metadata:
+        client: grpctestify
+        version: "1.0.0"
+    success: true

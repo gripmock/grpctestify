@@ -332,4 +332,4 @@ if .type == "premium" then .premium_features | length > 0 else true
 
 - **[Error Testing](error-testing)** - Learn to test error conditions
 - **[Assertion Patterns](assertion-patterns)** - Master advanced validation techniques
-- **[Real Examples](../guides/examples/basic/user-management)** - See data validation in action
+- **[Real Examples](../guides/examples/basic/real-time-chat)** - See data validation in action
