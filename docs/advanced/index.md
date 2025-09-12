@@ -207,20 +207,14 @@ grpctestify tests/ --graphql-endpoint "https://api.company.com/graphql"
 ## 📚 Learning Path
 
 ### For System Administrators
-1. [Performance Optimization](performance.md) - Tune for your environment
-2. [Security Considerations](security.md) - Secure deployment
-3. [Troubleshooting](troubleshooting.md) - Solve operational issues
+1. [Troubleshooting](troubleshooting.md) - Solve operational issues
 
 ### For DevOps Engineers
-1. [System Architecture](architecture.md) - Understand the system
-2. [Extending Functionality](extending.md) - Custom integrations
-3. [Performance Optimization](performance.md) - CI/CD optimization
+1. [Troubleshooting](troubleshooting.md) - Solve operational issues
 
 ### For Plugin Developers
-1. [Internal Workings](internals.md) - Understand the codebase
-2. [Extending Functionality](extending.md) - Advanced patterns
-3. [Security Considerations](security.md) - Secure development
+1. [Troubleshooting](troubleshooting.md) - Solve operational issues
 
-Ready to dive deep? Start with [System Architecture](architecture.md) to understand how it all works together.
+Ready to dive deep? Start with [Troubleshooting](troubleshooting.md) to solve common issues.
 
 

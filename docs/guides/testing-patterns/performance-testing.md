@@ -259,4 +259,4 @@ For advanced performance testing:
 
 - **[Data Validation](data-validation)** - Learn basic testing patterns
 - **[Error Testing](error-testing)** - Test error conditions
-- **[Real Examples](../guides/examples/advanced/media-streaming)** - See performance testing in action
+- **[Real Examples](../guides/examples/basic/real-time-chat)** - See performance testing in action
