@@ -89,4 +89,4 @@ Explore the detailed guides above to master each testing category:
 - **[Performance Testing](performance-testing)** - Optimize and monitor
 - **[Assertion Patterns](assertion-patterns)** - Master validation techniques
 
-Ready to test your gRPC services? Start with [Data Validation](data-validation) or explore [Real Examples](../guides/examples/basic/user-management)!
+Ready to test your gRPC services? Start with [Data Validation](data-validation) or explore [Real Examples](../guides/examples/basic/real-time-chat)!

@@ -1,0 +1,31 @@
+---
+service: chat.ChatService
+method: SendMessage
+input:
+  equals:
+    message:
+      user_id: options_test_user
+      room_id: test_room
+      content: "Testing OPTIONS functionality in grpctestify!"
+      message_type: text
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: options_functionality
+        extra_field: should_be_ignored_in_partial_mode
+output:
+  data:
+    message:
+      id: msg_options_test_12345
+      user_id: options_test_user
+      room_id: test_room
+      content: "Testing OPTIONS functionality in grpctestify!"
+      message_type: text
+      timestamp: "2024-01-15T10:30:00Z"
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: options_functionality
+        extra_field: should_be_ignored_in_partial_mode
+        additional_server_field: server_added_this
+    success: true

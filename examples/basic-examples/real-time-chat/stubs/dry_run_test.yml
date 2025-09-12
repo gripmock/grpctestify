@@ -1,0 +1,28 @@
+---
+service: chat.ChatService
+method: SendMessage
+input:
+  equals:
+    message:
+      user_id: dry_run_test_user
+      room_id: test_room
+      content: "Testing dry-run functionality!"
+      message_type: text
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: dry_run_test
+output:
+  data:
+    message:
+      id: msg_dry_run_test_12345
+      user_id: dry_run_test_user
+      room_id: test_room
+      content: "Testing dry-run functionality!"
+      message_type: text
+      timestamp: "2024-01-15T10:30:00Z"
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: dry_run_test
+    success: true

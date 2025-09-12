@@ -1,0 +1,52 @@
+# Response with Asserts Test
+# Tests RESPONSE section with with_asserts=true option
+
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
+
+--- REQUEST ---
+{
+  "message": {
+    "user_id": "response_test_user",
+    "room_id": "test_room",
+    "content": "Testing RESPONSE with asserts functionality!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify_test",
+      "version": "1.0.0",
+      "test_type": "response_with_asserts"
+    }
+  }
+}
+
+--- RESPONSE with_asserts=true ---
+{
+  "message": {
+    "id": "msg_response_test_12345",
+    "userId": "response_test_user",
+    "roomId": "test_room",
+    "content": "Testing RESPONSE with asserts functionality!",
+    "messageType": "text",
+    "timestamp": "2024-01-15T10:30:00Z",
+    "metadata": {
+      "client": "grpctestify_test",
+      "version": "1.0.0",
+      "test_type": "response_with_asserts"
+    }
+  },
+  "success": true
+}
+
+--- ASSERTS ---
+.message.id | test("msg_.*")
+.message.timestamp | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
+.message.content | length > 30
+.message.metadata | length >= 3
+.success == true
+
+--- OPTIONS ---
+timeout: 30
+partial: false

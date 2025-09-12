@@ -209,7 +209,7 @@ Now that you have gRPC Testify installed:
 
 1. **[Write Your First Test](first-test.md)** - Create and run your first test
 2. **[Learn Basic Concepts](basic-concepts.md)** - Understand the fundamentals
-3. **[Explore Examples](../guides/examples/basic/user-management)** - See real-world usage
+3. **[Explore Examples](../guides/examples/basic/real-time-chat)** - See real-world usage
 
 ## 🛠️ Troubleshooting
 

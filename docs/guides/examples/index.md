@@ -6,25 +6,7 @@ Learn gRPC Testify through practical examples covering different RPC patterns an
 
 ### 📚 [Basic Examples](basic/)
 Start with fundamental concepts:
-- **[User Management](basic/user-management)** - Complete user service testing with authentication, creation, and profile management
-- **[Real-time Chat](basic/real-time-chat)** - Messaging patterns and real-time communication
-- **[IoT Monitoring](basic/iot-monitoring)** - Device management and monitoring scenarios
-
-### 🚀 [Advanced Examples](advanced/)
-Explore sophisticated features:
-- **[E-commerce ShopFlow](advanced/shopflow-ecommerce)** - Complete e-commerce platform testing
-- **[Media Streaming](advanced/media-streaming)** - File upload, processing, and streaming scenarios
-- **[AI Chat](advanced/ai-chat)** - AI-powered conversation and sentiment analysis
-
-### 🔒 [Security Examples](security/)
-Production security patterns:
-- **[Fintech Payment](security/fintech-payment)** - Financial service validation with compliance
-- **[File Storage](security/file-storage)** - Secure file operations and storage
-
-### 🔌 [Plugin Examples](plugins/)
-Custom plugin development:
-- **[Custom Plugins](plugins/custom-plugins)** - Building and using custom plugins
-- **[Plugin Development](plugins/development)** - Plugin architecture and development guide
+- **[Real-time Chat](basic/real-time-chat)** - Messaging patterns and real-time communication with comprehensive testing examples
 
 ## 🚀 Quick Start Examples
 
@@ -34,148 +16,142 @@ Custom plugin development:
 localhost:4770
 
 --- ENDPOINT ---
-user.UserService/GetUser
+chat.ChatService/SendMessage
 
 --- REQUEST ---
 {
-  "user_id": "123"
-}
-
---- RESPONSE ---
-{
-  "user_id": "123", 
-  "name": "John Doe",
-  "email": "john@example.com"
-}
-```
-
-### With Assertions
-```gctf
---- ADDRESS ---
-localhost:4770
-
---- ENDPOINT ---
-user.UserService/CreateUser
-
---- REQUEST ---
-{
-  "name": "Jane Doe",
-  "email": "jane@example.com"
-}
-
---- RESPONSE ---
-{
-  "user_id": "456",
-  "name": "Jane Doe", 
-  "email": "jane@example.com",
-  "created_at": "2024-01-01T00:00:00Z"
+  "message": {
+    "user_id": "user1",
+    "room_id": "room1",
+    "content": "Hello from gRPC Testify!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify",
+      "version": "1.0.0"
+    }
+  }
 }
 
 --- ASSERTS ---
-.user_id | tonumber > 0
-.created_at | strptime("%Y-%m-%dT%H:%M:%SZ") | type == "array"
-.email | test("@")
+.success == true
+.message.id | test("msg_.*")
+.message.content == "Hello from gRPC Testify!"
+.message.userId == "user1"
+.message.roomId == "room1"
 ```
 
-### Error Handling
+### Response Validation
 ```gctf
 --- ADDRESS ---
 localhost:4770
 
 --- ENDPOINT ---
-user.UserService/GetUser
+chat.ChatService/SendMessage
 
 --- REQUEST ---
 {
-  "user_id": "nonexistent"
-}
-
---- ERROR ---
-{
-  "code": "NOT_FOUND",
-  "message": "User not found"
-}
-
---- ASSERTS ---
-.code == "NOT_FOUND"
-.message | contains("not found")
-```
-
-### TLS Authentication
-```gctf
---- ADDRESS ---
-localhost:4770
-
---- TLS ---
-ca_cert: ./../server/tls/ca-cert.pem
-cert: ./../server/tls/client-cert.pem
-key: ./../server/tls/client-key.pem
-server_name: localhost
-
---- ENDPOINT ---
-user.UserService/AuthenticateUser
-
---- REQUEST ---
-{
-  "username": "alice",
-  "password": "password123"
+  "message": {
+    "user_id": "response_test_user",
+    "room_id": "test_room",
+    "content": "Testing RESPONSE validation!",
+    "message_type": "text"
+  }
 }
 
 --- RESPONSE ---
 {
-  "user": {
-    "id": "*",
-    "username": "alice",
-    "role": "admin"
+  "message": {
+    "id": "msg_response_test_12345",
+    "userId": "response_test_user",
+    "roomId": "test_room",
+    "content": "Testing RESPONSE validation!",
+    "messageType": "text",
+    "timestamp": "2024-01-15T10:30:00Z"
   },
-  "token": "*",
   "success": true
 }
 ```
 
-### Client Streaming
+### Advanced Assertions
 ```gctf
 --- ADDRESS ---
 localhost:4770
 
 --- ENDPOINT ---
-storage.FileService/UploadFile
+chat.ChatService/SendMessage
 
 --- REQUEST ---
 {
-  "file_id": "file_001",
-  "chunk_number": 1,
-  "data": "SGVsbG8gV29ybGQh",
-  "is_last": false
+  "message": {
+    "user_id": "assert_test_user",
+    "room_id": "test_room",
+    "content": "Testing various assertion types!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify_test",
+      "version": "1.0.0"
+    }
+  }
 }
+
+--- ASSERTS ---
+.success == true
+.message.id | test("msg_.*")
+.message.timestamp | test("[0-9]{4}-[0-9]{2}-[0-9]{2}T.*")
+.message.content | contains("assertion")
+.message.content | length > 20
+.message.metadata | length >= 2
+```
+
+### Options and Timeout
+```gctf
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
 
 --- REQUEST ---
 {
-  "file_id": "file_001", 
-  "chunk_number": 2,
-  "data": "RmluYWwgY2h1bms=",
-  "is_last": true
+  "message": {
+    "user_id": "options_test_user",
+    "room_id": "test_room",
+    "content": "Testing OPTIONS functionality!",
+    "message_type": "text"
+  }
 }
 
---- RESPONSE ---
+--- RESPONSE partial=true ---
 {
-  "file_id": "file_001",
-  "total_chunks": 2,
+  "message": {
+    "id": "msg_options_test_12345",
+    "userId": "options_test_user",
+    "content": "Testing OPTIONS functionality!"
+  },
   "success": true
 }
+
+--- ASSERTS ---
+.message.id | test("msg_.*")
+.success == true
+
+--- OPTIONS ---
+timeout: 15
+partial: true
 ```
 
 ## 📁 Example Structure
 
-Each example category contains:
-- **Server implementations** - Complete gRPC servers with business logic
-- **Test files** - `.gctf` files demonstrating various testing patterns
-- **Documentation** - Detailed explanations and usage guides
+The real-time chat example contains:
+- **Proto definitions** - gRPC service definitions
+- **Stub files** - YAML files for gripmock server responses
+- **Test files** - 9 `.gctf` files demonstrating various testing patterns
+- **Comprehensive coverage** - All grpctestify capabilities in one example
 
 ## 🎯 Getting Started
 
-1. **Choose an example** from the categories above
-2. **Start the server** using the provided scripts
+1. **Navigate to the real-time chat example**
+2. **Ensure gripmock is running** on localhost:4770
 3. **Run the tests** with `grpctestify.sh`
 4. **Explore the patterns** and adapt them to your needs
 
@@ -183,24 +159,23 @@ Each example category contains:
 
 ```bash
 # Navigate to an example
-cd examples/basic-examples/user-management
+cd examples/basic-examples/real-time-chat
 
-# Start the server
-make start
+# Start gripmock server (if needed)
+# gripmock is already running on localhost:4770
 
 # Run tests
 ../../grpctestify.sh tests/*.gctf
 
-# Stop the server
-make stop
+# Run with verbose output
+../../grpctestify.sh tests/*.gctf --verbose
 ```
 
 ## 📚 Learning Path
 
-1. **Start with Basic Examples** - Understand core concepts
-2. **Explore Advanced Examples** - Learn complex patterns
-3. **Study Security Examples** - Master production security
-4. **Build Custom Plugins** - Extend functionality
+1. **Start with Real-time Chat Examples** - Understand core concepts and testing patterns
+2. **Explore Different Test Types** - Learn various assertion patterns and response validation
+3. **Study Advanced Features** - Master verbose mode, options, and comprehensive testing
 
-Each example is designed to be self-contained and educational, providing real-world scenarios that you can adapt to your own projects.
+The real-time chat example is designed to be comprehensive and educational, providing multiple testing scenarios that demonstrate all grpctestify capabilities.
 

@@ -1,0 +1,28 @@
+---
+service: chat.ChatService
+method: SendMessage
+input:
+  equals:
+    message:
+      user_id: response_test_user
+      room_id: test_room
+      content: "Testing RESPONSE with asserts functionality!"
+      message_type: text
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: response_with_asserts
+output:
+  data:
+    message:
+      id: msg_response_test_12345
+      user_id: response_test_user
+      room_id: test_room
+      content: "Testing RESPONSE with asserts functionality!"
+      message_type: text
+      timestamp: "2024-01-15T10:30:00Z"
+      metadata:
+        client: grpctestify_test
+        version: "1.0.0"
+        test_type: response_with_asserts
+    success: true

@@ -1,0 +1,47 @@
+# Comprehensive Functionality Test
+# Demonstrates ALL grpctestify capabilities in one test
+
+--- ADDRESS ---
+localhost:4770
+
+--- ENDPOINT ---
+chat.ChatService/SendMessage
+
+--- REQUEST ---
+{
+  "message": {
+    "user_id": "comprehensive_test_user",
+    "room_id": "test_room",
+    "content": "Testing ALL grpctestify capabilities: asserts, response validation, options, timeout, partial matching, and verbose output!",
+    "message_type": "text",
+    "metadata": {
+      "client": "grpctestify_test",
+      "version": "1.0.0",
+      "test_type": "comprehensive_functionality",
+      "features_tested": "all",
+      "assertion_types": "equality,regex,contains,length",
+      "response_modes": "with_asserts,exact_match",
+      "options_tested": "timeout,partial"
+    }
+  }
+}
+
+--- ASSERTS ---
+.success == true
+.message.id | test("msg_.*")
+.message.content == "Testing ALL grpctestify capabilities: asserts, response validation, options, timeout, partial matching, and verbose output!"
+.message.userId == "comprehensive_test_user"
+.message.roomId == "test_room"
+.message.messageType == "text"
+.message.content | contains("asserts")
+.message.content | contains("response")
+.message.content | contains("options")
+.message.content | contains("timeout")
+.message.content | contains("partial")
+.message.content | contains("verbose")
+.message.content | length > 100
+.message.content | length < 200
+
+--- OPTIONS ---
+timeout: 25
+partial: true

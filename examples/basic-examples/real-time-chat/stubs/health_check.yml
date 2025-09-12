@@ -1,0 +1,14 @@
+---
+service: chat.ChatService
+method: HealthCheck
+input:
+  equals:
+    service: chat
+output:
+  data:
+    status: healthy
+    timestamp: "2024-01-15T10:30:00Z"
+    details:
+      version: "1.0.0"
+      uptime: "24h"
+      active_connections: "42"

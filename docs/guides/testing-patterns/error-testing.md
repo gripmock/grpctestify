@@ -437,4 +437,4 @@ file.FileService/Upload
 
 - **[Security Testing](security-testing)** - Test authentication and authorization
 - **[Assertion Patterns](assertion-patterns)** - Master advanced validation techniques
-- **[Real Examples](../guides/examples/basic/user-management)** - See error testing in action
+- **[Real Examples](../guides/examples/basic/real-time-chat)** - See error testing in action

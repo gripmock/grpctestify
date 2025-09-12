@@ -89,10 +89,10 @@ First, you need a gRPC server to test against. You can use any gRPC server, or c
 ```bash
 # Clone the examples repository
 git clone https://github.com/gripmock/grpctestify.git
-cd grpctesti../guides/examples/basic-examples/user-management
+cd examples/basic-examples/real-time-chat
 
-# Start the example server
-make start
+# Start GripMock server with stubs
+gripmock -s stubs/ &
 ```
 
 ### Step 4: Run the Test
@@ -320,7 +320,7 @@ Now that you've written your first test:
 
 1. **[Learn Basic Concepts](basic-concepts.md)** - Understand gRPC testing fundamentals
 2. **[Explore Testing Patterns](../testing-patterns/testing-patterns)** - Master different test scenarios
-3. **[Try Real Examples](../guides/examples/basic/user-management)** - See complex real-world tests
+3. **[Try Real Examples](../guides/examples/basic/real-time-chat)** - See complex real-world tests
 4. **[Learn Advanced Features](../testing-patterns/testing-patterns)** - Optimize your test suite
 
 ## 🛠️ Troubleshooting
@@ -345,5 +345,5 @@ Now that you've written your first test:
 ### Getting Help
 
 - **[Troubleshooting Guide](../advanced/troubleshooting)** - Common problems and solutions
-- **[Examples](../guides/examples/basic/user-management)** - Real-world test examples
+- **[Examples](../guides/examples/basic/real-time-chat)** - Real-world test examples
 - **[API Reference](../reference/)** - Complete technical documentation

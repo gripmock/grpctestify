@@ -1,0 +1,27 @@
+---
+service: chat.ChatService
+method: GetMessages
+input:
+  matches:
+    room_id: room1
+    limit: ".*"
+output:
+  data:
+    messages:
+      - id: msg_001
+        user_id: user1
+        room_id: room1
+        content: "Hello everyone!"
+        message_type: text
+        timestamp: "2024-01-15T10:00:00Z"
+        metadata:
+          client: web
+      - id: msg_002
+        user_id: user2
+        room_id: room1
+        content: "Hi there!"
+        message_type: text
+        timestamp: "2024-01-15T10:01:00Z"
+        metadata:
+          client: mobile
+    total: 2
