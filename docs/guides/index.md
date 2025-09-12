@@ -52,10 +52,6 @@ gRPC supports four main communication patterns. Each requires different testing 
 
 - **[Security Testing Patterns](testing-patterns/security-testing)** - Authentication, TLS, and access control
 
-## 🔄 CI/CD Integration
-
-- **[GitHub Workflows](../.github/workflows/)** - Automated testing with GitHub Actions
-
 ## 📊 Reporting & Monitoring
 
 - **[Report Formats](reference/api/report-formats)** - JUnit XML and JSON output formats

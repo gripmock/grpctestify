@@ -69,23 +69,20 @@ assert_status_code 200               # HTTP status
 
 ### For Developers
 - Start with [Programming APIs](api/) for integration
-- Check [Plugin API](api/plugin-api.md) for extensions
 - Reference [State API](api/state-api.md) for data access
 
 ### For Test Writers
-- Begin with [Test File Format](test-format/)
-- Learn [Variables & Templating](test-format/variables.md)
-- Follow [Best Practices](test-format/best-practices.md)
+- Begin with [Test Files](api/test-files.md)
+- Follow [Best Practices](test-files.md)
 
 ### For CI/CD Integration
-- Review [CLI Commands](cli/commands.md)
-- Configure [Report Formats](reports/)
-- Set up [Configuration Files](cli/configuration.md)
+- Review [Command Line](api/command-line.md)
+- Configure [Report Formats](api/report-formats.md)
 
 ### For Operations
-- Use [Command Reference](cli/) for automation
-- Check [Configuration](cli/configuration.md) for deployment
-- Monitor with [Report Formats](reports/)
+- Use [Command Line](api/command-line.md) for automation
+- Check [Command Line](api/command-line.md) for deployment
+- Monitor with [Report Formats](api/report-formats.md)
 
 ## 🔗 Related Documentation
 

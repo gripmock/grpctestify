@@ -62,14 +62,7 @@ grpctestify --install-plugin grpc_my_awesome_plugin.sh
 ## 📚 Development Guides
 
 ### Core Concepts
-- **[Plugin API](plugin-api.md)** - Core interfaces and lifecycle hooks
 - **[State API](state-api.md)** - Centralized test state management
-- **[IO API](io-api.md)** - Synchronized output and logging
-
-### Advanced Topics
-- **[Testing Framework](testing.md)** - How to test your plugins
-- **[Publishing Guide](publishing.md)** - Share plugins with the community
-- **[Performance Optimization](performance.md)** - Make plugins fast and efficient
 
 ## 🛠️ Plugin Types
 
