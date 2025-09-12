@@ -4,6 +4,8 @@ export default defineConfig({
   title: 'gRPC Testify',
   description: 'Automate gRPC testing with simple .gctf files',
   ignoreDeadLinks: true,
+
+  base: '/grpctestify/',
   
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }],
