@@ -52,7 +52,7 @@ jobs:
       - name: Start GripMock server
         run: |
           set -euo pipefail
-          go install github.com/bavix/gripmock@latest
+          go install github.com/bavix/gripmock/v3@latest
           cd examples/basic-examples/real-time-chat
           gripmock -s stubs/ &
           echo $! > gripmock.pid
