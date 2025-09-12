@@ -58,7 +58,7 @@ jobs:
           echo $! > gripmock.pid
           
           # Wait for server to start and verify it's ready
-          gripmock check
+          gripmock check -t 10s
 
       - name: Test grpctestify with real-time-chat example
         run: |
