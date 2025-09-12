@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
           go install github.com/bavix/gripmock/v3@latest
           cd examples/basic-examples/real-time-chat
-          gripmock -s stubs/ &
+          gripmock -s stubs/ server/ &
           echo $! > gripmock.pid
           
           # Wait for server to start and verify it's ready
