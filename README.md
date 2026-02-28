@@ -1,5 +1,8 @@
 # gRPC Testify
 
+> ⚠️ **This project has been rewritten in Rust!**  
+> Check out the new version: [https://github.com/gripmock/grpctestify-rust](https://github.com/gripmock/grpctestify-rust)
+
 <img align="right" width="150" height="150" src="https://github.com/user-attachments/assets/d331a8db-4f4c-4296-950c-86b91ea5540a">
 
 [![Release](https://img.shields.io/badge/Release-v1.0.0-success?logo=github)](https://github.com/gripmock/grpctestify/releases/latest)
